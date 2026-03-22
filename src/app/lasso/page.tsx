@@ -42,17 +42,34 @@ export default function LassoPage() {
 
   // View State using shared hook
   const canvasViewport = useViewport();
-  const { view, isPanning } = canvasViewport;
-  const [mode, setMode] = useState<"lasso" | "pan">("lasso");
+  const { 
+    view, 
+    isPanning, 
+    containerRef: canvasContainerRef,
+    baseView,
+    setZoomIn,
+    setZoomOut,
+    fitToView
+  } = canvasViewport;
+
+  const [mode, setMode] = useState<'lasso' | 'pan'>('lasso');
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
   // Track movement during mouse down to differentiate click vs drag
-  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const dragStartPos = useRef<{ x: number, y: number } | null>(null);
   const hasDragged = useRef(false);
 
   // Preview View State using shared hook
   const previewViewport = useViewport();
-  const { view: pView } = previewViewport;
+  const { 
+    view: pView, 
+    containerRef: previewContainerRef,
+    baseView: pBaseView,
+    setZoomIn: pSetZoomIn,
+    setZoomOut: pSetZoomOut,
+    fitToView: pFitToView
+  } = previewViewport;
+
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
   const previewDimensions = useRef({ w: 0, h: 0 });
 
@@ -99,35 +116,35 @@ export default function LassoPage() {
   useEffect(() => {
     if (
       image &&
-      canvasViewport.containerRef.current &&
+      canvasContainerRef.current &&
       !hasAutoFittedMain.current
     ) {
-      const timer = setTimeout(() => {
-        canvasViewport.fitToView(image.width, image.height);
+      const raf = requestAnimationFrame(() => {
+        fitToView(image.width, image.height);
         hasAutoFittedMain.current = true;
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => cancelAnimationFrame(raf);
     }
-  }, [image, canvasViewport]);
+  }, [image, canvasContainerRef, fitToView]);
 
   // Auto-fit preview result when it's generated
   useEffect(() => {
     if (
       previewUrl &&
       previewDimensions.current.w > 0 &&
-      previewViewport.containerRef.current &&
+      previewContainerRef.current &&
       !hasAutoFittedPreview.current
     ) {
-      const timer = setTimeout(() => {
-        previewViewport.fitToView(
+      const raf = requestAnimationFrame(() => {
+        pFitToView(
           previewDimensions.current.w,
           previewDimensions.current.h,
         );
         hasAutoFittedPreview.current = true;
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => cancelAnimationFrame(raf);
     }
-  }, [previewUrl, previewViewport]);
+  }, [previewUrl, previewContainerRef, pFitToView]);
 
   const generateProcessedCanvas = useCallback(() => {
     if (!image || points.length < 3) return null;
@@ -299,7 +316,7 @@ export default function LassoPage() {
     if (!ctx) return;
 
     const { zoom, offset } = view;
-    const container = canvasViewport.containerRef.current;
+    const container = canvasContainerRef.current;
     if (!container) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -397,8 +414,8 @@ export default function LassoPage() {
   }, [
     image,
     points,
-    canvasViewport.view,
-    canvasViewport.containerRef,
+    view,
+    canvasContainerRef,
     mode,
     mousePos,
     isClosed,
@@ -705,11 +722,11 @@ export default function LassoPage() {
                 </Button>
                 <ViewportControls
                   onZoomIn={() =>
-                    image && canvasViewport.setZoomIn(image.width, image.height)
+                    image && setZoomIn(image.width, image.height)
                   }
                   onZoomOut={() =>
                     image &&
-                    canvasViewport.setZoomOut(image.width, image.height)
+                    setZoomOut(image.width, image.height)
                   }
                   onReset={handleResetCanvas}
                 />
@@ -737,7 +754,7 @@ export default function LassoPage() {
             </div>
 
             <div
-              ref={canvasViewport.containerRef}
+              ref={canvasContainerRef}
               className={cn(
                 "flex-1 relative overflow-hidden group transition-colors duration-500",
                 image
@@ -777,7 +794,7 @@ export default function LassoPage() {
               {image && (
                 <ZoomIndicator
                   zoom={view.zoom}
-                  baseZoom={canvasViewport.baseView.zoom}
+                  baseZoom={baseView.zoom}
                   className="absolute bottom-4 right-4"
                 />
               )}
@@ -850,14 +867,14 @@ export default function LassoPage() {
                     <ViewportControls
                       onZoomIn={() =>
                         previewDimensions.current.w > 0 &&
-                        previewViewport.setZoomIn(
+                        pSetZoomIn(
                           previewDimensions.current.w,
                           previewDimensions.current.h,
                         )
                       }
                       onZoomOut={() =>
                         previewDimensions.current.w > 0 &&
-                        previewViewport.setZoomOut(
+                        pSetZoomOut(
                           previewDimensions.current.w,
                           previewDimensions.current.h,
                         )
@@ -876,7 +893,7 @@ export default function LassoPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div
-                    ref={previewViewport.containerRef}
+                    ref={previewContainerRef}
                     className={cn(
                       "aspect-square min-h-[400px] overflow-hidden relative cursor-move touch-none bg-muted/5",
                       gridTheme === "light"
@@ -901,7 +918,7 @@ export default function LassoPage() {
                     />
                     <ZoomIndicator
                       zoom={pView.zoom}
-                      baseZoom={previewViewport.baseView.zoom}
+                      baseZoom={pBaseView.zoom}
                       className="absolute bottom-4 right-4"
                     />
                   </div>

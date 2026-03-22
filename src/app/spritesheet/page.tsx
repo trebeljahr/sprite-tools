@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Sparkles,
   Palette,
+  Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -76,9 +77,11 @@ const FrameItem = React.memo(
         />
         <div className="absolute top-1 right-1">
           {isSelected ? (
-            <div className="w-3 h-3 bg-primary rounded-full border border-white" />
+            <div className="w-4 h-4 bg-primary rounded shadow-sm border border-primary-foreground/20 flex items-center justify-center">
+              <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />
+            </div>
           ) : (
-            <div className="w-3 h-3 bg-white/50 rounded-full border border-gray-300" />
+            <div className="w-4 h-4 bg-black/20 backdrop-blur-sm rounded border border-white/30" />
           )}
         </div>
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -89,7 +92,12 @@ const FrameItem = React.memo(
   },
 );
 
-FrameItem.displayName = "FrameItem";
+// Helper to calculate a balanced grid (columns closest to square root)
+const calculateSmartColumns = (count: number) => {
+  if (count <= 1) return 1;
+  const sqrt = Math.sqrt(count);
+  return Math.ceil(sqrt);
+};
 
 export default function SpritesheetPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -119,7 +127,10 @@ export default function SpritesheetPage() {
 
   // Shared Viewport Hooks
   const previewViewport = useViewport();
+  const { view: pView, isPanning: pIsPanning } = previewViewport;
+  
   const sheetViewport = useViewport();
+  const { view: sView, isPanning: sIsPanning } = sheetViewport;
 
   const hasAutoFittedPreview = useRef(false);
   const hasAutoFittedSheet = useRef(false);
@@ -171,7 +182,7 @@ export default function SpritesheetPage() {
   const sheetContainerRef = sheetViewport.containerRef;
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Auto-fit animation preview when frames are processed
+  // Auto-fit animation preview when frames are processed or selection changes (only once)
   useEffect(() => {
     if (
       processedFrames.length > 0 &&
@@ -179,18 +190,18 @@ export default function SpritesheetPage() {
       previewViewport.containerRef.current &&
       !hasAutoFittedPreview.current
     ) {
-      const timer = setTimeout(() => {
+      const raf = requestAnimationFrame(() => {
         previewViewport.fitToView(
           frameDimensions.current.w,
           frameDimensions.current.h,
         );
         hasAutoFittedPreview.current = true;
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => cancelAnimationFrame(raf);
     }
-  }, [processedFrames, previewViewport]);
+  }, [processedFrames, activeFrames.length, previewViewport]);
 
-  // Auto-fit spritesheet when generated
+  // Auto-fit spritesheet when generated (only once)
   useEffect(() => {
     if (
       spritesheetUrl &&
@@ -198,14 +209,14 @@ export default function SpritesheetPage() {
       sheetViewport.containerRef.current &&
       !hasAutoFittedSheet.current
     ) {
-      const timer = setTimeout(() => {
+      const raf = requestAnimationFrame(() => {
         sheetViewport.fitToView(
           sheetDimensions.current.w,
           sheetDimensions.current.h,
         );
         hasAutoFittedSheet.current = true;
-      }, 50);
-      return () => clearTimeout(timer);
+      });
+      return () => cancelAnimationFrame(raf);
     }
   }, [spritesheetUrl, sheetViewport]);
 
@@ -358,8 +369,13 @@ export default function SpritesheetPage() {
 
     setRawFrames(extracted);
     setSelectedIndices(new Set(extracted.map((_, i) => i)));
+    
+    // Determine smart default columns
+    const smartCols = calculateSmartColumns(extracted.length);
+    setColumns(smartCols);
+
     const processed = await processFrames(extracted, true);
-    if (processed && processed.length > 0) await generateSpritesheet(processed);
+    if (processed && processed.length > 0) await generateSpritesheet(processed, smartCols);
 
     setIsExtracting(false);
     toast.success(`Extracted and processed ${extracted.length} frames!`);
@@ -508,7 +524,7 @@ export default function SpritesheetPage() {
     return processed;
   };
 
-  const generateSpritesheet = async (framesOverride?: string[]) => {
+  const generateSpritesheet = async (framesOverride?: string[], columnsOverride?: number) => {
     const framesToUse =
       framesOverride ||
       processedFrames.filter((_, i) => selectedIndices.has(i));
@@ -516,6 +532,7 @@ export default function SpritesheetPage() {
       setSpritesheetUrl(null);
       return;
     }
+    const cols = columnsOverride || columns;
     setIsCompiling(true);
     if (spritesheetUrl) URL.revokeObjectURL(spritesheetUrl);
     try {
@@ -524,9 +541,9 @@ export default function SpritesheetPage() {
       await new Promise((resolve) => (img.onload = resolve));
       const fw = img.width,
         fh = img.height;
-      const rows = Math.ceil(framesToUse.length / columns);
+      const rows = Math.ceil(framesToUse.length / cols);
       const canvas = document.createElement("canvas");
-      canvas.width = columns * fw;
+      canvas.width = cols * fw;
       canvas.height = rows * fh;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
@@ -534,7 +551,7 @@ export default function SpritesheetPage() {
         const fImg = new Image();
         fImg.src = framesToUse[i];
         await new Promise((resolve) => (fImg.onload = resolve));
-        ctx.drawImage(fImg, (i % columns) * fw, Math.floor(i / columns) * fh);
+        ctx.drawImage(fImg, (i % cols) * fw, Math.floor(i / cols) * fh);
       }
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/png"),
@@ -831,7 +848,7 @@ export default function SpritesheetPage() {
                             alt="Preview"
                             className="absolute top-0 left-0 max-w-none"
                             style={{
-                              transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`,
+                              transform: `translate(${pView.offset.x}px, ${pView.offset.y}px) scale(${pView.zoom})`,
                               transformOrigin: "0 0",
                             }}
                             draggable={false}
@@ -858,7 +875,7 @@ export default function SpritesheetPage() {
                             />
                           </div>
                           <ZoomIndicator
-                            zoom={previewViewport.view.zoom}
+                            zoom={pView.zoom}
                             baseZoom={previewViewport.baseView.zoom}
                             className="absolute bottom-2 right-2"
                           />
@@ -997,7 +1014,7 @@ export default function SpritesheetPage() {
                           alt="Result"
                           className="absolute top-0 left-0 max-w-none"
                           style={{
-                            transform: `translate(${sheetViewport.view.offset.x}px, ${sheetViewport.view.offset.y}px) scale(${sheetViewport.view.zoom})`,
+                            transform: `translate(${sView.offset.x}px, ${sView.offset.y}px) scale(${sView.zoom})`,
                             transformOrigin: "0 0",
                           }}
                           draggable={false}
@@ -1011,7 +1028,7 @@ export default function SpritesheetPage() {
                         </div>
                       )}
                       <ZoomIndicator
-                        zoom={sheetViewport.view.zoom}
+                        zoom={sView.zoom}
                         baseZoom={sheetViewport.baseView.zoom}
                         className="absolute bottom-2 right-2"
                       />
