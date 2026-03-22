@@ -117,14 +117,14 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
+@layer utilities {
+  .checkerboard {
+    background-image: conic-gradient(
+      #e5e7eb 25%, 
+      #ffffff 0 50%, 
+      #e5e7eb 0 75%, 
+      #ffffff 0
+    );
+    background-size: 20px 20px;
   }
 }

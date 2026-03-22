@@ -43,8 +43,11 @@ export default function SpritesheetPage() {
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
 
   // Background Removal
-  const [removeBackground, setRemoveBackground] = useState(false);
+  const [removeBackground, setRemoveBackground] = useState(true);
   const [similarity, setSimilarity] = useState(30);
+  const [softness, setSoftness] = useState(10);
+  const [spill, setSpill] = useState(20);
+  const [choke, setChoke] = useState(0);
 
   // Animation Preview State
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -159,17 +162,70 @@ export default function SpritesheetPage() {
 
             // Euclidean distance for color similarity
             const distance = Math.sqrt(
-              Math.pow(r - targetR, 2) +
-                Math.pow(g - targetG, 2) +
-                Math.pow(b - targetB, 2),
+              Math.pow(r - targetR, 2) + 
+              Math.pow(g - targetG, 2) + 
+              Math.pow(b - targetB, 2)
             );
 
+            // 1. Soft Alpha Masking
             if (distance < similarity) {
-              data[j + 3] = 0; // Set alpha to 0 (transparent)
+              data[j + 3] = 0; // Fully transparent
+            } else if (distance < similarity + softness) {
+              // Smooth transition (feathering)
+              const alpha = ((distance - similarity) / softness) * 255;
+              data[j + 3] = Math.min(data[j + 3], alpha);
+            }
+
+            // 2. Spill Reduction (De-tint the edges)
+            // If the pixel is close to the background color but not transparent enough,
+            // we reduce the influence of the background color components.
+            if (distance < similarity + softness + spill) {
+              const spillFactor = 1 - Math.max(0, Math.min(1, (distance - similarity) / (softness + spill)));
+
+              // Desaturate by pulling towards the average of R and B if G is the target (typical for greenscreen)
+              // Here we do a general approach: blend the pixel towards a neutral version of itself
+              const gray = (r + g + b) / 3;
+              data[j] = r * (1 - spillFactor) + gray * spillFactor;
+              data[j + 1] = g * (1 - spillFactor) + gray * spillFactor;
+              data[j + 2] = b * (1 - spillFactor) + gray * spillFactor;
             }
           }
+
+          // 3. Mask Choke (Erosion)
+          // Shrinks the mask by 'choke' pixels to remove any remaining halo
+          if (choke > 0) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const originalAlphas = new Uint8Array(data.length / 4);
+            for (let k = 0; k < originalAlphas.length; k++) {
+              originalAlphas[k] = data[k * 4 + 3];
+            }
+
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                if (data[idx + 3] === 0) continue;
+
+                let minAlpha = data[idx + 3];
+                // Check a square neighborhood based on 'choke'
+                for (let dy = -choke; dy <= choke; dy++) {
+                  for (let dx = -choke; dx <= choke; dx++) {
+                    const ny = y + dy;
+                    const nx = x + dx;
+                    if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                      const nAlpha = originalAlphas[ny * width + nx];
+                      if (nAlpha < minAlpha) minAlpha = nAlpha;
+                    }
+                  }
+                }
+                data[idx + 3] = minAlpha;
+              }
+            }
+          }
+
           ctx.putImageData(imageData, 0, 0);
         }
+
 
         extracted.push(canvas.toDataURL("image/png"));
       }
@@ -240,6 +296,13 @@ export default function SpritesheetPage() {
     link.download = "spritesheet.png";
     link.click();
   };
+
+  // Automate sprite sheet generation when frames or columns change
+  useEffect(() => {
+    if (frames.length > 0) {
+      generateSpritesheet();
+    }
+  }, [frames, columns]);
 
   return (
     <main className="flex-1 container max-w-6xl mx-auto py-12 px-4">
@@ -391,27 +454,101 @@ export default function SpritesheetPage() {
                   </div>
 
                   {removeBackground && (
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <Label className="text-xs">Chroma Similarity</Label>
-                        <span className="text-[10px] font-mono">
-                          {similarity || 30}
-                        </span>
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <Label className="text-xs">Chroma Similarity</Label>
+                          <span className="text-[10px] font-mono">
+                            {similarity || 30}
+                          </span>
+                        </div>
+                        <div className="px-1">
+                          <Slider
+                            className="w-full"
+                            value={[similarity]}
+                            min={1}
+                            max={150}
+                            step={1}
+                            onValueChange={(val) => {
+                              if (typeof val === "number") setSimilarity(val);
+                              else if (val && val.length > 0) {
+                                setSimilarity(val[0]);
+                              }
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="px-1">
-                        <Slider
-                          className="w-full"
-                          value={[similarity]}
-                          min={1}
-                          max={150}
-                          step={1}
-                          onValueChange={(val) => {
-                            if (typeof val === "number") setSimilarity(val);
-                            else if (val && val.length > 0) {
-                              setSimilarity(val[0]);
-                            }
-                          }}
-                        />
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <Label className="text-xs">Edge Softness</Label>
+                          <span className="text-[10px] font-mono">
+                            {softness || 10}
+                          </span>
+                        </div>
+                        <div className="px-1">
+                          <Slider
+                            className="w-full"
+                            value={[softness]}
+                            min={0}
+                            max={50}
+                            step={1}
+                            onValueChange={(val) => {
+                              if (typeof val === "number") setSoftness(val);
+                              else if (val && val.length > 0) {
+                                setSoftness(val[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <Label className="text-xs">Color Spill</Label>
+                          <span className="text-[10px] font-mono">
+                            {spill || 20}
+                          </span>
+                        </div>
+                        <div className="px-1">
+                          <Slider
+                            className="w-full"
+                            value={[spill]}
+                            min={0}
+                            max={100}
+                            step={1}
+                            onValueChange={(val) => {
+                              if (typeof val === "number") setSpill(val);
+                              else if (val && val.length > 0) {
+                                setSpill(val[0]);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <Label className="text-xs">Mask Choke (Erosion)</Label>
+                          <span className="text-[10px] font-mono">
+                            {choke || 0}px
+                          </span>
+                        </div>
+                        <div className="px-1">
+                          <Slider
+                            className="w-full"
+                            value={[choke]}
+                            min={0}
+                            max={5}
+                            step={1}
+                            onValueChange={(val) => {
+                              if (typeof val === "number") setChoke(val);
+                              else if (val && val.length > 0) {
+                                setChoke(val[0]);
+                              }
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -435,16 +572,6 @@ export default function SpritesheetPage() {
                     Extract Frames
                   </>
                 )}
-              </Button>
-
-              <Button
-                onClick={generateSpritesheet}
-                disabled={isProcessing || frames.length === 0}
-                variant="secondary"
-                className="w-full"
-              >
-                <LayoutGrid className="mr-2 h-4 w-4" />
-                Generate Sheet
               </Button>
             </CardFooter>
           </Card>
@@ -475,7 +602,7 @@ export default function SpritesheetPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative">
+                <div className="aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative checkerboard">
                   {frames.length > 0 ? (
                     <img
                       src={frames[previewIndex]}
@@ -548,7 +675,7 @@ export default function SpritesheetPage() {
                 )}
               </CardHeader>
               <CardContent>
-                <div className="aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden">
+                <div className="aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden checkerboard">
                   {spritesheetUrl ? (
                     <img
                       src={spritesheetUrl}
@@ -578,7 +705,7 @@ export default function SpritesheetPage() {
             </CardHeader>
             <CardContent>
               {frames.length > 0 ? (
-                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[300px] overflow-y-auto p-1 border rounded-md">
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[300px] overflow-y-auto p-1 border rounded-md checkerboard">
                   {frames.map((frame, i) => (
                     <div
                       key={i}
