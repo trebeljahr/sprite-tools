@@ -117,23 +117,21 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-@layer utilities {
-  @utility checkerboard-light {
-    background-image: conic-gradient(
-      #f3f4f6 25%, 
-      #ffffff 0 50%, 
-      #f3f4f6 0 75%, 
-      #ffffff 0
-    );
-    background-size: 20px 20px;
-  }
-  @utility checkerboard-dark {
-    background-image: conic-gradient(
-      #1f2937 25%, 
-      #111827 0 50%, 
-      #1f2937 0 75%, 
-      #111827 0
-    );
-    background-size: 20px 20px;
-  }
+@utility checkerboard-light {
+  background-image: conic-gradient(
+    #f3f4f6 25%, 
+    #ffffff 0 50%, 
+    #f3f4f6 0 75%, 
+    #ffffff 0
+  );
+  background-size: 20px 20px;
+}
+@utility checkerboard-dark {
+  background-image: conic-gradient(
+    #1f2937 25%, 
+    #111827 0 50%, 
+    #1f2937 0 75%, 
+    #111827 0
+  );
+  background-size: 20px 20px;
 }

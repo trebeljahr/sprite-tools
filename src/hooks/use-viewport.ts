@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 
 export interface ViewState {
   zoom: number;
@@ -35,29 +35,31 @@ export function useViewport(options: UseViewportOptions = {}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const zoomAtPoint = useCallback((factor: number, cx?: number, cy?: number) => {
+    const element = containerRef.current;
+    let pivotX = cx;
+    let pivotY = cy;
+    
+    if (pivotX === undefined || pivotY === undefined) {
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        pivotX = rect.width / 2;
+        pivotY = rect.height / 2;
+      } else {
+        pivotX = 0;
+        pivotY = 0;
+      }
+    }
+
+    const px = pivotX;
+    const py = pivotY;
+
     setView((prev) => {
       const newZoom = Math.min(Math.max(prev.zoom * factor, minZoom), maxZoom);
-      
-      let pivotX = cx;
-      let pivotY = cy;
-      
-      const element = containerRef.current;
-      if (pivotX === undefined || pivotY === undefined) {
-        if (element) {
-          const rect = element.getBoundingClientRect();
-          pivotX = rect.width / 2;
-          pivotY = rect.height / 2;
-        } else {
-          pivotX = 0;
-          pivotY = 0;
-        }
-      }
-
       return {
         zoom: newZoom,
         offset: {
-          x: pivotX - (pivotX - prev.offset.x) * (newZoom / prev.zoom),
-          y: pivotY - (pivotY - prev.offset.y) * (newZoom / prev.zoom),
+          x: px - (px - prev.offset.x) * (newZoom / prev.zoom),
+          y: py - (py - prev.offset.y) * (newZoom / prev.zoom),
         },
       };
     });
@@ -91,11 +93,12 @@ export function useViewport(options: UseViewportOptions = {}) {
 
   const setZoomIn = useCallback((contentWidth?: number, contentHeight?: number) => {
     if (typeof contentWidth === 'number' && typeof contentHeight === 'number') {
+      const element = containerRef.current;
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      
       setView((prev) => {
         const newZoom = Math.min(prev.zoom * 1.2, maxZoom);
-        const element = containerRef.current;
-        if (!element) return prev;
-        const rect = element.getBoundingClientRect();
         return {
           zoom: newZoom,
           offset: {
@@ -111,11 +114,12 @@ export function useViewport(options: UseViewportOptions = {}) {
 
   const setZoomOut = useCallback((contentWidth?: number, contentHeight?: number) => {
     if (typeof contentWidth === 'number' && typeof contentHeight === 'number') {
+      const element = containerRef.current;
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+
       setView((prev) => {
         const newZoom = Math.max(prev.zoom * 0.8, minZoom);
-        const element = containerRef.current;
-        if (!element) return prev;
-        const rect = element.getBoundingClientRect();
         return {
           zoom: newZoom,
           offset: {
@@ -138,7 +142,7 @@ export function useViewport(options: UseViewportOptions = {}) {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      const divisor = e.ctrlKey ? 40 : 160; // Reduced from 80 to 40 for 2x responsiveness on pinch
+      const divisor = e.ctrlKey ? 20 : 160; // Reduced from 40 to 20 for another 2x responsiveness on pinch
       const zoomFactor = Math.pow(1.1, -e.deltaY / divisor);
       zoomAtPoint(zoomFactor, mouseX, mouseY);
     },
@@ -173,7 +177,7 @@ export function useViewport(options: UseViewportOptions = {}) {
     setIsPanning(false);
   }, []);
 
-  return {
+  return useMemo(() => ({
     view,
     setView,
     baseView,
@@ -188,5 +192,17 @@ export function useViewport(options: UseViewportOptions = {}) {
     startPanning,
     updatePanning,
     stopPanning,
-  };
+  }), [
+    view,
+    baseView,
+    isPanning,
+    resetView,
+    fitToView,
+    setZoomIn,
+    setZoomOut,
+    handleWheel,
+    startPanning,
+    updatePanning,
+    stopPanning,
+  ]);
 }

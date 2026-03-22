@@ -50,8 +50,10 @@ export default function LassoPage() {
   const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const canvasRef = canvasViewport.containerRef;
-  const previewContainerRef = previewViewport.containerRef;
+  const hasAutoFittedMain = useRef(false);
+  const hasAutoFittedPreview = useRef(false);
+  const localCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewCanvasRef = useRef<HTMLImageElement | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,14 +68,36 @@ export default function LassoPage() {
           setPoints([]);
           setIsClosed(false);
           setPreviewUrl(null);
-          // Wait for next tick so containerRef is ready
-          setTimeout(() => canvasViewport.fitToView(img.width, img.height), 0);
+          hasAutoFittedMain.current = false;
+          hasAutoFittedPreview.current = false;
         };
         img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
   };
+
+  // Auto-fit main image when it loads or container becomes available
+  useEffect(() => {
+    if (image && canvasViewport.containerRef.current && !hasAutoFittedMain.current) {
+      const timer = setTimeout(() => {
+        canvasViewport.fitToView(image.width, image.height);
+        hasAutoFittedMain.current = true;
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [image, canvasViewport]);
+
+  // Auto-fit preview result when it's generated
+  useEffect(() => {
+    if (previewUrl && previewDimensions.current.w > 0 && previewViewport.containerRef.current && !hasAutoFittedPreview.current) {
+      const timer = setTimeout(() => {
+        previewViewport.fitToView(previewDimensions.current.w, previewDimensions.current.h);
+        hasAutoFittedPreview.current = true;
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [previewUrl, previewViewport]);
 
   const generateProcessedCanvas = useCallback(() => {
     if (!image || points.length < 3) return null;
@@ -157,10 +181,8 @@ export default function LassoPage() {
     if (canvas) {
       setPreviewUrl(canvas.toDataURL('image/png'));
       previewDimensions.current = { w: canvas.width, h: canvas.height };
+      hasAutoFittedPreview.current = false;
       if (!silent) toast.success('Cutout processed!');
-      
-      // Auto fit preview
-      setTimeout(() => previewViewport.fitToView(canvas.width, canvas.height), 0);
       
       // Completion effects
       setTimeout(() => {
@@ -183,13 +205,13 @@ export default function LassoPage() {
   }, [isClosed, previewUrl, isProcessing, processCutout]);
 
   const draw = useCallback(() => {
-    const canvas = canvasRef.current;
+    const canvas = localCanvasRef.current;
     if (!canvas || !image) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const { zoom, offset } = canvasViewport.view;
-    const container = canvas.parentElement;
+    const container = canvasViewport.containerRef.current;
     if (!container) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -279,12 +301,12 @@ export default function LassoPage() {
       ctx.restore();
     }
     ctx.restore();
-  }, [image, points, canvasViewport.view, mode, mousePos, isClosed]);
+  }, [image, points, canvasViewport.view, canvasViewport.containerRef, mode, mousePos, isClosed]);
 
   useEffect(() => { draw(); }, [draw]);
 
   const getCanvasPoint = (e: React.MouseEvent | React.WheelEvent | WheelEvent): Point => {
-    const canvas = canvasRef.current;
+    const canvas = localCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
@@ -333,6 +355,13 @@ export default function LassoPage() {
     canvasViewport.updatePanning(e);
   };
 
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    if (!image) return;
+    canvasViewport.stopPanning();
+    dragStartPos.current = null;
+    setMousePos(null);
+  };
+
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!image) return;
     const wasDrag = hasDragged.current;
@@ -352,7 +381,7 @@ export default function LassoPage() {
         const { zoom, offset } = canvasViewport.view;
         const firstPoint = points[0];
         const screenFirst = { x: firstPoint.x * zoom + offset.x, y: firstPoint.y * zoom + offset.y };
-        const canvas = canvasRef.current;
+        const canvas = localCanvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
           const screenClick = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -368,7 +397,7 @@ export default function LassoPage() {
   };
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = localCanvasRef.current;
     if (!canvas) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -386,7 +415,7 @@ export default function LassoPage() {
   }, [canvasViewport]);
 
   useEffect(() => {
-    const container = previewContainerRef.current;
+    const container = previewViewport.containerRef.current;
     if (!container) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -517,11 +546,11 @@ export default function LassoPage() {
                 </div>
               ) : (
                 <canvas
-                  ref={canvasRef}
+                  ref={localCanvasRef}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
+                  onMouseLeave={handleMouseLeave}
                   className={cn(
                     "absolute top-0 left-0 w-full h-full",
                     mode === 'pan' ? 'cursor-move' : 'cursor-crosshair',
@@ -578,7 +607,14 @@ export default function LassoPage() {
                     onMouseUp={previewViewport.stopPanning}
                     onMouseLeave={previewViewport.stopPanning}
                   >
-                    <img src={previewUrl} alt="Result" className="absolute top-0 left-0 shadow-2xl max-w-none" style={{ transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`, transformOrigin: '0 0' }} draggable={false} />
+                    <img 
+                      ref={previewCanvasRef}
+                      src={previewUrl} 
+                      alt="Result" 
+                      className="absolute top-0 left-0 shadow-2xl max-w-none" 
+                      style={{ transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`, transformOrigin: '0 0' }} 
+                      draggable={false} 
+                    />
                     <ZoomIndicator zoom={previewViewport.view.zoom} baseZoom={previewViewport.baseView.zoom} className="absolute bottom-4 right-4" />
                   </div>
                 </CardContent>

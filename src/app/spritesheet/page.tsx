@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { cn, applyChromaKey, type BackgroundRemovalState } from "@/lib/utils";
+import { cn, applyChromaKey } from "@/lib/utils";
 import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
 import {
@@ -121,11 +121,13 @@ export default function SpritesheetPage() {
   const previewViewport = useViewport();
   const sheetViewport = useViewport();
 
+  const hasAutoFittedPreview = useRef(false);
+  const hasAutoFittedSheet = useRef(false);
   const frameDimensions = useRef({ w: 0, h: 0 });
   const sheetDimensions = useRef({ w: 0, h: 0 });
 
   // Background Removal Settings
-  const [brState, setBrState] = useState<BackgroundRemovalState>({
+  const [brState, setBrState] = useState({
     removeBackground: true,
     autoCrop: true,
     similarity: 30,
@@ -168,6 +170,44 @@ export default function SpritesheetPage() {
   const previewContainerRef = previewViewport.containerRef;
   const sheetContainerRef = sheetViewport.containerRef;
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Auto-fit animation preview when frames are processed
+  useEffect(() => {
+    if (
+      processedFrames.length > 0 &&
+      frameDimensions.current.w > 0 &&
+      previewViewport.containerRef.current &&
+      !hasAutoFittedPreview.current
+    ) {
+      const timer = setTimeout(() => {
+        previewViewport.fitToView(
+          frameDimensions.current.w,
+          frameDimensions.current.h,
+        );
+        hasAutoFittedPreview.current = true;
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [processedFrames, previewViewport]);
+
+  // Auto-fit spritesheet when generated
+  useEffect(() => {
+    if (
+      spritesheetUrl &&
+      sheetDimensions.current.w > 0 &&
+      sheetViewport.containerRef.current &&
+      !hasAutoFittedSheet.current
+    ) {
+      const timer = setTimeout(() => {
+        sheetViewport.fitToView(
+          sheetDimensions.current.w,
+          sheetDimensions.current.h,
+        );
+        hasAutoFittedSheet.current = true;
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [spritesheetUrl, sheetViewport]);
 
   // Progress Smoothing
   useEffect(() => {
@@ -270,6 +310,8 @@ export default function SpritesheetPage() {
       setPreviewIndex(0);
       setIsPlaying(false);
       setProgress(0);
+      hasAutoFittedPreview.current = false;
+      hasAutoFittedSheet.current = false;
     }
   };
 
@@ -456,9 +498,7 @@ export default function SpritesheetPage() {
 
     setProcessedFrames(processed);
     frameDimensions.current = { w: cropW, h: cropH };
-
-    // Auto fit preview
-    setTimeout(() => previewViewport.fitToView(cropW, cropH), 0);
+    hasAutoFittedPreview.current = false;
 
     setIsProcessing(false);
     if (!isInitial) {
@@ -503,11 +543,7 @@ export default function SpritesheetPage() {
         const url = URL.createObjectURL(blob);
         setSpritesheetUrl(url);
         sheetDimensions.current = { w: canvas.width, h: canvas.height };
-        // Auto fit sheet
-        setTimeout(
-          () => sheetViewport.fitToView(canvas.width, canvas.height),
-          0,
-        );
+        hasAutoFittedSheet.current = false;
       }
     } finally {
       setIsCompiling(false);
@@ -555,17 +591,6 @@ export default function SpritesheetPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
-          <Card className="p-4 space-y-4">
-            <div className="text-xs text-muted-foreground space-y-2">
-              <p className="font-semibold text-foreground">Shortcuts:</p>
-              <div className="grid grid-cols-2 gap-y-1 border rounded-md p-3 bg-muted/20">
-                <span>Navigate:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Arrow keys</span>
-                <span>Select:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
-                <span>Move View:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
-                <span>Zoom:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Scroll Wheel</span>
-              </div>
-            </div>
-          </Card>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Source & Extraction</CardTitle>
@@ -763,8 +788,20 @@ export default function SpritesheetPage() {
                       </Button>
                     </div>
                     <ViewportControls
-                      onZoomIn={() => frameDimensions.current.w > 0 && previewViewport.setZoomIn(frameDimensions.current.w, frameDimensions.current.h)}
-                      onZoomOut={() => frameDimensions.current.w > 0 && previewViewport.setZoomOut(frameDimensions.current.w, frameDimensions.current.h)}
+                      onZoomIn={() =>
+                        frameDimensions.current.w > 0 &&
+                        previewViewport.setZoomIn(
+                          frameDimensions.current.w,
+                          frameDimensions.current.h,
+                        )
+                      }
+                      onZoomOut={() =>
+                        frameDimensions.current.w > 0 &&
+                        previewViewport.setZoomOut(
+                          frameDimensions.current.w,
+                          frameDimensions.current.h,
+                        )
+                      }
                       onReset={() =>
                         previewViewport.fitToView(
                           frameDimensions.current.w,
@@ -892,8 +929,20 @@ export default function SpritesheetPage() {
                     </div>
                     <div className="flex gap-1 items-center">
                       <ViewportControls
-                        onZoomIn={() => sheetDimensions.current.w > 0 && sheetViewport.setZoomIn(sheetDimensions.current.w, sheetDimensions.current.h)}
-                        onZoomOut={() => sheetDimensions.current.w > 0 && sheetViewport.setZoomOut(sheetDimensions.current.w, sheetDimensions.current.h)}
+                        onZoomIn={() =>
+                          sheetDimensions.current.w > 0 &&
+                          sheetViewport.setZoomIn(
+                            sheetDimensions.current.w,
+                            sheetDimensions.current.h,
+                          )
+                        }
+                        onZoomOut={() =>
+                          sheetDimensions.current.w > 0 &&
+                          sheetViewport.setZoomOut(
+                            sheetDimensions.current.w,
+                            sheetDimensions.current.h,
+                          )
+                        }
                         onReset={() =>
                           sheetViewport.fitToView(
                             sheetDimensions.current.w,
