@@ -108,6 +108,10 @@ export default function SpritesheetPage() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [progress, setProgress] = useState(0);
   const [smoothProgress, setSmoothProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
+  const [actionOrigin, setActionOrigin] = useState<"extract" | "settings" | null>(
+    null,
+  );
 
   const [fps, setFps] = useState(10);
   const [columns, setColumns] = useState(8);
@@ -161,6 +165,16 @@ export default function SpritesheetPage() {
 
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const sheetContainerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to results when first processed
+  useEffect(() => {
+    if (processedFrames.length > 0 && actionOrigin === "extract" && !isProcessing) {
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, [processedFrames.length, actionOrigin, isProcessing]);
 
   // Synchronous State Adjustments (Render Phase)
   // This is the recommended pattern to avoid cascading renders from Effects
@@ -258,6 +272,8 @@ export default function SpritesheetPage() {
   const extractFrames = async () => {
     if (!videoUrl) return;
     setIsExtracting(true);
+    setActionOrigin("extract");
+    setProgressLabel("Extracting Video...");
     setProgress(0);
     setRawFrames([]);
     setProcessedFrames([]);
@@ -312,7 +328,12 @@ export default function SpritesheetPage() {
   const processFrames = async (sourceFrames = rawFrames, isInitial = false) => {
     if (sourceFrames.length === 0) return;
     setIsProcessing(true);
-    if (!isInitial) setProgress(0);
+    if (!isInitial) {
+      setActionOrigin("settings");
+      setProgress(0);
+    }
+
+    setProgressLabel("Removing background...");
 
     // Revoke old object URLs to prevent memory leaks
     processedFrames.forEach((url) => URL.revokeObjectURL(url));
@@ -488,14 +509,13 @@ export default function SpritesheetPage() {
         }
       }
 
-      // Update progress for Step 1 (up to 70%)
-      const step1Progress = Math.round(
-        ((i + 1) / sourceFrames.length) * (isInitial ? 35 : 70),
-      );
-      setProgress(isInitial ? 50 + step1Progress : step1Progress);
+      // Update progress for Step 1 (up to 70% of the processing phase)
+      const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);
+      setProgress(isInitial ? 50 + Math.round(step1Progress * 0.5) : step1Progress);
     }
 
     // Step 2: Crop and generate final blobs
+    setProgressLabel("Auto-Cropping...");
     const processed: string[] = [];
     const padding = 2; // Add a small safe padding
     let cropX = 0,
@@ -527,18 +547,23 @@ export default function SpritesheetPage() {
         if (blob) processed.push(URL.createObjectURL(blob));
       }
 
-      // Final progress (70% -> 100%)
+      // Final progress (70% -> 100% of the processing phase)
       const step2Progress = Math.round(((i + 1) / frameImageData.length) * 30);
+      const currentProcessingProgress = 70 + step2Progress;
+      
       setProgress(
         isInitial
-          ? 50 + 70 + Math.round((step2Progress / 100) * 30)
-          : 70 + step2Progress,
+          ? 50 + Math.round(currentProcessingProgress * 0.5)
+          : currentProcessingProgress,
       );
     }
 
     setProcessedFrames(processed);
     setIsProcessing(false);
-    if (!isInitial) toast.success("Frames processed!");
+    if (!isInitial) {
+      toast.success("Frames processed!");
+      setActionOrigin(null);
+    }
   };
 
   const generateSpritesheet = async () => {
@@ -753,12 +778,18 @@ export default function SpritesheetPage() {
                       ? "Processing..."
                       : "Extract Raw Frames"}
                 </Button>
-                {isExtracting && (
+                {actionOrigin === "extract" && (isExtracting || isProcessing) && (
                   <div className="space-y-2 pt-2">
                     <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
-                      <span className="text-muted-foreground">
-                        Extracting Video...
-                      </span>
+                      {smoothProgress === 100 ? (
+                        <span className="text-primary animate-pulse font-bold">
+                          Finishing up...
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {progressLabel}
+                        </span>
+                      )}
                       <span className="text-muted-foreground">
                         {smoothProgress}%
                       </span>
@@ -852,43 +883,45 @@ export default function SpritesheetPage() {
                 )}
               </div>
 
-              <div className="space-y-4 border-t border-dashed pt-4">
-                <Button
-                  onClick={() => processFrames()}
-                  disabled={
-                    isProcessing || isExtracting || rawFrames.length === 0
-                  }
-                  variant="outline"
-                  className="w-full"
-                >
-                  {isProcessing && !isExtracting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4 text-primary" />
-                  )}
-                  Apply Settings
-                </Button>
+              {processedFrames.length > 0 && (
+                <div className="space-y-4 border-t border-dashed pt-4">
+                  <Button
+                    onClick={() => processFrames()}
+                    disabled={
+                      isProcessing || isExtracting || rawFrames.length === 0
+                    }
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {isProcessing && actionOrigin === "settings" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                    )}
+                    Re-do Background Removal
+                  </Button>
 
-                {isProcessing && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
-                      {smoothProgress === 100 ? (
-                        <span className="text-primary animate-pulse font-bold">
-                          Finishing up...
-                        </span>
-                      ) : (
+                  {isProcessing && actionOrigin === "settings" && (
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
+                        {smoothProgress === 100 ? (
+                          <span className="text-primary animate-pulse font-bold">
+                            Finishing up...
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {progressLabel}
+                          </span>
+                        )}
                         <span className="text-muted-foreground">
-                          Applying Filters...
+                          {smoothProgress}%
                         </span>
-                      )}
-                      <span className="text-muted-foreground">
-                        {smoothProgress}%
-                      </span>
+                      </div>
+                      <Progress value={smoothProgress} className="h-1.5" />
                     </div>
-                    <Progress value={smoothProgress} className="h-1.5" />
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
