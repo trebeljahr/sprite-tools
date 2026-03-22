@@ -763,8 +763,8 @@ export default function SpritesheetPage() {
                       </Button>
                     </div>
                     <ViewportControls
-                      onZoomIn={previewViewport.setZoomIn}
-                      onZoomOut={previewViewport.setZoomOut}
+                      onZoomIn={() => frameDimensions.current.w > 0 && previewViewport.setZoomIn(frameDimensions.current.w, frameDimensions.current.h)}
+                      onZoomOut={() => frameDimensions.current.w > 0 && previewViewport.setZoomOut(frameDimensions.current.w, frameDimensions.current.h)}
                       onReset={() =>
                         previewViewport.fitToView(
                           frameDimensions.current.w,
@@ -892,8 +892,8 @@ export default function SpritesheetPage() {
                     </div>
                     <div className="flex gap-1 items-center">
                       <ViewportControls
-                        onZoomIn={sheetViewport.setZoomIn}
-                        onZoomOut={sheetViewport.setZoomOut}
+                        onZoomIn={() => sheetDimensions.current.w > 0 && sheetViewport.setZoomIn(sheetDimensions.current.w, sheetDimensions.current.h)}
+                        onZoomOut={() => sheetDimensions.current.w > 0 && sheetViewport.setZoomOut(sheetDimensions.current.w, sheetDimensions.current.h)}
                         onReset={() =>
                           sheetViewport.fitToView(
                             sheetDimensions.current.w,

@@ -189,8 +189,21 @@ export default function LassoPage() {
     if (!ctx) return;
 
     const { zoom, offset } = canvasViewport.view;
+    const container = canvas.parentElement;
+    if (!container) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = window.devicePixelRatio || 1;
+    const targetW = container.clientWidth * dpr;
+    const targetH = container.clientHeight * dpr;
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
     
     // Enable high-quality smoothing for zoomed-out views
     ctx.imageSmoothingEnabled = true;
@@ -265,6 +278,7 @@ export default function LassoPage() {
       });
       ctx.restore();
     }
+    ctx.restore();
   }, [image, points, canvasViewport.view, mode, mousePos, isClosed]);
 
   useEffect(() => { draw(); }, [draw]);
@@ -273,11 +287,9 @@ export default function LassoPage() {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     return {
-      x: ((e.clientX - rect.left) * scaleX - canvasViewport.view.offset.x) / canvasViewport.view.zoom,
-      y: ((e.clientY - rect.top) * scaleY - canvasViewport.view.offset.y) / canvasViewport.view.zoom
+      x: (e.clientX - rect.left - canvasViewport.view.offset.x) / canvasViewport.view.zoom,
+      y: (e.clientY - rect.top - canvasViewport.view.offset.y) / canvasViewport.view.zoom
     };
   };
 
@@ -343,9 +355,7 @@ export default function LassoPage() {
         const canvas = canvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
-          const scaleX = canvas.width / rect.width;
-          const scaleY = canvas.height / rect.height;
-          const screenClick = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+          const screenClick = { x: e.clientX - rect.left, y: e.clientY - rect.top };
           const dist = Math.sqrt(Math.pow(screenClick.x - screenFirst.x, 2) + Math.pow(screenClick.y - screenFirst.y, 2));
           if (dist < 20) {
             setIsClosed(true);
@@ -477,7 +487,11 @@ export default function LassoPage() {
                 <Button variant={mode === 'pan' ? 'default' : 'ghost'} size="sm" className="h-8 px-3" onClick={() => setMode('pan')} title="Pan Tool"><Move className="h-4 w-4 mr-2" /> Pan</Button>
                 <div className="w-px h-4 bg-border mx-1" />
                 <Button size="icon" variant="ghost" className="h-8 w-8" title="Toggle Grid Color" onClick={() => setGridTheme(prev => prev === 'light' ? 'dark' : 'light')}><Palette className={cn("h-4 w-4", gridTheme === 'dark' ? "text-primary" : "text-muted-foreground")} /></Button>
-                <ViewportControls onZoomIn={canvasViewport.setZoomIn} onZoomOut={canvasViewport.setZoomOut} onReset={handleResetCanvas} />
+                <ViewportControls 
+                  onZoomIn={() => image && canvasViewport.setZoomIn(image.width, image.height)} 
+                  onZoomOut={() => image && canvasViewport.setZoomOut(image.width, image.height)} 
+                  onReset={handleResetCanvas} 
+                />
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" className="h-8" onClick={undoLastPoint} disabled={points.length === 0}><Undo className="mr-2 h-4 w-4" /> Undo</Button>
@@ -504,14 +518,12 @@ export default function LassoPage() {
               ) : (
                 <canvas
                   ref={canvasRef}
-                  width={image.width}
-                  height={image.height}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                   className={cn(
-                    "absolute top-0 left-0 max-w-none max-h-none",
+                    "absolute top-0 left-0 w-full h-full",
                     mode === 'pan' ? 'cursor-move' : 'cursor-crosshair',
                     canvasViewport.isPanning && 'cursor-grabbing'
                   )}
@@ -545,7 +557,11 @@ export default function LassoPage() {
                     <Button size="icon" variant="ghost" className="h-7 w-7" title="Toggle Grid" onClick={() => setGridTheme(prev => prev === 'light' ? 'dark' : 'light')}><Palette className={cn("h-4 w-4", gridTheme === 'dark' ? "text-primary" : "text-muted-foreground")} /></Button>
                   </div>
                   <div className="flex gap-1 items-center">
-                    <ViewportControls onZoomIn={previewViewport.setZoomIn} onZoomOut={previewViewport.setZoomOut} onReset={handleResetPreview} />
+                    <ViewportControls 
+                      onZoomIn={() => previewDimensions.current.w > 0 && previewViewport.setZoomIn(previewDimensions.current.w, previewDimensions.current.h)} 
+                      onZoomOut={() => previewDimensions.current.w > 0 && previewViewport.setZoomOut(previewDimensions.current.w, previewDimensions.current.h)} 
+                      onReset={handleResetPreview} 
+                    />
                     <div className="w-px h-4 bg-border mx-1" />
                     <Button onClick={exportClippedImage} size="sm" className="h-8 gap-2"><Download className="h-4 w-4" /> Export</Button>
                   </div>

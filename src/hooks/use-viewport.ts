@@ -79,7 +79,7 @@ export function useViewport(options: UseViewportOptions = {}) {
 
     const zoomX = availableWidth / contentWidth;
     const zoomY = availableHeight / contentHeight;
-    const newZoom = Math.min(zoomX, zoomY, 1);
+    const newZoom = Math.min(zoomX, zoomY); // Removed the 1.0 cap to allow fitting small images
 
     const offsetX = (rect.width - contentWidth * newZoom) / 2;
     const offsetY = (rect.height - contentHeight * newZoom) / 2;
@@ -89,8 +89,45 @@ export function useViewport(options: UseViewportOptions = {}) {
     setBaseView(newView);
   }, []);
 
-  const setZoomIn = useCallback(() => zoomAtPoint(1.2), [zoomAtPoint]);
-  const setZoomOut = useCallback(() => zoomAtPoint(0.8), [zoomAtPoint]);
+  const setZoomIn = useCallback((contentWidth?: number, contentHeight?: number) => {
+    if (typeof contentWidth === 'number' && typeof contentHeight === 'number') {
+      setView((prev) => {
+        const newZoom = Math.min(prev.zoom * 1.2, maxZoom);
+        const element = containerRef.current;
+        if (!element) return prev;
+        const rect = element.getBoundingClientRect();
+        return {
+          zoom: newZoom,
+          offset: {
+            x: (rect.width - contentWidth * newZoom) / 2,
+            y: (rect.height - contentHeight * newZoom) / 2,
+          },
+        };
+      });
+    } else {
+      zoomAtPoint(1.2);
+    }
+  }, [zoomAtPoint, maxZoom]);
+
+  const setZoomOut = useCallback((contentWidth?: number, contentHeight?: number) => {
+    if (typeof contentWidth === 'number' && typeof contentHeight === 'number') {
+      setView((prev) => {
+        const newZoom = Math.max(prev.zoom * 0.8, minZoom);
+        const element = containerRef.current;
+        if (!element) return prev;
+        const rect = element.getBoundingClientRect();
+        return {
+          zoom: newZoom,
+          offset: {
+            x: (rect.width - contentWidth * newZoom) / 2,
+            y: (rect.height - contentHeight * newZoom) / 2,
+          },
+        };
+      });
+    } else {
+      zoomAtPoint(0.8);
+    }
+  }, [zoomAtPoint, minZoom]);
 
   const handleWheel = useCallback(
     (e: WheelEvent | React.WheelEvent, elementOverride?: HTMLElement | null) => {
@@ -101,7 +138,7 @@ export function useViewport(options: UseViewportOptions = {}) {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      const divisor = e.ctrlKey ? 80 : 160;
+      const divisor = e.ctrlKey ? 40 : 160; // Reduced from 80 to 40 for 2x responsiveness on pinch
       const zoomFactor = Math.pow(1.1, -e.deltaY / divisor);
       zoomAtPoint(zoomFactor, mouseX, mouseY);
     },
