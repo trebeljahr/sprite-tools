@@ -76,74 +76,96 @@ export function BackgroundRemovalSettings({
         </div>
       )}
 
-      {state.removeBackground && showAdvanced && (
+      {((state.removeBackground && showAdvanced) ||
+        !state.removeBackground) && (
         <div
           className={cn(
             "space-y-4 pt-2 animate-in slide-in-from-top-2 duration-300",
             compact && "grid grid-cols-2 gap-x-6 gap-y-4 space-y-0",
           )}
         >
-          <div className="flex items-center justify-between col-span-2 pb-2 border-b border-dashed mb-2">
-            <div className="space-y-0.5">
-              <Label
-                className={cn(compact ? "text-xs" : "text-sm font-medium")}
-              >
-                Auto-Crop Content
-              </Label>
-              {!compact && (
-                <p className="text-xs text-muted-foreground/70">
-                  Tight uniform bounds based on transparency
-                </p>
-              )}
-            </div>
-            <Switch
-              checked={state.autoCrop}
-              onCheckedChange={(v) => updateField("autoCrop", v)}
-              className={cn(compact && "scale-75 origin-right")}
-            />
-          </div>
-          {[
-            {
-              label: "Similarity",
-              val: state.similarity,
-              field: "similarity" as const,
-              max: 150,
-            },
-            {
-              label: "Edge Softness",
-              val: state.softness,
-              field: "softness" as const,
-              max: 50,
-            },
-            {
-              label: "Color Spill",
-              val: state.spill,
-              field: "spill" as const,
-              max: 100,
-            },
-            {
-              label: "Mask Choke",
-              val: state.choke,
-              field: "choke" as const,
-              max: 5,
-            },
-          ].map((s) => (
-            <div key={s.label} className="space-y-2">
-              <div className="flex justify-between">
-                <Label className="text-xs text-muted-foreground">
-                  {s.label}
+          {state.removeBackground && (
+            <div className="flex items-center justify-between col-span-2 pb-2 border-b border-dashed mb-2">
+              <div className="space-y-0.5">
+                <Label
+                  className={cn(compact ? "text-xs" : "text-sm font-medium")}
+                >
+                  Auto-Crop Content
                 </Label>
-                <span className="text-xs font-mono">{s.val}</span>
+                {!compact && (
+                  <p className="text-xs text-muted-foreground/70">
+                    Tight uniform bounds based on transparency
+                  </p>
+                )}
               </div>
-              <Slider
-                value={[s.val]}
-                min={0}
-                max={s.max}
-                step={1}
-                onValueChange={(v) => updateField(s.field, v)}
+              <Switch
+                checked={state.autoCrop}
+                onCheckedChange={(v) => updateField("autoCrop", v)}
+                className={cn(compact && "scale-75 origin-right")}
               />
             </div>
-          ))}
+          )}
+
+          {state.removeBackground ? (
+            [
+              {
+                label: "Similarity",
+                val: state.similarity,
+                field: "similarity" as const,
+                max: 150,
+              },
+              {
+                label: "Edge Softness",
+                val: state.softness,
+                field: "softness" as const,
+                max: 50,
+              },
+              {
+                label: "Color Spill",
+                val: state.spill,
+                field: "spill" as const,
+                max: 100,
+              },
+              {
+                label: "Mask Choke",
+                val: state.choke,
+                field: "choke" as const,
+                max: 5,
+              },
+            ].map((s) => (
+              <div key={s.label} className="space-y-2">
+                <div className="flex justify-between">
+                  <Label className="text-xs text-muted-foreground">
+                    {s.label}
+                  </Label>
+                  <span className="text-xs font-mono">{s.val}</span>
+                </div>
+                <Slider
+                  value={[s.val]}
+                  min={0}
+                  max={s.max}
+                  step={1}
+                  onValueChange={(v) => updateField(s.field, v)}
+                />
+              </div>
+            ))
+          ) : (
+            <div className="space-y-2 col-span-2">
+              <div className="flex justify-between">
+                <Label className="text-xs text-muted-foreground">
+                  Edge Feathering
+                </Label>
+                <span className="text-xs font-mono">{state.softness}px</span>
+              </div>
+              <Slider
+                value={[state.softness]}
+                min={0}
+                max={50}
+                step={1}
+                onValueChange={(v) => updateField("softness", v)}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

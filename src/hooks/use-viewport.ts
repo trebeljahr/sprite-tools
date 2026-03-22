@@ -177,7 +177,7 @@ export function useViewport(options: UseViewportOptions = {}) {
     setIsPanning(false);
   }, []);
 
-  return useMemo(() => ({
+  return {
     view,
     setView,
     baseView,
@@ -192,17 +192,5 @@ export function useViewport(options: UseViewportOptions = {}) {
     startPanning,
     updatePanning,
     stopPanning,
-  }), [
-    view,
-    baseView,
-    isPanning,
-    resetView,
-    fitToView,
-    setZoomIn,
-    setZoomOut,
-    handleWheel,
-    startPanning,
-    updatePanning,
-    stopPanning,
-  ]);
+  };
 }
