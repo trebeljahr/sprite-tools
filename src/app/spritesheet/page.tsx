@@ -1,7 +1,9 @@
 "use client";
 
+import * as React from "react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import confetti from "canvas-confetti";
 import {
   Upload,
   Scissors,
@@ -40,6 +42,55 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
+// Memoized Frame Item for Performance
+const FrameItem = React.memo(
+  ({
+    index,
+    frame,
+    isSelected,
+    isActive,
+    onMouseDown,
+    onMouseEnter,
+  }: {
+    index: number;
+    frame: string;
+    isSelected: boolean;
+    isActive: boolean;
+    onMouseDown: (index: number) => void;
+    onMouseEnter: (index: number) => void;
+  }) => {
+    return (
+      <div
+        className={cn(
+          "aspect-square border rounded bg-muted/50 overflow-hidden group relative cursor-pointer transition-all",
+          isSelected ? "ring-2 ring-primary" : "opacity-40 grayscale",
+          isActive && "ring-offset-2 ring-2 ring-blue-500",
+        )}
+        onMouseDown={() => onMouseDown(index)}
+        onMouseEnter={() => onMouseEnter(index)}
+      >
+        <img
+          src={frame}
+          alt={`F${index}`}
+          className="w-full h-full object-contain pointer-events-none"
+        />
+        <div className="absolute top-1 right-1">
+          {isSelected ? (
+            <CheckCircle2 className="w-3 h-3 text-primary bg-white rounded-full" />
+          ) : (
+            <Circle className="w-3 h-3 text-muted-foreground bg-white/50 rounded-full" />
+          )}
+        </div>
+        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-[10px] text-white font-mono">#{index}</span>
+        </div>
+      </div>
+    );
+  },
+);
+
+FrameItem.displayName = "FrameItem";
+
 export default function SpritesheetPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -53,6 +104,7 @@ export default function SpritesheetPage() {
 
   const [isExtracting, setIsExtracting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
   const [progress, setProgress] = useState(0);
   const [smoothProgress, setSmoothProgress] = useState(0);
 
@@ -65,7 +117,7 @@ export default function SpritesheetPage() {
   const [similarity, setSimilarity] = useState(30);
   const [softness, setSoftness] = useState(10);
   const [spill, setSpill] = useState(20);
-  const [choke, setChoke] = useState(0);
+  const [choke, setChoke] = useState(1);
 
   // Animation Preview State
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -88,9 +140,21 @@ export default function SpritesheetPage() {
   // Background Grid Theme
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
 
+  const activeIndices = useMemo(() => {
+    const indices: number[] = [];
+    for (let i = 0; i < processedFrames.length; i++) {
+      if (selectedIndices.size === 0 || selectedIndices.has(i)) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  }, [processedFrames.length, selectedIndices]);
+
   const activeFrames = useMemo(() => {
-    return processedFrames.filter((_, i) => selectedIndices.size === 0 || selectedIndices.has(i));
-  }, [processedFrames, selectedIndices]);
+    return activeIndices.map((i) => processedFrames[i]);
+  }, [activeIndices, processedFrames]);
+
+  const currentGlobalIndex = activeIndices[previewIndex] ?? -1;
 
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const sheetContainerRef = useRef<HTMLDivElement>(null);
@@ -218,7 +282,10 @@ export default function SpritesheetPage() {
       await new Promise((resolve) => (video.onseeked = resolve));
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        extracted.push(canvas.toDataURL("image/png"));
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/png"),
+        );
+        if (blob) extracted.push(URL.createObjectURL(blob));
       }
       setProgress(Math.round(((i + 1) / totalFramesCount) * 50));
     }
@@ -227,6 +294,15 @@ export default function SpritesheetPage() {
     setSelectedIndices(new Set(extracted.map((_, i) => i)));
     setIsExtracting(false);
     await processFrames(extracted, true);
+
+    // DELIGHT: Confetti Success Animation!
+    confetti({
+      particleCount: 150,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ["#4ade80", "#22c55e", "#3b82f6", "#f59e0b"],
+    });
+
     toast.success(`Extracted and processed ${extracted.length} frames!`);
   };
 
@@ -234,6 +310,9 @@ export default function SpritesheetPage() {
     if (sourceFrames.length === 0) return;
     setIsProcessing(true);
     if (!isInitial) setProgress(0);
+
+    // Revoke old object URLs to prevent memory leaks
+    processedFrames.forEach((url) => URL.revokeObjectURL(url));
 
     const processed: string[] = [];
     const canvas = document.createElement("canvas");
@@ -363,7 +442,10 @@ export default function SpritesheetPage() {
           }
           ctx.putImageData(imageData, 0, 0);
         }
-        processed.push(canvas.toDataURL("image/png"));
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/png"),
+        );
+        if (blob) processed.push(URL.createObjectURL(blob));
       }
       const stepProgress = Math.round(
         ((i + 1) / sourceFrames.length) * (isInitial ? 50 : 100),
@@ -383,24 +465,35 @@ export default function SpritesheetPage() {
       setSpritesheetUrl(null);
       return;
     }
-    const img = new Image();
-    img.src = activeFramesList[0];
-    await new Promise((resolve) => (img.onload = resolve));
-    const fw = img.width,
-      fh = img.height;
-    const rows = Math.ceil(activeFramesList.length / columns);
-    const canvas = document.createElement("canvas");
-    canvas.width = columns * fw;
-    canvas.height = rows * fh;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    for (let i = 0; i < activeFramesList.length; i++) {
-      const fImg = new Image();
-      fImg.src = activeFramesList[i];
-      await new Promise((resolve) => (fImg.onload = resolve));
-      ctx.drawImage(fImg, (i % columns) * fw, Math.floor(i / columns) * fh);
+
+    setIsCompiling(true);
+    if (spritesheetUrl) URL.revokeObjectURL(spritesheetUrl);
+
+    try {
+      const img = new Image();
+      img.src = activeFramesList[0];
+      await new Promise((resolve) => (img.onload = resolve));
+      const fw = img.width,
+        fh = img.height;
+      const rows = Math.ceil(activeFramesList.length / columns);
+      const canvas = document.createElement("canvas");
+      canvas.width = columns * fw;
+      canvas.height = rows * fh;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      for (let i = 0; i < activeFramesList.length; i++) {
+        const fImg = new Image();
+        fImg.src = activeFramesList[i];
+        await new Promise((resolve) => (fImg.onload = resolve));
+        ctx.drawImage(fImg, (i % columns) * fw, Math.floor(i / columns) * fh);
+      }
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      if (blob) setSpritesheetUrl(URL.createObjectURL(blob));
+    } finally {
+      setIsCompiling(false);
     }
-    setSpritesheetUrl(canvas.toDataURL("image/png"));
   };
 
   const handleFrameMouseDown = (index: number) => {
@@ -562,7 +655,7 @@ export default function SpritesheetPage() {
                 </div>
                 <Button
                   onClick={extractFrames}
-                  disabled={isExtracting || !videoUrl}
+                  disabled={isExtracting || isProcessing || !videoUrl}
                   className="w-full"
                 >
                   {isExtracting ? (
@@ -570,22 +663,18 @@ export default function SpritesheetPage() {
                   ) : (
                     <Scissors className="mr-2 h-4 w-4" />
                   )}
-                  Extract Raw Frames
+                  {isExtracting
+                    ? "Extracting..."
+                    : isProcessing && smoothProgress < 100
+                      ? "Processing..."
+                      : "Extract Raw Frames"}
                 </Button>
-                {(isExtracting || isProcessing) && (
+                {isExtracting && (
                   <div className="space-y-2 pt-2">
                     <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
-                      {smoothProgress === 100 ? (
-                        <span className="text-primary animate-pulse font-bold">
-                          Finishing up...
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {isExtracting
-                            ? "Extracting Video..."
-                            : "Applying Filters..."}
-                        </span>
-                      )}
+                      <span className="text-muted-foreground">
+                        Extracting Video...
+                      </span>
                       <span className="text-muted-foreground">
                         {smoothProgress}%
                       </span>
@@ -653,19 +742,43 @@ export default function SpritesheetPage() {
                   ))}
                 </div>
               )}
-              <Button
-                onClick={() => processFrames()}
-                disabled={isProcessing || rawFrames.length === 0}
-                variant="outline"
-                className="w-full"
-              >
-                {isProcessing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4 text-primary" />
+              <div className="space-y-4">
+                <Button
+                  onClick={() => processFrames()}
+                  disabled={
+                    isProcessing || isExtracting || rawFrames.length === 0
+                  }
+                  variant="outline"
+                  className="w-full"
+                >
+                  {isProcessing && !isExtracting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                  )}
+                  Re-process Frames
+                </Button>
+
+                {isProcessing && (
+                  <div className="space-y-2 pt-2">
+                    <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
+                      {smoothProgress === 100 ? (
+                        <span className="text-primary animate-pulse font-bold">
+                          Finishing up...
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Applying Filters...
+                        </span>
+                      )}
+                      <span className="text-muted-foreground">
+                        {smoothProgress}%
+                      </span>
+                    </div>
+                    <Progress value={smoothProgress} className="h-1.5" />
+                  </div>
                 )}
-                Re-process Frames
-              </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -879,10 +992,14 @@ export default function SpritesheetPage() {
                     variant="outline"
                     className="h-7 text-[10px] gap-1 px-2"
                     onClick={generateSpritesheet}
-                    disabled={processedFrames.length === 0}
+                    disabled={processedFrames.length === 0 || isCompiling}
                   >
-                    <RefreshCw className="w-3 h-3" />
-                    Compile
+                    {isCompiling ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    {isCompiling ? "Compiling..." : "Compile"}
                   </Button>
                   {spritesheetUrl && (
                     <Button
@@ -939,10 +1056,14 @@ export default function SpritesheetPage() {
                         variant="secondary"
                         className="gap-2"
                         onClick={generateSpritesheet}
-                        disabled={processedFrames.length === 0}
+                        disabled={processedFrames.length === 0 || isCompiling}
                       >
-                        <RefreshCw className="w-4 h-4" />
-                        Compile Selection
+                        {isCompiling ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4" />
+                        )}
+                        {isCompiling ? "Compiling..." : "Compile Selection"}
                       </Button>
                     </div>
                   )}
@@ -1010,37 +1131,15 @@ export default function SpritesheetPage() {
                   )}
                 >
                   {processedFrames.map((frame, i) => (
-                    <div
+                    <FrameItem
                       key={i}
-                      className={cn(
-                        "aspect-square border rounded bg-muted/50 overflow-hidden group relative cursor-pointer transition-all",
-                        selectedIndices.has(i)
-                          ? "ring-2 ring-primary"
-                          : "opacity-40 grayscale",
-                        activeFrames[previewIndex] === processedFrames[i] &&
-                          "ring-offset-2 ring-2 ring-blue-500",
-                      )}
-                      onMouseDown={() => handleFrameMouseDown(i)}
-                      onMouseEnter={() => handleFrameMouseEnter(i)}
-                    >
-                      <img
-                        src={frame}
-                        alt={`F${i}`}
-                        className="w-full h-full object-contain pointer-events-none"
-                      />
-                      <div className="absolute top-1 right-1">
-                        {selectedIndices.has(i) ? (
-                          <CheckCircle2 className="w-3 h-3 text-primary bg-white rounded-full" />
-                        ) : (
-                          <Circle className="w-3 h-3 text-muted-foreground bg-white/50 rounded-full" />
-                        )}
-                      </div>
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[10px] text-white font-mono">
-                          #{i}
-                        </span>
-                      </div>
-                    </div>
+                      index={i}
+                      frame={frame}
+                      isSelected={selectedIndices.has(i)}
+                      isActive={currentGlobalIndex === i}
+                      onMouseDown={handleFrameMouseDown}
+                      onMouseEnter={handleFrameMouseEnter}
+                    />
                   ))}
                 </div>
               ) : (
