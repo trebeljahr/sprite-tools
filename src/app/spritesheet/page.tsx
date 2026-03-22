@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { cn, applyChromaKey } from "@/lib/utils";
+import { cn, applyChromaKey, type BackgroundRemovalState } from "@/lib/utils";
 import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
 import {
@@ -121,8 +121,11 @@ export default function SpritesheetPage() {
   const previewViewport = useViewport();
   const sheetViewport = useViewport();
 
+  const frameDimensions = useRef({ w: 0, h: 0 });
+  const sheetDimensions = useRef({ w: 0, h: 0 });
+
   // Background Removal Settings
-  const [brState, setBrState] = useState({
+  const [brState, setBrState] = useState<BackgroundRemovalState>({
     removeBackground: true,
     autoCrop: true,
     similarity: 30,
@@ -162,8 +165,8 @@ export default function SpritesheetPage() {
 
   const currentGlobalIndex = activeIndices[previewIndex] ?? -1;
 
-  const previewContainerRef = useRef<HTMLDivElement>(null);
-  const sheetContainerRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = previewViewport.containerRef;
+  const sheetContainerRef = sheetViewport.containerRef;
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Progress Smoothing
@@ -185,31 +188,33 @@ export default function SpritesheetPage() {
   useEffect(() => {
     const preview = previewContainerRef.current;
     const sheet = sheetContainerRef.current;
-
     const onPreviewWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        previewViewport.handleWheel(e, preview);
-      }
+      e.preventDefault();
+      previewViewport.handleWheel(e, preview);
     };
-
     const onSheetWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        sheetViewport.handleWheel(e, sheet);
-      }
+      e.preventDefault();
+      sheetViewport.handleWheel(e, sheet);
     };
+    const preventDefault = (e: Event) => e.preventDefault();
 
-    if (preview)
+    if (preview) {
       preview.addEventListener("wheel", onPreviewWheel, { passive: false });
-    if (sheet)
+      preview.addEventListener("gesturestart", preventDefault, {
+        passive: false,
+      });
+    }
+    if (sheet) {
       sheet.addEventListener("wheel", onSheetWheel, { passive: false });
-
+      sheet.addEventListener("gesturestart", preventDefault, {
+        passive: false,
+      });
+    }
     return () => {
       if (preview) preview.removeEventListener("wheel", onPreviewWheel);
       if (sheet) sheet.removeEventListener("wheel", onSheetWheel);
     };
-  }, [previewViewport, sheetViewport]);
+  }, [previewViewport, sheetViewport, previewContainerRef, sheetContainerRef]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -381,7 +386,7 @@ export default function SpritesheetPage() {
         if (brState.removeBackground) {
           const imageData = ctx.getImageData(0, 0, fw, fh);
           const data = imageData.data;
-          const target = { r: data[0], g: data[1], b: data[2] }; // Simplified fallback target
+          const target = { r: data[0], g: data[1], b: data[2] };
 
           applyChromaKey(ctx, fw, fh, target, brState);
           const processedData = ctx.getImageData(0, 0, fw, fh);
@@ -450,6 +455,11 @@ export default function SpritesheetPage() {
     }
 
     setProcessedFrames(processed);
+    frameDimensions.current = { w: cropW, h: cropH };
+
+    // Auto fit preview
+    setTimeout(() => previewViewport.fitToView(cropW, cropH), 0);
+
     setIsProcessing(false);
     if (!isInitial) {
       toast.success("Frames processed!");
@@ -489,7 +499,16 @@ export default function SpritesheetPage() {
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/png"),
       );
-      if (blob) setSpritesheetUrl(URL.createObjectURL(blob));
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        setSpritesheetUrl(url);
+        sheetDimensions.current = { w: canvas.width, h: canvas.height };
+        // Auto fit sheet
+        setTimeout(
+          () => sheetViewport.fitToView(canvas.width, canvas.height),
+          0,
+        );
+      }
     } finally {
       setIsCompiling(false);
     }
@@ -654,15 +673,13 @@ export default function SpritesheetPage() {
                 showAdvanced={showAdvancedChroma}
                 setShowAdvanced={setShowAdvancedChroma}
               />
-
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
                   <Button
                     onClick={async () => {
                       const processed = await processFrames();
-                      if (processed && processed.length > 0) {
+                      if (processed && processed.length > 0)
                         await generateSpritesheet(processed);
-                      }
                     }}
                     disabled={
                       isProcessing || isExtracting || rawFrames.length === 0
@@ -677,7 +694,6 @@ export default function SpritesheetPage() {
                     )}
                     Re-do Background Removal
                   </Button>
-
                   {isProcessing && actionOrigin === "settings" && (
                     <div className="space-y-2 pt-2">
                       <div className="flex justify-between text-xs font-medium uppercase tracking-wider">
@@ -738,16 +754,19 @@ export default function SpritesheetPage() {
                     <ViewportControls
                       onZoomIn={previewViewport.setZoomIn}
                       onZoomOut={previewViewport.setZoomOut}
-                      onReset={() => {
-                        previewViewport.resetView();
-                      }}
+                      onReset={() =>
+                        previewViewport.fitToView(
+                          frameDimensions.current.w,
+                          frameDimensions.current.h,
+                        )
+                      }
                     />
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div
                       ref={previewContainerRef}
                       className={cn(
-                        "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
+                        "aspect-square rounded-lg border overflow-hidden relative cursor-move touch-none",
                         gridTheme === "light"
                           ? "checkerboard-light"
                           : "checkerboard-dark",
@@ -762,7 +781,7 @@ export default function SpritesheetPage() {
                           <img
                             src={activeFrames[previewIndex]}
                             alt="Preview"
-                            className="object-contain"
+                            className="absolute top-0 left-0 max-w-none"
                             style={{
                               transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`,
                               transformOrigin: "0 0",
@@ -796,7 +815,7 @@ export default function SpritesheetPage() {
                           />
                         </>
                       ) : (
-                        <div className="text-center p-6 text-muted-foreground text-sm">
+                        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
                           No selected frames
                         </div>
                       )}
@@ -836,14 +855,39 @@ export default function SpritesheetPage() {
                   )}
                 >
                   <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-lg">Sprite Sheet</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">Sprite Sheet</CardTitle>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="Toggle Background Grid Color"
+                        onClick={() =>
+                          setGridTheme((prev) =>
+                            prev === "light" ? "dark" : "light",
+                          )
+                        }
+                      >
+                        <Palette
+                          className={cn(
+                            "h-4 w-4",
+                            gridTheme === "dark"
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
+                        />
+                      </Button>
+                    </div>
                     <div className="flex gap-1 items-center">
                       <ViewportControls
                         onZoomIn={sheetViewport.setZoomIn}
                         onZoomOut={sheetViewport.setZoomOut}
-                        onReset={() => {
-                          sheetViewport.resetView();
-                        }}
+                        onReset={() =>
+                          sheetViewport.fitToView(
+                            sheetDimensions.current.w,
+                            sheetDimensions.current.h,
+                          )
+                        }
                       />
                       <div className="w-px h-4 bg-border mx-1" />
                       <Button
@@ -876,7 +920,7 @@ export default function SpritesheetPage() {
                     <div
                       ref={sheetContainerRef}
                       className={cn(
-                        "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
+                        "aspect-square rounded-lg border overflow-hidden relative cursor-move touch-none",
                         gridTheme === "light"
                           ? "checkerboard-light"
                           : "checkerboard-dark",
@@ -890,7 +934,7 @@ export default function SpritesheetPage() {
                         <img
                           src={spritesheetUrl}
                           alt="Result"
-                          className="object-contain"
+                          className="absolute top-0 left-0 max-w-none"
                           style={{
                             transform: `translate(${sheetViewport.view.offset.x}px, ${sheetViewport.view.offset.y}px) scale(${sheetViewport.view.zoom})`,
                             transformOrigin: "0 0",
@@ -898,8 +942,8 @@ export default function SpritesheetPage() {
                           draggable={false}
                         />
                       ) : (
-                        <div className="text-center p-6 space-y-4 opacity-20">
-                          <ImageIcon className="w-12 h-12 mx-auto mb-2" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 opacity-20">
+                          <ImageIcon className="w-12 h-12" />
                           <p className="text-sm font-medium">
                             Spritesheet will appear here
                           </p>

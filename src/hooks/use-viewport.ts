@@ -11,7 +11,6 @@ export interface UseViewportOptions {
   minZoom?: number;
   maxZoom?: number;
   initialZoom?: number;
-  zoomSensitivity?: number;
 }
 
 export function useViewport(options: UseViewportOptions = {}) {
@@ -19,7 +18,6 @@ export function useViewport(options: UseViewportOptions = {}) {
     minZoom = 0.1,
     maxZoom = 10,
     initialZoom = 1,
-    zoomSensitivity = 0.001,
   } = options;
 
   const [view, setView] = useState<ViewState>({
@@ -28,68 +26,101 @@ export function useViewport(options: UseViewportOptions = {}) {
   });
 
   const [isPanning, setIsPanning] = useState(false);
-  const panStart = useRef({ x: 0, y: 0 });
+  const panStart = useRef({ x: 0, y: 0, startOffset: { x: 0, y: 0 } });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const zoomAtPoint = useCallback((factor: number, cx?: number, cy?: number) => {
+    setView((prev) => {
+      const newZoom = Math.min(Math.max(prev.zoom * factor, minZoom), maxZoom);
+      
+      let pivotX = cx;
+      let pivotY = cy;
+      
+      const element = containerRef.current;
+      if (pivotX === undefined || pivotY === undefined) {
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          pivotX = rect.width / 2;
+          pivotY = rect.height / 2;
+        } else {
+          pivotX = 0;
+          pivotY = 0;
+        }
+      }
+
+      return {
+        zoom: newZoom,
+        offset: {
+          x: pivotX - (pivotX - prev.offset.x) * (newZoom / prev.zoom),
+          y: pivotY - (pivotY - prev.offset.y) * (newZoom / prev.zoom),
+        },
+      };
+    });
+  }, [minZoom, maxZoom]);
 
   const resetView = useCallback(() => {
     setView({ zoom: initialZoom, offset: { x: 0, y: 0 } });
   }, [initialZoom]);
 
-  const setZoomIn = useCallback(() => {
-    setView((prev) => {
-      const newZoom = Math.min(prev.zoom * 1.2, maxZoom);
-      return { ...prev, zoom: newZoom };
-    });
-  }, [maxZoom]);
+  const fitToView = useCallback((contentWidth: number, contentHeight: number, padding = 40) => {
+    const element = containerRef.current;
+    if (!element) return;
 
-  const setZoomOut = useCallback(() => {
-    setView((prev) => {
-      const newZoom = Math.max(prev.zoom * 0.8, minZoom);
-      return { ...prev, zoom: newZoom };
-    });
-  }, [minZoom]);
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const availableWidth = rect.width - padding;
+    const availableHeight = rect.height - padding;
+
+    const zoomX = availableWidth / contentWidth;
+    const zoomY = availableHeight / contentHeight;
+    const newZoom = Math.min(zoomX, zoomY, 1);
+
+    const offsetX = (rect.width - contentWidth * newZoom) / 2;
+    const offsetY = (rect.height - contentHeight * newZoom) / 2;
+
+    setView({ zoom: newZoom, offset: { x: offsetX, y: offsetY } });
+  }, []);
+
+  const setZoomIn = useCallback(() => zoomAtPoint(1.2), [zoomAtPoint]);
+  const setZoomOut = useCallback(() => zoomAtPoint(0.8), [zoomAtPoint]);
 
   const handleWheel = useCallback(
-    (e: WheelEvent | React.WheelEvent, element: HTMLElement | null) => {
+    (e: WheelEvent | React.WheelEvent, elementOverride?: HTMLElement | null) => {
+      const element = elementOverride || containerRef.current;
       if (!element) return;
       
       const rect = element.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Snappier, more responsive zoom factor
-      const zoomFactor = Math.pow(1.1, -e.deltaY / 200);
-
-      setView((prev) => {
-        const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, minZoom), maxZoom);
-        
-        // Exact 1:1 zoom-to-mouse-point calculation
-        return {
-          zoom: newZoom,
-          offset: {
-            x: mouseX - (mouseX - prev.offset.x) * (newZoom / prev.zoom),
-            y: mouseY - (mouseY - prev.offset.y) * (newZoom / prev.zoom),
-          },
-        };
-      });
+      const divisor = e.ctrlKey ? 80 : 160;
+      const zoomFactor = Math.pow(1.1, -e.deltaY / divisor);
+      zoomAtPoint(zoomFactor, mouseX, mouseY);
     },
-    [minZoom, maxZoom]
+    [zoomAtPoint]
   );
 
   const startPanning = useCallback((e: React.MouseEvent | MouseEvent) => {
     setIsPanning(true);
     panStart.current = {
-      x: e.clientX - view.offset.x,
-      y: e.clientY - view.offset.y,
+      x: e.clientX,
+      y: e.clientY,
+      startOffset: { ...view.offset },
     };
   }, [view.offset]);
 
   const updatePanning = useCallback((e: React.MouseEvent | MouseEvent) => {
     if (!isPanning) return;
+    
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    
     setView((prev) => ({
       ...prev,
       offset: {
-        x: e.clientX - panStart.current.x,
-        y: e.clientY - panStart.current.y,
+        x: panStart.current.startOffset.x + dx,
+        y: panStart.current.startOffset.y + dy,
       },
     }));
   }, [isPanning]);
@@ -102,7 +133,9 @@ export function useViewport(options: UseViewportOptions = {}) {
     view,
     setView,
     isPanning,
+    containerRef,
     resetView,
+    fitToView,
     setZoomIn,
     setZoomOut,
     handleWheel,
