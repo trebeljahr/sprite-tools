@@ -15,12 +15,17 @@ export interface UseViewportOptions {
 
 export function useViewport(options: UseViewportOptions = {}) {
   const {
-    minZoom = 0.1,
-    maxZoom = 10,
+    minZoom = 0.01,
+    maxZoom = 50,
     initialZoom = 1,
   } = options;
 
   const [view, setView] = useState<ViewState>({
+    zoom: initialZoom,
+    offset: { x: 0, y: 0 },
+  });
+
+  const [baseView, setBaseView] = useState<ViewState>({
     zoom: initialZoom,
     offset: { x: 0, y: 0 },
   });
@@ -59,8 +64,8 @@ export function useViewport(options: UseViewportOptions = {}) {
   }, [minZoom, maxZoom]);
 
   const resetView = useCallback(() => {
-    setView({ zoom: initialZoom, offset: { x: 0, y: 0 } });
-  }, [initialZoom]);
+    setView(baseView);
+  }, [baseView]);
 
   const fitToView = useCallback((contentWidth: number, contentHeight: number, padding = 40) => {
     const element = containerRef.current;
@@ -79,7 +84,9 @@ export function useViewport(options: UseViewportOptions = {}) {
     const offsetX = (rect.width - contentWidth * newZoom) / 2;
     const offsetY = (rect.height - contentHeight * newZoom) / 2;
 
-    setView({ zoom: newZoom, offset: { x: offsetX, y: offsetY } });
+    const newView = { zoom: newZoom, offset: { x: offsetX, y: offsetY } };
+    setView(newView);
+    setBaseView(newView);
   }, []);
 
   const setZoomIn = useCallback(() => zoomAtPoint(1.2), [zoomAtPoint]);
@@ -132,6 +139,8 @@ export function useViewport(options: UseViewportOptions = {}) {
   return {
     view,
     setView,
+    baseView,
+    setBaseView,
     isPanning,
     containerRef,
     resetView,

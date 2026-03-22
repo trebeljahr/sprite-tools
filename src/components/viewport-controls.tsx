@@ -57,10 +57,10 @@ export function ViewportControls({
   );
 }
 
-export function ZoomIndicator({ zoom, className }: { zoom: number; className?: string }) {
+export function ZoomIndicator({ zoom, baseZoom = 1, className }: { zoom: number; baseZoom?: number; className?: string }) {
   return (
     <div className={cn("bg-black/60 text-white text-[10px] px-2 py-1 rounded-full font-mono pointer-events-none whitespace-nowrap", className)}>
-      {Math.round(zoom * 100)}%
+      {Math.round((zoom / baseZoom) * 100)}%
     </div>
   );
 }

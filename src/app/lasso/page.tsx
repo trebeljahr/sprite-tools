@@ -454,10 +454,11 @@ export default function LassoPage() {
             <div className="text-xs text-muted-foreground space-y-2">
               <p className="font-semibold text-foreground">Shortcuts:</p>
               <div className="grid grid-cols-2 gap-y-1 border rounded-md p-3 bg-muted/20">
-                <span>Finish:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Enter</span>
+                <span>Finish:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Enter / Double-Click</span>
                 <span>Undo:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Ctrl+Z / Right-Click</span>
                 <span>Clear:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Space / Esc</span>
                 <span>Move:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
+                <span>Zoom:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Scroll Wheel</span>
               </div>
             </div>
           </Card>
@@ -516,7 +517,7 @@ export default function LassoPage() {
                   )}
                 />
               )}
-              {image && <ZoomIndicator zoom={canvasViewport.view.zoom} className="absolute bottom-4 right-4" />}
+              {image && <ZoomIndicator zoom={canvasViewport.view.zoom} baseZoom={canvasViewport.baseView.zoom} className="absolute bottom-4 right-4" />}
             </div>
           </Card>
 
@@ -562,7 +563,7 @@ export default function LassoPage() {
                     onMouseLeave={previewViewport.stopPanning}
                   >
                     <img src={previewUrl} alt="Result" className="absolute top-0 left-0 shadow-2xl max-w-none" style={{ transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`, transformOrigin: '0 0' }} draggable={false} />
-                    <ZoomIndicator zoom={previewViewport.view.zoom} className="absolute bottom-4 right-4" />
+                    <ZoomIndicator zoom={previewViewport.view.zoom} baseZoom={previewViewport.baseView.zoom} className="absolute bottom-4 right-4" />
                   </div>
                 </CardContent>
               </Card>

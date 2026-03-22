@@ -555,6 +555,17 @@ export default function SpritesheetPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
+          <Card className="p-4 space-y-4">
+            <div className="text-xs text-muted-foreground space-y-2">
+              <p className="font-semibold text-foreground">Shortcuts:</p>
+              <div className="grid grid-cols-2 gap-y-1 border rounded-md p-3 bg-muted/20">
+                <span>Navigate:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Arrow keys</span>
+                <span>Select:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
+                <span>Move View:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
+                <span>Zoom:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Scroll Wheel</span>
+              </div>
+            </div>
+          </Card>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Source & Extraction</CardTitle>
@@ -811,6 +822,7 @@ export default function SpritesheetPage() {
                           </div>
                           <ZoomIndicator
                             zoom={previewViewport.view.zoom}
+                            baseZoom={previewViewport.baseView.zoom}
                             className="absolute bottom-2 right-2"
                           />
                         </>
@@ -951,6 +963,7 @@ export default function SpritesheetPage() {
                       )}
                       <ZoomIndicator
                         zoom={sheetViewport.view.zoom}
+                        baseZoom={sheetViewport.baseView.zoom}
                         className="absolute bottom-2 right-2"
                       />
                     </div>
