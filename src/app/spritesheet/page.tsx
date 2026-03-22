@@ -23,6 +23,7 @@ import {
   Circle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Sparkles,
 } from "lucide-react";
 
@@ -114,7 +115,8 @@ export default function SpritesheetPage() {
 
   // Background Removal Settings
   const [removeBackground, setRemoveBackground] = useState(true);
-  const [autoCrop, setAutoCrop] = useState(false);
+  const [autoCrop, setAutoCrop] = useState(true);
+  const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
   const [similarity, setSimilarity] = useState(30);
   const [softness, setSoftness] = useState(10);
   const [spill, setSpill] = useState(20);
@@ -770,21 +772,9 @@ export default function SpritesheetPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Chroma Filtering</CardTitle>
+              <CardTitle>Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Remove Background</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Sampling corners
-                  </p>
-                </div>
-                <Switch
-                  checked={removeBackground}
-                  onCheckedChange={setRemoveBackground}
-                />
-              </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Auto-Crop Frames</Label>
@@ -794,46 +784,75 @@ export default function SpritesheetPage() {
                 </div>
                 <Switch checked={autoCrop} onCheckedChange={setAutoCrop} />
               </div>
-              {removeBackground && (
-                <div className="space-y-4 pt-2">
-                  {[
-                    {
-                      label: "Similarity",
-                      val: similarity,
-                      set: setSimilarity,
-                      max: 150,
-                    },
-                    {
-                      label: "Edge Softness",
-                      val: softness,
-                      set: setSoftness,
-                      max: 50,
-                    },
-                    {
-                      label: "Color Spill",
-                      val: spill,
-                      set: setSpill,
-                      max: 100,
-                    },
-                    { label: "Mask Choke", val: choke, set: setChoke, max: 5 },
-                  ].map((s) => (
-                    <div key={s.label} className="space-y-2">
-                      <div className="flex justify-between">
-                        <Label className="text-xs">{s.label}</Label>
-                        <span className="text-[10px] font-mono">{s.val}</span>
-                      </div>
-                      <Slider
-                        value={[s.val]}
-                        min={0}
-                        max={s.max}
-                        step={1}
-                        onValueChange={(v) => s.set(v as number)}
-                      />
-                    </div>
-                  ))}
+
+              <div className="space-y-4 pt-2 border-t border-dashed">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Chroma Keying</Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Remove background color
+                    </p>
+                  </div>
+                  <Switch
+                    checked={removeBackground}
+                    onCheckedChange={setRemoveBackground}
+                  />
                 </div>
-              )}
-              <div className="space-y-4">
+
+                {removeBackground && (
+                  <div className="pt-1">
+                    <button 
+                      onClick={() => setShowAdvancedChroma(!showAdvancedChroma)}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors group"
+                    >
+                      <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", showAdvancedChroma && "rotate-180")} />
+                      Advanced Settings
+                    </button>
+                  </div>
+                )}
+
+                {removeBackground && showAdvancedChroma && (
+                  <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-300">
+                    {[
+                      {
+                        label: "Similarity",
+                        val: similarity,
+                        set: setSimilarity,
+                        max: 150,
+                      },
+                      {
+                        label: "Edge Softness",
+                        val: softness,
+                        set: setSoftness,
+                        max: 50,
+                      },
+                      {
+                        label: "Color Spill",
+                        val: spill,
+                        set: setSpill,
+                        max: 100,
+                      },
+                      { label: "Mask Choke", val: choke, set: setChoke, max: 5 },
+                    ].map((s) => (
+                      <div key={s.label} className="space-y-2">
+                        <div className="flex justify-between">
+                          <Label className="text-[10px] text-muted-foreground">{s.label}</Label>
+                          <span className="text-[10px] font-mono">{s.val}</span>
+                        </div>
+                        <Slider
+                          value={[s.val]}
+                          min={0}
+                          max={s.max}
+                          step={1}
+                          onValueChange={(v) => s.set(v as number)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 border-t border-dashed pt-4">
                 <Button
                   onClick={() => processFrames()}
                   disabled={
@@ -847,7 +866,7 @@ export default function SpritesheetPage() {
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4 text-primary" />
                   )}
-                  Re-process Frames
+                  Apply Settings
                 </Button>
 
                 {isProcessing && (
@@ -875,374 +894,373 @@ export default function SpritesheetPage() {
         </div>
 
         <div className="lg:col-span-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="md:col-span-1">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg">Preview</CardTitle>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    title="Toggle Background Grid"
-                    onClick={() =>
-                      setGridTheme((prev) =>
-                        prev === "light" ? "dark" : "light",
-                      )
-                    }
-                  >
-                    <LayoutGrid
-                      className={cn(
-                        "h-4 w-4",
-                        gridTheme === "dark"
-                          ? "text-primary"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                  </Button>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setZoom((prev) => Math.max(0.5, prev - 0.2))}
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      setZoom(1);
-                      setPan({ x: 0, y: 0 });
-                    }}
-                  >
-                    <Maximize className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setZoom((prev) => Math.min(5, prev + 0.2))}
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div
-                  ref={previewContainerRef}
-                  className={cn(
-                    "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
-                    gridTheme === "light"
-                      ? "checkerboard-light"
-                      : "checkerboard-dark",
-                  )}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  onWheel={(e) => handleWheel(e, "preview")}
-                  onTouchMove={(e) => handleTouchMove(e, "preview")}
-                  onTouchEnd={handleTouchEnd}
-                >
-                  {activeFrames.length > 0 ? (
-                    <>
-                      <img
-                        src={activeFrames[previewIndex]}
-                        alt="Preview"
-                        className="object-contain transition-transform duration-200"
-                        style={{
-                          transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
-                        }}
-                        draggable={false}
-                      />
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-[10px] px-3 py-1.5 rounded-full font-mono">
-                        <ChevronLeft
-                          className="w-3 h-3 cursor-pointer"
-                          onClick={() =>
-                            setPreviewIndex(
-                              (p) =>
-                                (p - 1 + activeFrames.length) %
-                                activeFrames.length,
-                            )
-                          }
+          {processedFrames.length > 0 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="md:col-span-1 shadow-lg ring-1 ring-primary/10">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">Preview</CardTitle>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="Toggle Background Grid"
+                        onClick={() =>
+                          setGridTheme((prev) =>
+                            prev === "light" ? "dark" : "light",
+                          )
+                        }
+                      >
+                        <LayoutGrid
+                          className={cn(
+                            "h-4 w-4",
+                            gridTheme === "dark"
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
                         />
-                        {previewIndex + 1} / {activeFrames.length}
-                        <ChevronRight
-                          className="w-3 h-3 cursor-pointer"
-                          onClick={() =>
-                            setPreviewIndex(
-                              (p) => (p + 1) % activeFrames.length,
-                            )
-                          }
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center p-6 text-muted-foreground text-sm">
-                      No selected frames
+                      </Button>
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    disabled={activeFrames.length === 0}
-                  >
-                    {isPlaying ? (
-                      <Pause className="w-4 h-4" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Slider
-                    className="flex-1"
-                    value={[previewIndex]}
-                    min={0}
-                    max={Math.max(0, activeFrames.length - 1)}
-                    step={1}
-                    onValueChange={(val) => {
-                      setPreviewIndex(val as number);
-                      setIsPlaying(false);
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card
-              className={cn(
-                "md:col-span-1",
-                processedFrames.length === 0 && "opacity-50",
-              )}
-            >
-              <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg">Sprite Sheet</CardTitle>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    title="Toggle Background Grid"
-                    onClick={() =>
-                      setGridTheme((prev) =>
-                        prev === "light" ? "dark" : "light",
-                      )
-                    }
-                  >
-                    <LayoutGrid
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() =>
+                          setZoom((prev) => Math.max(0.5, prev - 0.2))
+                        }
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => {
+                          setZoom(1);
+                          setPan({ x: 0, y: 0 });
+                        }}
+                      >
+                        <Maximize className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => setZoom((prev) => Math.min(5, prev + 0.2))}
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div
+                      ref={previewContainerRef}
                       className={cn(
-                        "h-4 w-4",
-                        gridTheme === "dark"
-                          ? "text-primary"
-                          : "text-muted-foreground",
+                        "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
+                        gridTheme === "light"
+                          ? "checkerboard-light"
+                          : "checkerboard-dark",
                       )}
-                    />
-                  </Button>
-                </div>
-                <div className="flex gap-1 items-center">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() =>
-                      setSheetZoom((prev) => Math.max(0.5, prev - 0.2))
-                    }
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      setSheetZoom(1);
-                      setSheetPan({ x: 0, y: 0 });
-                    }}
-                  >
-                    <Maximize className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() =>
-                      setSheetZoom((prev) => Math.min(5, prev + 0.2))
-                    }
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                  <div className="w-px h-4 bg-border mx-1" />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px] gap-1 px-2"
-                    onClick={generateSpritesheet}
-                    disabled={processedFrames.length === 0 || isCompiling}
-                  >
-                    {isCompiling ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3 h-3" />
-                    )}
-                    {isCompiling ? "Compiling..." : "Compile"}
-                  </Button>
-                  {spritesheetUrl && (
-                    <Button
-                      onClick={downloadSpritesheet}
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 ml-1"
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                      onWheel={(e) => handleWheel(e, "preview")}
+                      onTouchMove={(e) => handleTouchMove(e, "preview")}
+                      onTouchEnd={handleTouchEnd}
                     >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div
-                  ref={sheetContainerRef}
+                      {activeFrames.length > 0 ? (
+                        <>
+                          <img
+                            src={activeFrames[previewIndex]}
+                            alt="Preview"
+                            className="object-contain transition-transform duration-200"
+                            style={{
+                              transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+                            }}
+                            draggable={false}
+                          />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-[10px] px-3 py-1.5 rounded-full font-mono">
+                            <ChevronLeft
+                              className="w-3 h-3 cursor-pointer"
+                              onClick={() =>
+                                setPreviewIndex(
+                                  (p) =>
+                                    (p - 1 + activeFrames.length) %
+                                    activeFrames.length,
+                                )
+                              }
+                            />
+                            {previewIndex + 1} / {activeFrames.length}
+                            <ChevronRight
+                              className="w-3 h-3 cursor-pointer"
+                              onClick={() =>
+                                setPreviewIndex(
+                                  (p) => (p + 1) % activeFrames.length,
+                                )
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center p-6 text-muted-foreground text-sm">
+                          No selected frames
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => setIsPlaying(!isPlaying)}
+                        disabled={activeFrames.length === 0}
+                      >
+                        {isPlaying ? (
+                          <Pause className="w-4 h-4" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <Slider
+                        className="flex-1"
+                        value={[previewIndex]}
+                        min={0}
+                        max={Math.max(0, activeFrames.length - 1)}
+                        step={1}
+                        onValueChange={(val) => {
+                          setPreviewIndex(val as number);
+                          setIsPlaying(false);
+                        }}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card
                   className={cn(
-                    "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
-                    gridTheme === "light"
-                      ? "checkerboard-light"
-                      : "checkerboard-dark",
+                    "md:col-span-1 shadow-lg ring-1 ring-primary/5",
+                    processedFrames.length === 0 && "opacity-50",
                   )}
-                  onMouseDown={() => setIsPanningSheet(true)}
-                  onMouseMove={(e) => {
-                    if (!isPanningSheet) return;
-                    setSheetPan((prev) => ({
-                      x: prev.x + e.movementX / sheetZoom,
-                      y: prev.y + e.movementY / sheetZoom,
-                    }));
-                  }}
-                  onMouseUp={() => setIsPanningSheet(false)}
-                  onMouseLeave={() => setIsPanningSheet(false)}
-                  onWheel={(e) => handleWheel(e, "sheet")}
-                  onTouchMove={(e) => handleTouchMove(e, "sheet")}
-                  onTouchEnd={handleTouchEnd}
                 >
-                  {spritesheetUrl ? (
-                    <img
-                      src={spritesheetUrl}
-                      alt="Result"
-                      className="object-contain transition-transform duration-200"
-                      style={{
-                        transform: `scale(${sheetZoom}) translate(${sheetPan.x}px, ${sheetPan.y}px)`,
-                      }}
-                      draggable={false}
-                    />
-                  ) : (
-                    <div className="text-center p-6 space-y-4">
-                      <p className="text-muted-foreground text-sm">
-                        No sheet compiled yet.
-                      </p>
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">Sprite Sheet</CardTitle>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="Toggle Background Grid"
+                        onClick={() =>
+                          setGridTheme((prev) =>
+                            prev === "light" ? "dark" : "light",
+                          )
+                        }
+                      >
+                        <LayoutGrid
+                          className={cn(
+                            "h-4 w-4",
+                            gridTheme === "dark"
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
+                        />
+                      </Button>
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() =>
+                          setSheetZoom((prev) => Math.max(0.5, prev - 0.2))
+                        }
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => {
+                          setSheetZoom(1);
+                          setSheetPan({ x: 0, y: 0 });
+                        }}
+                      >
+                        <Maximize className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() =>
+                          setSheetZoom((prev) => Math.min(5, prev + 0.2))
+                        }
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </Button>
+                      <div className="w-px h-4 bg-border mx-1" />
                       <Button
                         size="sm"
-                        variant="secondary"
-                        className="gap-2"
+                        variant="outline"
+                        className="h-7 text-[10px] gap-1 px-2"
                         onClick={generateSpritesheet}
                         disabled={processedFrames.length === 0 || isCompiling}
                       >
                         {isCompiling ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
-                          <RefreshCw className="w-4 h-4" />
+                          <RefreshCw className="w-3 h-3" />
                         )}
-                        {isCompiling ? "Compiling..." : "Compile Selection"}
+                        {isCompiling ? "Compiling..." : "Compile"}
                       </Button>
+                      {spritesheetUrl && (
+                        <Button
+                          onClick={downloadSpritesheet}
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 ml-1"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-[10px]">Columns</Label>
-                    <Input
-                      type="number"
-                      className="h-7 w-12 text-xs"
-                      value={columns}
-                      onChange={(e) => setColumns(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground font-mono">
-                    Zoom: {Math.round(sheetZoom * 100)}%
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div
+                      ref={sheetContainerRef}
+                      className={cn(
+                        "aspect-square rounded-lg bg-muted/30 border flex items-center justify-center overflow-hidden relative cursor-move touch-none",
+                        gridTheme === "light"
+                          ? "checkerboard-light"
+                          : "checkerboard-dark",
+                      )}
+                      onMouseDown={() => setIsPanningSheet(true)}
+                      onMouseMove={(e) => {
+                        if (!isPanningSheet) return;
+                        setSheetPan((prev) => ({
+                          x: prev.x + e.movementX / sheetZoom,
+                          y: prev.y + e.movementY / sheetZoom,
+                        }));
+                      }}
+                      onMouseUp={() => setIsPanningSheet(false)}
+                      onMouseLeave={() => setIsPanningSheet(false)}
+                      onWheel={(e) => handleWheel(e, "sheet")}
+                      onTouchMove={(e) => handleTouchMove(e, "sheet")}
+                      onTouchEnd={handleTouchEnd}
+                    >
+                      {spritesheetUrl ? (
+                        <img
+                          src={spritesheetUrl}
+                          alt="Result"
+                          className="object-contain transition-transform duration-200"
+                          style={{
+                            transform: `scale(${sheetZoom}) translate(${sheetPan.x}px, ${sheetPan.y}px)`,
+                          }}
+                          draggable={false}
+                        />
+                      ) : (
+                        <div className="text-center p-6 space-y-4">
+                          <p className="text-muted-foreground text-sm">
+                            No sheet compiled yet.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="gap-2"
+                            onClick={generateSpritesheet}
+                            disabled={
+                              processedFrames.length === 0 || isCompiling
+                            }
+                          >
+                            {isCompiling ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            {isCompiling ? "Compiling..." : "Compile Selection"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px]">Columns</Label>
+                        <Input
+                          type="number"
+                          className="h-7 w-12 text-xs"
+                          value={columns}
+                          onChange={(e) => setColumns(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono">
+                        Zoom: {Math.round(sheetZoom * 100)}%
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>
-                  Frame Selection ({selectedIndices.size} /{" "}
-                  {processedFrames.length})
-                </CardTitle>
-                <CardDescription>
-                  Drag to toggle multiple frames.
-                </CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-[10px]"
-                  onClick={() => setSelectedIndices(new Set())}
-                >
-                  Deselect All
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-[10px]"
-                  onClick={() =>
-                    setSelectedIndices(
-                      new Set(processedFrames.map((_, i) => i)),
-                    )
-                  }
-                >
-                  Select All
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {processedFrames.length > 0 ? (
-                <div
-                  className={cn(
-                    "grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[350px] overflow-y-auto p-1 border rounded-md select-none",
-                    gridTheme === "light"
-                      ? "checkerboard-light"
-                      : "checkerboard-dark",
-                  )}
-                >
-                  {processedFrames.map((frame, i) => (
-                    <FrameItem
-                      key={i}
-                      index={i}
-                      frame={frame}
-                      isSelected={selectedIndices.has(i)}
-                      isActive={currentGlobalIndex === i}
-                      onMouseDown={handleFrameMouseDown}
-                      onMouseEnter={handleFrameMouseEnter}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 border-2 border-dashed rounded-lg border-muted-foreground/10 bg-muted/5">
-                  <ImageIcon className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-                  <p className="text-muted-foreground text-sm">
-                    No frames extracted.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              <Card className="shadow-lg ring-1 ring-primary/5">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle>
+                      Frame Selection ({selectedIndices.size} /{" "}
+                      {processedFrames.length})
+                    </CardTitle>
+                    <CardDescription>
+                      Drag to toggle multiple frames.
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-[10px]"
+                      onClick={() => setSelectedIndices(new Set())}
+                    >
+                      Deselect All
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-[10px]"
+                      onClick={() =>
+                        setSelectedIndices(
+                          new Set(processedFrames.map((_, i) => i)),
+                        )
+                      }
+                    >
+                      Select All
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={cn(
+                      "grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[350px] overflow-y-auto p-1 border rounded-md select-none",
+                      gridTheme === "light"
+                        ? "checkerboard-light"
+                        : "checkerboard-dark",
+                    )}
+                  >
+                    {processedFrames.map((frame, i) => (
+                      <FrameItem
+                        key={i}
+                        index={i}
+                        frame={frame}
+                        isSelected={selectedIndices.has(i)}
+                        isActive={currentGlobalIndex === i}
+                        onMouseDown={handleFrameMouseDown}
+                        onMouseEnter={handleFrameMouseEnter}
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </main>
