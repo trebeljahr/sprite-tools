@@ -118,16 +118,16 @@
 }
 
 @layer utilities {
-  .checkerboard-light {
+  @utility checkerboard-light {
     background-image: conic-gradient(
-      #e5e7eb 25%, 
+      #f3f4f6 25%, 
       #ffffff 0 50%, 
-      #e5e7eb 0 75%, 
+      #f3f4f6 0 75%, 
       #ffffff 0
     );
     background-size: 20px 20px;
   }
-  .checkerboard-dark {
+  @utility checkerboard-dark {
     background-image: conic-gradient(
       #1f2937 25%, 
       #111827 0 50%, 
