@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,9 @@ export default function RootLayout({
                     Sprite Sheet
                   </Link>
                 </nav>
+              </div>
+              <div className="flex flex-1 items-center justify-end">
+                <ThemeToggle />
               </div>
             </div>
           </header>
