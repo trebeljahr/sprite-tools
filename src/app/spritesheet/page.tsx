@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ChevronDown,
   Sparkles,
+  Palette,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ const FrameItem = React.memo(
     frame,
     isSelected,
     isActive,
+    gridTheme,
     onMouseDown,
     onMouseEnter,
   }: {
@@ -57,13 +59,15 @@ const FrameItem = React.memo(
     frame: string;
     isSelected: boolean;
     isActive: boolean;
+    gridTheme: "light" | "dark";
     onMouseDown: (index: number) => void;
     onMouseEnter: (index: number) => void;
   }) => {
     return (
       <div
         className={cn(
-          "aspect-square border rounded bg-muted/50 overflow-hidden group relative cursor-pointer transition-all",
+          "aspect-square border rounded overflow-hidden group relative cursor-pointer transition-all",
+          gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
           isSelected ? "ring-2 ring-primary" : "opacity-40 grayscale",
           isActive && "ring-offset-2 ring-2 ring-blue-500",
         )}
@@ -83,7 +87,7 @@ const FrameItem = React.memo(
           )}
         </div>
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-[10px] text-white font-mono">#{index}</span>
+          <span className="text-xs text-white font-mono">#{index}</span>
         </div>
       </div>
     );
@@ -106,12 +110,13 @@ export default function SpritesheetPage() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [progress, setProgress] = useState(0);
   const [smoothProgress, setSmoothProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
-  const [actionOrigin, setActionOrigin] = useState<"extract" | "settings" | null>(
-    null,
-  );
+  const [actionOrigin, setActionOrigin] = useState<
+    "extract" | "settings" | null
+  >(null);
 
   const [fps, setFps] = useState(10);
   const [columns, setColumns] = useState(8);
@@ -166,15 +171,6 @@ export default function SpritesheetPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const sheetContainerRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-
-  // Scroll to results when first processed
-  useEffect(() => {
-    if (processedFrames.length > 0 && actionOrigin === "extract" && !isProcessing) {
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
-    }
-  }, [processedFrames.length, actionOrigin, isProcessing]);
 
   // Synchronous State Adjustments (Render Phase)
   // This is the recommended pattern to avoid cascading renders from Effects
@@ -263,6 +259,7 @@ export default function SpritesheetPage() {
       setRawFrames([]);
       setProcessedFrames([]);
       setSpritesheetUrl(null);
+      setShowResults(false);
       setPreviewIndex(0);
       setIsPlaying(false);
       setProgress(0);
@@ -278,6 +275,7 @@ export default function SpritesheetPage() {
     setRawFrames([]);
     setProcessedFrames([]);
     setSpritesheetUrl(null);
+    setShowResults(false);
     setIsPlaying(false);
 
     const video = document.createElement("video");
@@ -311,22 +309,51 @@ export default function SpritesheetPage() {
 
     setRawFrames(extracted);
     setSelectedIndices(new Set(extracted.map((_, i) => i)));
-    setIsExtracting(false);
-    await processFrames(extracted, true);
+    const processed = await processFrames(extracted, true);
 
-    // DELIGHT: Confetti Success Animation!
+    if (processed && processed.length > 0) {
+      await generateSpritesheet(processed);
+    }
+
+    setIsExtracting(false);
+
+    // 1. Success Toast (Trigger immediately once data is ready)
+    toast.success(`Extracted and processed ${extracted.length} frames!`);
+
+    // 2. Short Delay before Confetti
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 5. Show Results just before scrolling
+    setShowResults(true);
+
+    // 6. Smooth Scroll to Results
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+
+    setActionOrigin(null);
+
+    // 4. Short Delay to let the confetti burst be seen
+    await new Promise((r) => setTimeout(r, 500));
+
+    // 3. DELIGHT: Confetti Success Animation!
     confetti({
       particleCount: 150,
       spread: 70,
-      origin: { y: 0.6 },
+      origin: { y: 0.9 },
       colors: ["#4ade80", "#22c55e", "#3b82f6", "#f59e0b"],
     });
-
-    toast.success(`Extracted and processed ${extracted.length} frames!`);
   };
 
-  const processFrames = async (sourceFrames = rawFrames, isInitial = false) => {
-    if (sourceFrames.length === 0) return;
+  const processFrames = async (
+    sourceFrames = rawFrames,
+    isInitial = false,
+  ): Promise<string[]> => {
+    if (sourceFrames.length === 0) return [];
+
     setIsProcessing(true);
     if (!isInitial) {
       setActionOrigin("settings");
@@ -511,7 +538,9 @@ export default function SpritesheetPage() {
 
       // Update progress for Step 1 (up to 70% of the processing phase)
       const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);
-      setProgress(isInitial ? 50 + Math.round(step1Progress * 0.5) : step1Progress);
+      setProgress(
+        isInitial ? 50 + Math.round(step1Progress * 0.5) : step1Progress,
+      );
     }
 
     // Step 2: Crop and generate final blobs
@@ -550,7 +579,7 @@ export default function SpritesheetPage() {
       // Final progress (70% -> 100% of the processing phase)
       const step2Progress = Math.round(((i + 1) / frameImageData.length) * 30);
       const currentProcessingProgress = 70 + step2Progress;
-      
+
       setProgress(
         isInitial
           ? 50 + Math.round(currentProcessingProgress * 0.5)
@@ -564,13 +593,15 @@ export default function SpritesheetPage() {
       toast.success("Frames processed!");
       setActionOrigin(null);
     }
+    return processed;
   };
 
-  const generateSpritesheet = async () => {
-    const activeFramesList = processedFrames.filter((_, i) =>
-      selectedIndices.has(i),
-    );
-    if (activeFramesList.length === 0) {
+  const generateSpritesheet = async (framesOverride?: string[]) => {
+    const framesToUse =
+      framesOverride ||
+      processedFrames.filter((_, i) => selectedIndices.has(i));
+
+    if (framesToUse.length === 0) {
       setSpritesheetUrl(null);
       return;
     }
@@ -580,19 +611,19 @@ export default function SpritesheetPage() {
 
     try {
       const img = new Image();
-      img.src = activeFramesList[0];
+      img.src = framesToUse[0];
       await new Promise((resolve) => (img.onload = resolve));
       const fw = img.width,
         fh = img.height;
-      const rows = Math.ceil(activeFramesList.length / columns);
+      const rows = Math.ceil(framesToUse.length / columns);
       const canvas = document.createElement("canvas");
       canvas.width = columns * fw;
       canvas.height = rows * fh;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      for (let i = 0; i < activeFramesList.length; i++) {
+      for (let i = 0; i < framesToUse.length; i++) {
         const fImg = new Image();
-        fImg.src = activeFramesList[i];
+        fImg.src = framesToUse[i];
         await new Promise((resolve) => (fImg.onload = resolve));
         ctx.drawImage(fImg, (i % columns) * fw, Math.floor(i / columns) * fh);
       }
@@ -773,30 +804,31 @@ export default function SpritesheetPage() {
                     <Scissors className="mr-2 h-4 w-4" />
                   )}
                   {isExtracting
-                    ? "Extracting..."
-                    : isProcessing && smoothProgress < 100
+                    ? isProcessing
                       ? "Processing..."
-                      : "Extract Raw Frames"}
+                      : "Extracting..."
+                    : "Extract Raw Frames"}
                 </Button>
-                {actionOrigin === "extract" && (isExtracting || isProcessing) && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
-                      {smoothProgress === 100 ? (
-                        <span className="text-primary animate-pulse font-bold">
-                          Finishing up...
-                        </span>
-                      ) : (
+                {actionOrigin === "extract" &&
+                  (isExtracting || isProcessing) && (
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between text-xs font-medium uppercase tracking-wider">
+                        {smoothProgress === 100 ? (
+                          <span className="text-primary animate-pulse font-bold">
+                            Finishing up...
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {progressLabel}
+                          </span>
+                        )}
                         <span className="text-muted-foreground">
-                          {progressLabel}
+                          {smoothProgress}%
                         </span>
-                      )}
-                      <span className="text-muted-foreground">
-                        {smoothProgress}%
-                      </span>
+                      </div>
+                      <Progress value={smoothProgress} className="h-1.5" />
                     </div>
-                    <Progress value={smoothProgress} className="h-1.5" />
-                  </div>
-                )}
+                  )}
               </div>
             </CardContent>
           </Card>
@@ -819,9 +851,11 @@ export default function SpritesheetPage() {
               <div className="space-y-4 pt-2 border-t border-dashed">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">Chroma Keying</Label>
-                    <p className="text-[10px] text-muted-foreground">
-                      Remove background color
+                    <Label className="text-sm font-medium">
+                      Background Removal
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      For true transparency.
                     </p>
                   </div>
                   <Switch
@@ -832,11 +866,16 @@ export default function SpritesheetPage() {
 
                 {removeBackground && (
                   <div className="pt-1">
-                    <button 
+                    <button
                       onClick={() => setShowAdvancedChroma(!showAdvancedChroma)}
-                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors group"
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group"
                     >
-                      <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", showAdvancedChroma && "rotate-180")} />
+                      <ChevronDown
+                        className={cn(
+                          "w-3 h-3 transition-transform duration-200",
+                          showAdvancedChroma && "rotate-180",
+                        )}
+                      />
                       Advanced Settings
                     </button>
                   </div>
@@ -863,12 +902,19 @@ export default function SpritesheetPage() {
                         set: setSpill,
                         max: 100,
                       },
-                      { label: "Mask Choke", val: choke, set: setChoke, max: 5 },
+                      {
+                        label: "Mask Choke",
+                        val: choke,
+                        set: setChoke,
+                        max: 5,
+                      },
                     ].map((s) => (
                       <div key={s.label} className="space-y-2">
                         <div className="flex justify-between">
-                          <Label className="text-[10px] text-muted-foreground">{s.label}</Label>
-                          <span className="text-[10px] font-mono">{s.val}</span>
+                          <Label className="text-xs text-muted-foreground">
+                            {s.label}
+                          </Label>
+                          <span className="text-xs font-mono">{s.val}</span>
                         </div>
                         <Slider
                           value={[s.val]}
@@ -883,7 +929,7 @@ export default function SpritesheetPage() {
                 )}
               </div>
 
-              {processedFrames.length > 0 && (
+              {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
                   <Button
                     onClick={() => processFrames()}
@@ -903,7 +949,7 @@ export default function SpritesheetPage() {
 
                   {isProcessing && actionOrigin === "settings" && (
                     <div className="space-y-2 pt-2">
-                      <div className="flex justify-between text-[10px] font-medium uppercase tracking-wider">
+                      <div className="flex justify-between text-xs font-medium uppercase tracking-wider">
                         {smoothProgress === 100 ? (
                           <span className="text-primary animate-pulse font-bold">
                             Finishing up...
@@ -927,8 +973,11 @@ export default function SpritesheetPage() {
         </div>
 
         <div className="lg:col-span-8 space-y-6">
-          {processedFrames.length > 0 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {showResults && (
+            <div
+              ref={resultsRef}
+              className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 scroll-mt-12"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="md:col-span-1 shadow-lg ring-1 ring-primary/10">
                   <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
@@ -938,14 +987,14 @@ export default function SpritesheetPage() {
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7"
-                        title="Toggle Background Grid"
+                        title="Toggle Background Grid Color"
                         onClick={() =>
                           setGridTheme((prev) =>
                             prev === "light" ? "dark" : "light",
                           )
                         }
                       >
-                        <LayoutGrid
+                        <Palette
                           className={cn(
                             "h-4 w-4",
                             gridTheme === "dark"
@@ -981,7 +1030,9 @@ export default function SpritesheetPage() {
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7"
-                        onClick={() => setZoom((prev) => Math.min(5, prev + 0.2))}
+                        onClick={() =>
+                          setZoom((prev) => Math.min(5, prev + 0.2))
+                        }
                       >
                         <ZoomIn className="h-4 w-4" />
                       </Button>
@@ -1015,7 +1066,7 @@ export default function SpritesheetPage() {
                             }}
                             draggable={false}
                           />
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-[10px] px-3 py-1.5 rounded-full font-mono">
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-mono">
                             <ChevronLeft
                               className="w-3 h-3 cursor-pointer"
                               onClick={() =>
@@ -1080,27 +1131,8 @@ export default function SpritesheetPage() {
                   <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-lg">Sprite Sheet</CardTitle>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title="Toggle Background Grid"
-                        onClick={() =>
-                          setGridTheme((prev) =>
-                            prev === "light" ? "dark" : "light",
-                          )
-                        }
-                      >
-                        <LayoutGrid
-                          className={cn(
-                            "h-4 w-4",
-                            gridTheme === "dark"
-                              ? "text-primary"
-                              : "text-muted-foreground",
-                          )}
-                        />
-                      </Button>
                     </div>
+
                     <div className="flex gap-1 items-center">
                       <Button
                         size="icon"
@@ -1137,8 +1169,8 @@ export default function SpritesheetPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[10px] gap-1 px-2"
-                        onClick={generateSpritesheet}
+                        className="h-7 text-xs gap-1 px-2"
+                        onClick={() => generateSpritesheet()}
                         disabled={processedFrames.length === 0 || isCompiling}
                       >
                         {isCompiling ? (
@@ -1194,32 +1226,18 @@ export default function SpritesheetPage() {
                           draggable={false}
                         />
                       ) : (
-                        <div className="text-center p-6 space-y-4">
-                          <p className="text-muted-foreground text-sm">
-                            No sheet compiled yet.
+                        <div className="text-center p-6 space-y-4 opacity-20">
+                          <ImageIcon className="w-12 h-12 mx-auto mb-2" />
+                          <p className="text-sm font-medium">
+                            Spritesheet will appear here
                           </p>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="gap-2"
-                            onClick={generateSpritesheet}
-                            disabled={
-                              processedFrames.length === 0 || isCompiling
-                            }
-                          >
-                            {isCompiling ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="w-4 h-4" />
-                            )}
-                            {isCompiling ? "Compiling..." : "Compile Selection"}
-                          </Button>
                         </div>
                       )}
                     </div>
+
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
-                        <Label className="text-[10px]">Columns</Label>
+                        <Label className="text-xs">Columns</Label>
                         <Input
                           type="number"
                           className="h-7 w-12 text-xs"
@@ -1227,7 +1245,7 @@ export default function SpritesheetPage() {
                           onChange={(e) => setColumns(Number(e.target.value))}
                         />
                       </div>
-                      <div className="text-[10px] text-muted-foreground font-mono">
+                      <div className="text-xs text-muted-foreground font-mono">
                         Zoom: {Math.round(sheetZoom * 100)}%
                       </div>
                     </div>
@@ -1250,7 +1268,7 @@ export default function SpritesheetPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 text-[10px]"
+                      className="h-8 text-xs"
                       onClick={() => setSelectedIndices(new Set())}
                     >
                       Deselect All
@@ -1258,7 +1276,7 @@ export default function SpritesheetPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 text-[10px]"
+                      className="h-8 text-xs"
                       onClick={() =>
                         setSelectedIndices(
                           new Set(processedFrames.map((_, i) => i)),
@@ -1273,9 +1291,6 @@ export default function SpritesheetPage() {
                   <div
                     className={cn(
                       "grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[350px] overflow-y-auto p-1 border rounded-md select-none",
-                      gridTheme === "light"
-                        ? "checkerboard-light"
-                        : "checkerboard-dark",
                     )}
                   >
                     {processedFrames.map((frame, i) => (
@@ -1285,6 +1300,7 @@ export default function SpritesheetPage() {
                         frame={frame}
                         isSelected={selectedIndices.has(i)}
                         isActive={currentGlobalIndex === i}
+                        gridTheme={gridTheme}
                         onMouseDown={handleFrameMouseDown}
                         onMouseEnter={handleFrameMouseEnter}
                       />
