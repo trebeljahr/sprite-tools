@@ -838,17 +838,7 @@ export default function SpritesheetPage() {
               <CardTitle>Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto-Crop Frames</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Tight uniform bounds
-                  </p>
-                </div>
-                <Switch checked={autoCrop} onCheckedChange={setAutoCrop} />
-              </div>
-
-              <div className="space-y-4 pt-2 border-t border-dashed">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-sm font-medium">
@@ -883,6 +873,21 @@ export default function SpritesheetPage() {
 
                 {removeBackground && showAdvancedChroma && (
                   <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center justify-between pb-2 border-b border-dashed">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs text-muted-foreground">
+                          Auto-Crop Frames
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground/70">
+                          Tight uniform bounds
+                        </p>
+                      </div>
+                      <Switch
+                        checked={autoCrop}
+                        onCheckedChange={setAutoCrop}
+                        className="scale-75 origin-right"
+                      />
+                    </div>
                     {[
                       {
                         label: "Similarity",
@@ -932,7 +937,12 @@ export default function SpritesheetPage() {
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
                   <Button
-                    onClick={() => processFrames()}
+                    onClick={async () => {
+                      const processed = await processFrames();
+                      if (processed && processed.length > 0) {
+                        await generateSpritesheet(processed);
+                      }
+                    }}
                     disabled={
                       isProcessing || isExtracting || rawFrames.length === 0
                     }

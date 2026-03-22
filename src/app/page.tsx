@@ -74,6 +74,8 @@ export default function Home() {
 
     const result = await generateVideoAction(formData);
 
+    console.log(result);
+
     if (result.success && result.id) {
       setRequestId(result.id);
       setStatus("Processing video...");
@@ -91,10 +93,12 @@ export default function Home() {
       const result = await checkStatusAction(id);
 
       if (result.success && result.data) {
-        const { status: currentStatus, video_url } = result.data;
+        const { status: currentStatus, video } = result.data;
+        const video_url = video?.url;
+
         setStatus(`Status: ${currentStatus}`);
 
-        if (currentStatus === "completed" && video_url) {
+        if (currentStatus === "done" && video_url) {
           setVideoUrl(video_url);
           setIsGenerating(false);
           clearInterval(pollInterval.current!);
