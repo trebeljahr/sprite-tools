@@ -64,6 +64,15 @@ export default function RootLayout({
                   >
                     Sprite Sheet
                   </Link>
+                  <Link 
+                    href="/lasso" 
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/lasso" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Lasso Tool
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
