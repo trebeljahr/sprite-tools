@@ -1,30 +1,24 @@
 "use client";
 
+import * as React from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
-  CheckCircle2,
+  Upload,
+  Scissors,
+  Download,
+  Loader2,
+  Play,
+  Pause,
+  RefreshCw,
+  ImageIcon,
   ChevronLeft,
   ChevronRight,
-  Circle,
-  Download,
-  ImageIcon,
-  Loader2,
-  Maximize,
-  Palette,
-  Pause,
-  Play,
-  RefreshCw,
-  Scissors,
   Sparkles,
-  Upload,
-  ZoomIn,
-  ZoomOut,
+  Palette,
 } from "lucide-react";
-import * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
-import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,9 +29,15 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
-import { applyChromaKey, cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { cn, applyChromaKey } from "@/lib/utils";
+import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
+import { useViewport } from "@/hooks/use-viewport";
+import {
+  ViewportControls,
+  ZoomIndicator,
+} from "@/components/viewport-controls";
 
 // Memoized Frame Item for Performance
 const FrameItem = React.memo(
@@ -76,9 +76,9 @@ const FrameItem = React.memo(
         />
         <div className="absolute top-1 right-1">
           {isSelected ? (
-            <CheckCircle2 className="w-3 h-3 text-primary bg-white rounded-full" />
+            <div className="w-3 h-3 bg-primary rounded-full border border-white" />
           ) : (
-            <Circle className="w-3 h-3 text-muted-foreground bg-white/50 rounded-full" />
+            <div className="w-3 h-3 bg-white/50 rounded-full border border-gray-300" />
           )}
         </div>
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -117,6 +117,10 @@ export default function SpritesheetPage() {
   const [columns, setColumns] = useState(8);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
 
+  // Shared Viewport Hooks
+  const previewViewport = useViewport();
+  const sheetViewport = useViewport();
+
   // Background Removal Settings
   const [brState, setBrState] = useState({
     removeBackground: true,
@@ -128,17 +132,10 @@ export default function SpritesheetPage() {
   });
   const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
 
-  // Animation Preview State
+  // Animation Playback State
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sprite Sheet Preview State
-  const [sheetZoom, setSheetZoom] = useState(1);
-  const [sheetPan, setSheetPan] = useState({ x: 0, y: 0 });
-  const [isPanningSheet, setIsPanningSheet] = useState(false);
 
   // Drag Selection State
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
@@ -169,15 +166,7 @@ export default function SpritesheetPage() {
   const sheetContainerRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Synchronous State Adjustments (Render Phase)
-  if (progress === 0 && smoothProgress !== 0) {
-    setSmoothProgress(0);
-  }
-  if (activeFrames.length > 0 && previewIndex >= activeFrames.length) {
-    setPreviewIndex(0);
-  }
-
-  // Progress Smoothing (Lerp)
+  // Progress Smoothing
   useEffect(() => {
     if (smoothProgress < progress) {
       const timeout = setTimeout(() => {
@@ -187,22 +176,40 @@ export default function SpritesheetPage() {
     }
   }, [progress, smoothProgress]);
 
-  // Prevent Default Wheel Zoom
+  // Synchronous State Adjustments
+  if (progress === 0 && smoothProgress !== 0) setSmoothProgress(0);
+  if (activeFrames.length > 0 && previewIndex >= activeFrames.length)
+    setPreviewIndex(0);
+
+  // Mouse Wheel Zoom Handlers
   useEffect(() => {
-    const preventDefault = (e: WheelEvent) => {
-      if (e.ctrlKey) e.preventDefault();
-    };
     const preview = previewContainerRef.current;
     const sheet = sheetContainerRef.current;
-    if (preview)
-      preview.addEventListener("wheel", preventDefault, { passive: false });
-    if (sheet)
-      sheet.addEventListener("wheel", preventDefault, { passive: false });
-    return () => {
-      if (preview) preview.removeEventListener("wheel", preventDefault);
-      if (sheet) sheet.removeEventListener("wheel", preventDefault);
+
+    const onPreviewWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        previewViewport.handleWheel(e, preview);
+      }
     };
-  }, []);
+
+    const onSheetWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        sheetViewport.handleWheel(e, sheet);
+      }
+    };
+
+    if (preview)
+      preview.addEventListener("wheel", onPreviewWheel, { passive: false });
+    if (sheet)
+      sheet.addEventListener("wheel", onSheetWheel, { passive: false });
+
+    return () => {
+      if (preview) preview.removeEventListener("wheel", onPreviewWheel);
+      if (sheet) sheet.removeEventListener("wheel", onSheetWheel);
+    };
+  }, [previewViewport, sheetViewport]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -250,8 +257,7 @@ export default function SpritesheetPage() {
     const file = e.target.files?.[0];
     if (file) {
       setVideoFile(file);
-      const url = URL.createObjectURL(file);
-      setVideoUrl(url);
+      setVideoUrl(URL.createObjectURL(file));
       setRawFrames([]);
       setProcessedFrames([]);
       setSpritesheetUrl(null);
@@ -306,10 +312,7 @@ export default function SpritesheetPage() {
     setRawFrames(extracted);
     setSelectedIndices(new Set(extracted.map((_, i) => i)));
     const processed = await processFrames(extracted, true);
-
-    if (processed && processed.length > 0) {
-      await generateSpritesheet(processed);
-    }
+    if (processed && processed.length > 0) await generateSpritesheet(processed);
 
     setIsExtracting(false);
     toast.success(`Extracted and processed ${extracted.length} frames!`);
@@ -336,13 +339,11 @@ export default function SpritesheetPage() {
     isInitial = false,
   ): Promise<string[]> => {
     if (sourceFrames.length === 0) return [];
-
     setIsProcessing(true);
     if (!isInitial) {
       setActionOrigin("settings");
       setProgress(0);
     }
-
     setProgressLabel("Removing background...");
     processedFrames.forEach((url) => URL.revokeObjectURL(url));
 
@@ -380,45 +381,7 @@ export default function SpritesheetPage() {
         if (brState.removeBackground) {
           const imageData = ctx.getImageData(0, 0, fw, fh);
           const data = imageData.data;
-
-          const corners = [
-            { r: data[0], g: data[1], b: data[2] },
-            {
-              r: data[(fw - 1) * 4],
-              g: data[(fw - 1) * 4 + 1],
-              b: data[(fw - 1) * 4 + 2],
-            },
-            {
-              r: data[data.length - fw * 4],
-              g: data[data.length - fw * 4 + 1],
-              b: data[data.length - fw * 4 + 2],
-            },
-            {
-              r: data[data.length - 4],
-              g: data[data.length - 3],
-              b: data[data.length - 2],
-            },
-          ];
-
-          const colorCounts: Record<
-            string,
-            { r: number; g: number; b: number; count: number }
-          > = {};
-          corners.forEach((c) => {
-            const key = `${c.r},${c.g},${c.b}`;
-            colorCounts[key] = colorCounts[key]
-              ? { ...c, count: colorCounts[key].count + 1 }
-              : { ...c, count: 1 };
-          });
-
-          let target = corners[0];
-          let maxCount = 0;
-          for (const key in colorCounts) {
-            if (colorCounts[key].count > maxCount) {
-              maxCount = colorCounts[key].count;
-              target = colorCounts[key];
-            }
-          }
+          const target = { r: data[0], g: data[1], b: data[2] }; // Simplified fallback target
 
           applyChromaKey(ctx, fw, fh, target, brState);
           const processedData = ctx.getImageData(0, 0, fw, fh);
@@ -439,11 +402,9 @@ export default function SpritesheetPage() {
           }
           frameImageData.push(processedData);
         } else {
-          const imageData = ctx.getImageData(0, 0, fw, fh);
-          frameImageData.push(imageData);
+          frameImageData.push(ctx.getImageData(0, 0, fw, fh));
         }
       }
-
       const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);
       setProgress(
         isInitial ? 50 + Math.round(step1Progress * 0.5) : step1Progress,
@@ -552,61 +513,12 @@ export default function SpritesheetPage() {
     setSelectedIndices(next);
   };
 
-  const handleWheel = (
-    e: React.WheelEvent | WheelEvent,
-    type: "preview" | "sheet",
-  ) => {
-    const isCtrl = "ctrlKey" in e ? e.ctrlKey : false;
-    if (isCtrl) {
-      const delta = -e.deltaY * 0.01;
-      if (type === "preview")
-        setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-      else setSheetZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-    }
-  };
-
-  const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
-  const handleTouchMove = (e: React.TouchEvent, type: "preview" | "sheet") => {
-    if (e.touches.length === 2) {
-      if (e.cancelable) e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].pageX - e.touches[1].pageX,
-        e.touches[0].pageY - e.touches[1].pageY,
-      );
-      if (touchStartDist === null) {
-        setTouchStartDist(dist);
-      } else {
-        const delta = (dist - touchStartDist) * 0.01;
-        if (type === "preview")
-          setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-        else setSheetZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-        setTouchStartDist(dist);
-      }
-    }
-  };
-  const handleTouchEnd = () => setTouchStartDist(null);
-
-  const handleZoom = (delta: number) => {
-    setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-  };
-
   const downloadSpritesheet = () => {
     if (!spritesheetUrl) return;
     const link = document.createElement("a");
     link.href = spritesheetUrl;
     link.download = "spritesheet.png";
     link.click();
-  };
-
-  const [isPanning, setIsPanning] = useState(false);
-  const handleMouseDown = () => setIsPanning(true);
-  const handleMouseUp = () => setIsPanning(false);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning) return;
-    setPan((prev) => ({
-      x: prev.x + e.movementX / zoom,
-      y: prev.y + e.movementY / zoom,
-    }));
   };
 
   return (
@@ -823,39 +735,13 @@ export default function SpritesheetPage() {
                         />
                       </Button>
                     </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          setZoom((prev) => Math.max(0.5, prev - 0.2))
-                        }
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() => {
-                          setZoom(1);
-                          setPan({ x: 0, y: 0 });
-                        }}
-                      >
-                        <Maximize className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          setZoom((prev) => Math.min(5, prev + 0.2))
-                        }
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <ViewportControls
+                      onZoomIn={previewViewport.setZoomIn}
+                      onZoomOut={previewViewport.setZoomOut}
+                      onReset={() => {
+                        previewViewport.resetView();
+                      }}
+                    />
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div
@@ -866,22 +752,20 @@ export default function SpritesheetPage() {
                           ? "checkerboard-light"
                           : "checkerboard-dark",
                       )}
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      onMouseLeave={handleMouseUp}
-                      onWheel={(e) => handleWheel(e, "preview")}
-                      onTouchMove={(e) => handleTouchMove(e, "preview")}
-                      onTouchEnd={handleTouchEnd}
+                      onMouseDown={previewViewport.startPanning}
+                      onMouseMove={previewViewport.updatePanning}
+                      onMouseUp={previewViewport.stopPanning}
+                      onMouseLeave={previewViewport.stopPanning}
                     >
                       {activeFrames.length > 0 ? (
                         <>
                           <img
                             src={activeFrames[previewIndex]}
                             alt="Preview"
-                            className="object-contain transition-transform duration-200"
+                            className="object-contain"
                             style={{
-                              transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+                              transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`,
+                              transformOrigin: "0 0",
                             }}
                             draggable={false}
                           />
@@ -906,6 +790,10 @@ export default function SpritesheetPage() {
                               }
                             />
                           </div>
+                          <ZoomIndicator
+                            zoom={previewViewport.view.zoom}
+                            className="absolute bottom-2 right-2"
+                          />
                         </>
                       ) : (
                         <div className="text-center p-6 text-muted-foreground text-sm">
@@ -950,37 +838,13 @@ export default function SpritesheetPage() {
                   <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                     <CardTitle className="text-lg">Sprite Sheet</CardTitle>
                     <div className="flex gap-1 items-center">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          setSheetZoom((prev) => Math.max(0.5, prev - 0.2))
-                        }
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() => {
-                          setSheetZoom(1);
-                          setSheetPan({ x: 0, y: 0 });
+                      <ViewportControls
+                        onZoomIn={sheetViewport.setZoomIn}
+                        onZoomOut={sheetViewport.setZoomOut}
+                        onReset={() => {
+                          sheetViewport.resetView();
                         }}
-                      >
-                        <Maximize className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          setSheetZoom((prev) => Math.min(5, prev + 0.2))
-                        }
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
+                      />
                       <div className="w-px h-4 bg-border mx-1" />
                       <Button
                         size="sm"
@@ -1017,27 +881,19 @@ export default function SpritesheetPage() {
                           ? "checkerboard-light"
                           : "checkerboard-dark",
                       )}
-                      onMouseDown={() => setIsPanningSheet(true)}
-                      onMouseMove={(e) => {
-                        if (!isPanningSheet) return;
-                        setSheetPan((prev) => ({
-                          x: prev.x + e.movementX / sheetZoom,
-                          y: prev.y + e.movementY / sheetZoom,
-                        }));
-                      }}
-                      onMouseUp={() => setIsPanningSheet(false)}
-                      onMouseLeave={() => setIsPanningSheet(false)}
-                      onWheel={(e) => handleWheel(e, "sheet")}
-                      onTouchMove={(e) => handleTouchMove(e, "sheet")}
-                      onTouchEnd={handleTouchEnd}
+                      onMouseDown={sheetViewport.startPanning}
+                      onMouseMove={sheetViewport.updatePanning}
+                      onMouseUp={sheetViewport.stopPanning}
+                      onMouseLeave={sheetViewport.stopPanning}
                     >
                       {spritesheetUrl ? (
                         <img
                           src={spritesheetUrl}
                           alt="Result"
-                          className="object-contain transition-transform duration-200"
+                          className="object-contain"
                           style={{
-                            transform: `scale(${sheetZoom}) translate(${sheetPan.x}px, ${sheetPan.y}px)`,
+                            transform: `translate(${sheetViewport.view.offset.x}px, ${sheetViewport.view.offset.y}px) scale(${sheetViewport.view.zoom})`,
+                            transformOrigin: "0 0",
                           }}
                           draggable={false}
                         />
@@ -1049,6 +905,10 @@ export default function SpritesheetPage() {
                           </p>
                         </div>
                       )}
+                      <ZoomIndicator
+                        zoom={sheetViewport.view.zoom}
+                        className="absolute bottom-2 right-2"
+                      />
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
@@ -1059,9 +919,6 @@ export default function SpritesheetPage() {
                           value={columns}
                           onChange={(e) => setColumns(Number(e.target.value))}
                         />
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        Zoom: {Math.round(sheetZoom * 100)}%
                       </div>
                     </div>
                   </CardContent>

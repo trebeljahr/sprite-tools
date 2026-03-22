@@ -4,19 +4,16 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Upload, Download, Trash2, ZoomIn, ZoomOut, Move, Scissors, Undo, RefreshCw, Sparkles, Maximize, Palette } from 'lucide-react';
+import { Upload, Download, Trash2, Move, Scissors, Undo, RefreshCw, Sparkles, Palette } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn, sampleBackground, applyChromaKey } from '@/lib/utils';
 import { BackgroundRemovalSettings, type BackgroundRemovalState } from '@/components/background-removal-settings';
+import { useViewport } from '@/hooks/use-viewport';
+import { ViewportControls, ZoomIndicator } from '@/components/viewport-controls';
 
 interface Point {
   x: number;
   y: number;
-}
-
-interface ViewState {
-  zoom: number;
-  offset: { x: number, y: number };
 }
 
 export default function LassoPage() {
@@ -26,20 +23,17 @@ export default function LassoPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [lastClickTime, setLastClickTime] = useState(0);
   
-  // Main Canvas View State
-  const [view, setView] = useState<ViewState>({ zoom: 1, offset: { x: 0, y: 0 } });
+  // Main Canvas View State using shared hook
+  const canvasViewport = useViewport();
   const [mode, setMode] = useState<'lasso' | 'pan'>('lasso');
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
   // Track movement during mouse down to differentiate click vs drag
   const dragStartPos = useRef<{ x: number, y: number } | null>(null);
   const hasDragged = useRef(false);
 
-  // Preview View State
-  const [pView, setPView] = useState<ViewState>({ zoom: 1, offset: { x: 0, y: 0 } });
-  const [isPanningPreview, setIsPanningPreview] = useState(false);
+  // Preview View State using shared hook
+  const previewViewport = useViewport();
   const [gridTheme, setGridTheme] = useState<'light' | 'dark'>('light');
 
   // Background Removal Settings
@@ -67,7 +61,7 @@ export default function LassoPage() {
         img.onload = () => {
           setImage(img);
           setPoints([]);
-          setView({ zoom: 1, offset: { x: 0, y: 0 } });
+          canvasViewport.resetView();
           setIsClosed(false);
           setPreviewUrl(null);
         };
@@ -152,17 +146,25 @@ export default function LassoPage() {
     return canvas;
   }, [image, points, brState]);
 
-  const processCutout = async () => {
+  const processCutout = useCallback(async (silent = false) => {
     setIsProcessing(true);
-    await new Promise(r => setTimeout(r, 400));
+    // Short delay for better UX feel
+    await new Promise(r => setTimeout(r, 300));
     const canvas = generateProcessedCanvas();
     if (canvas) {
       setPreviewUrl(canvas.toDataURL('image/png'));
-      toast.success('Cutout processed!');
-      setPView({ zoom: 1, offset: { x: 0, y: 0 } });
+      if (!silent) toast.success('Cutout processed!');
+      previewViewport.resetView();
     }
     setIsProcessing(false);
-  };
+  }, [generateProcessedCanvas, previewViewport]);
+
+  // Auto-process when selection is closed
+  useEffect(() => {
+    if (isClosed && !previewUrl && !isProcessing) {
+      processCutout(true);
+    }
+  }, [isClosed, previewUrl, isProcessing, processCutout]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -172,8 +174,8 @@ export default function LassoPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
-    ctx.translate(view.offset.x, view.offset.y);
-    ctx.scale(view.zoom, view.zoom);
+    ctx.translate(canvasViewport.view.offset.x, canvasViewport.view.offset.y);
+    ctx.scale(canvasViewport.view.zoom, canvasViewport.view.zoom);
     ctx.drawImage(image, 0, 0);
 
     if (points.length > 0) {
@@ -199,14 +201,14 @@ export default function LassoPage() {
         ctx.closePath();
         ctx.strokeStyle = '#00ff00';
         ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.lineWidth = 2 / view.zoom;
+        ctx.lineWidth = 2 / canvasViewport.view.zoom;
         ctx.fill();
         ctx.stroke();
       } else if (mode === 'lasso') {
         if (mousePos) ctx.lineTo(mousePos.x, mousePos.y);
         ctx.strokeStyle = '#ff0000';
-        ctx.lineWidth = 2 / view.zoom;
-        ctx.setLineDash([5 / view.zoom, 5 / view.zoom]);
+        ctx.lineWidth = 2 / canvasViewport.view.zoom;
+        ctx.setLineDash([5 / canvasViewport.view.zoom, 5 / canvasViewport.view.zoom]);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -214,23 +216,23 @@ export default function LassoPage() {
       points.forEach((p, i) => {
         ctx.fillStyle = i === 0 ? (isClosed ? '#00ff00' : '#ffff00') : '#ff0000';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5 / view.zoom, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 5 / canvasViewport.view.zoom, 0, Math.PI * 2);
         ctx.fill();
         
         if (i === 0 && mousePos && !isClosed && points.length > 2) {
           const dist = Math.sqrt(Math.pow(mousePos.x - p.x, 2) + Math.pow(mousePos.y - p.y, 2));
-          if (dist < 20 / view.zoom) {
+          if (dist < 20 / canvasViewport.view.zoom) {
             ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 3 / view.zoom;
+            ctx.lineWidth = 3 / canvasViewport.view.zoom;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 15 / view.zoom, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 15 / canvasViewport.view.zoom, 0, Math.PI * 2);
             ctx.stroke();
           }
         }
       });
     }
     ctx.restore();
-  }, [image, points, view, mode, mousePos, isClosed]);
+  }, [image, points, canvasViewport.view, mode, mousePos, isClosed]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -241,8 +243,8 @@ export default function LassoPage() {
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
-      x: ((e.clientX - rect.left) * scaleX - view.offset.x) / view.zoom,
-      y: ((e.clientY - rect.top) * scaleY - view.offset.y) / view.zoom
+      x: ((e.clientX - rect.left) * scaleX - canvasViewport.view.offset.x) / canvasViewport.view.zoom,
+      y: ((e.clientY - rect.top) * scaleY - canvasViewport.view.offset.y) / canvasViewport.view.zoom
     };
   };
 
@@ -266,19 +268,7 @@ export default function LassoPage() {
 
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     hasDragged.current = false;
-
-    // Start panning preparation regardless of mode
-    setIsPanning(true);
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      setPanStart({ 
-        x: (e.clientX - rect.left) * scaleX - view.offset.x, 
-        y: (e.clientY - rect.top) * scaleY - view.offset.y 
-      });
-    }
+    canvasViewport.startPanning(e);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -295,29 +285,14 @@ export default function LassoPage() {
       }
     }
 
-    if (isPanning) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        setView(prev => ({
-          ...prev,
-          offset: {
-            x: (e.clientX - rect.left) * scaleX - panStart.x,
-            y: (e.clientY - rect.top) * scaleY - panStart.y
-          }
-        }));
-      }
-    }
+    canvasViewport.updatePanning(e);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     const wasDrag = hasDragged.current;
-    setIsPanning(false);
+    canvasViewport.stopPanning();
     dragStartPos.current = null;
 
-    // If it was a click (not a drag) and we're in lasso mode, add a point
     if (!wasDrag && mode === 'lasso' && image && !isClosed && e.button === 0) {
       const p = getCanvasPoint(e);
       const now = Date.now();
@@ -332,7 +307,7 @@ export default function LassoPage() {
       if (points.length > 2) {
         const firstPoint = points[0];
         const dist = Math.sqrt(Math.pow(p.x - firstPoint.x, 2) + Math.pow(p.y - firstPoint.y, 2));
-        if (dist < 20 / view.zoom) {
+        if (dist < 20 / canvasViewport.view.zoom) {
           setIsClosed(true);
           return;
         }
@@ -345,79 +320,43 @@ export default function LassoPage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const handleWheelRaw = (e: WheelEvent) => {
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      
-      // Use a consistent power-based zoom for smoothness
-      const zoomIntensity = 0.001;
-      const zoomFactor = Math.pow(1.1, -e.deltaY * zoomIntensity);
-      
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const mouseX = (e.clientX - rect.left) * scaleX;
-      const mouseY = (e.clientY - rect.top) * scaleY;
-      
-      setView(prev => {
-        const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, 0.1), 10);
-        return {
-          zoom: newZoom,
-          offset: {
-            x: mouseX - (mouseX - prev.offset.x) * (newZoom / prev.zoom),
-            y: mouseY - (mouseY - prev.offset.y) * (newZoom / prev.zoom)
-          }
-        };
-      });
+      canvasViewport.handleWheel(e, canvas);
     };
 
     const preventDefault = (e: Event) => e.preventDefault();
-    canvas.addEventListener('wheel', handleWheelRaw, { passive: false });
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('gesturestart', preventDefault, { passive: false });
     canvas.addEventListener('gesturechange', preventDefault, { passive: false });
 
     return () => {
-      canvas.removeEventListener('wheel', handleWheelRaw);
+      canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('gesturestart', preventDefault);
       canvas.removeEventListener('gesturechange', preventDefault);
     };
-  }, [image]);
+  }, [canvasViewport]);
 
   useEffect(() => {
     const container = previewContainerRef.current;
     if (!container) return;
 
-    const handleWheelRaw = (e: WheelEvent) => {
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const zoomIntensity = 0.001;
-      const zoomFactor = Math.pow(1.1, -e.deltaY * zoomIntensity);
-      
-      const rect = container.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      setPView(prev => {
-        const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, 0.1), 10);
-        return {
-          zoom: newZoom,
-          offset: {
-            x: mouseX - (mouseX - prev.offset.x) * (newZoom / prev.zoom),
-            y: mouseY - (mouseY - prev.offset.y) * (newZoom / prev.zoom)
-          }
-        };
-      });
+      previewViewport.handleWheel(e, container);
     };
 
     const preventDefault = (e: Event) => e.preventDefault();
-    container.addEventListener('wheel', handleWheelRaw, { passive: false });
+    container.addEventListener('wheel', onWheel, { passive: false });
     container.addEventListener('gesturestart', preventDefault, { passive: false });
     container.addEventListener('gesturechange', preventDefault, { passive: false });
 
     return () => {
-      container.removeEventListener('wheel', handleWheelRaw);
+      container.removeEventListener('wheel', onWheel);
       container.removeEventListener('gesturestart', preventDefault);
       container.removeEventListener('gesturechange', preventDefault);
     };
-  }, []);
+  }, [previewViewport]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -447,10 +386,6 @@ export default function LassoPage() {
       link.click();
       toast.success('Image exported successfully!');
     }
-  };
-
-  const resetView = () => {
-    setView({ zoom: 1, offset: { x: 0, y: 0 } });
   };
 
   return (
@@ -487,7 +422,6 @@ export default function LassoPage() {
 
         <div className="lg:col-span-3 flex flex-col gap-6">
           <Card className="relative overflow-hidden min-h-[600px] flex flex-col border shadow-lg" onContextMenu={(e) => e.preventDefault()}>
-            {/* Toolbar */}
             <div className="flex items-center justify-between p-2 bg-muted/30 border-b backdrop-blur-sm z-10">
               <div className="flex items-center gap-1">
                 <Button 
@@ -509,19 +443,12 @@ export default function LassoPage() {
                   <Move className="h-4 w-4 mr-2" /> Pan
                 </Button>
                 <div className="w-px h-4 bg-border mx-1" />
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                  setView(prev => ({ ...prev, zoom: prev.zoom * 1.1 }));
-                }} title="Zoom In">
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                  setView(prev => ({ ...prev, zoom: prev.zoom * 0.9 }));
-                }} title="Zoom Out">
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetView} title="Reset View">
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+                
+                <ViewportControls 
+                  onZoomIn={canvasViewport.setZoomIn}
+                  onZoomOut={canvasViewport.setZoomOut}
+                  onReset={canvasViewport.resetView}
+                />
               </div>
 
               <div className="flex items-center gap-1">
@@ -534,7 +461,6 @@ export default function LassoPage() {
               </div>
             </div>
 
-            {/* Canvas Container */}
             <div className="flex-1 bg-muted/5 flex items-center justify-center relative" ref={containerRef}>
               {!image && (
                 <div className="text-muted-foreground flex flex-col items-center">
@@ -553,9 +479,12 @@ export default function LassoPage() {
                 className={cn(
                   "max-w-full max-h-full object-contain",
                   mode === 'pan' ? 'cursor-move' : 'cursor-crosshair',
-                  isPanning && 'cursor-grabbing'
+                  canvasViewport.isPanning && 'cursor-grabbing'
                 )}
               />
+              {image && (
+                <ZoomIndicator zoom={canvasViewport.view.zoom} className="absolute bottom-4 right-4" />
+              )}
             </div>
           </Card>
 
@@ -566,7 +495,7 @@ export default function LassoPage() {
                   <Sparkles className="w-5 h-5 text-primary" />
                   Process Selection
                 </CardTitle>
-                <Button onClick={processCutout} disabled={isProcessing} className="bg-primary hover:bg-primary/90">
+                <Button onClick={() => processCutout()} disabled={isProcessing} className="bg-primary hover:bg-primary/90">
                   {isProcessing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {isProcessing ? 'Processing...' : 'Process Cutout'}
                 </Button>
@@ -600,30 +529,11 @@ export default function LassoPage() {
                   </Button>
                 </div>
                 <div className="flex gap-1 items-center">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setPView(prev => ({ ...prev, zoom: Math.max(0.1, prev.zoom * 0.8) }))}
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => { setPView({ zoom: 1, offset: { x: 0, y: 0 } }); }}
-                  >
-                    <Maximize className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setPView(prev => ({ ...prev, zoom: Math.min(10, prev.zoom * 1.2) }))}
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
+                  <ViewportControls 
+                    onZoomIn={previewViewport.setZoomIn}
+                    onZoomOut={previewViewport.setZoomOut}
+                    onReset={previewViewport.resetView}
+                  />
                   <div className="w-px h-4 bg-border mx-1" />
                   <Button onClick={exportClippedImage} size="sm" className="h-8 gap-2">
                     <Download className="h-4 w-4" /> Export
@@ -635,41 +545,24 @@ export default function LassoPage() {
                   ref={previewContainerRef}
                   className={cn(
                     "aspect-square min-h-[400px] flex items-center justify-center overflow-hidden relative cursor-move touch-none bg-muted/5",
-                    brState.removeBackground && (gridTheme === 'light' ? "checkerboard-light" : "checkerboard-dark")
+                    gridTheme === 'light' ? "checkerboard-light" : "checkerboard-dark"
                   )}
-                  onMouseDown={(e) => {
-                    setIsPanningPreview(true);
-                    setPanStart({ 
-                      x: e.clientX - pView.offset.x, 
-                      y: e.clientY - pView.offset.y 
-                    });
-                  }}
-                  onMouseMove={(e) => {
-                    if (!isPanningPreview) return;
-                    setPView(prev => ({
-                      ...prev,
-                      offset: {
-                        x: e.clientX - panStart.x,
-                        y: e.clientY - panStart.y
-                      }
-                    }));
-                  }}
-                  onMouseUp={() => setIsPanningPreview(false)}
-                  onMouseLeave={() => setIsPanningPreview(false)}
+                  onMouseDown={previewViewport.startPanning}
+                  onMouseMove={previewViewport.updatePanning}
+                  onMouseUp={previewViewport.stopPanning}
+                  onMouseLeave={previewViewport.stopPanning}
                 >
                   <img
                     src={previewUrl}
                     alt="Cutout Preview"
-                    className="object-contain transition-transform duration-200"
+                    className="object-contain shadow-2xl"
                     style={{
-                      transform: `translate(${pView.offset.x}px, ${pView.offset.y}px) scale(${pView.zoom})`,
+                      transform: `translate(${previewViewport.view.offset.x}px, ${previewViewport.view.offset.y}px) scale(${previewViewport.view.zoom})`,
                       transformOrigin: '0 0'
                     }}
                     draggable={false}
                   />
-                  <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-mono">
-                    Zoom: {Math.round(pView.zoom * 100)}%
-                  </div>
+                  <ZoomIndicator zoom={previewViewport.view.zoom} className="absolute bottom-4 right-4" />
                 </div>
               </CardContent>
             </Card>
