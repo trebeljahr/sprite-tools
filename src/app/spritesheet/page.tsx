@@ -89,11 +89,20 @@ export default function SpritesheetPage() {
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
 
   const activeFrames = useMemo(() => {
-    return processedFrames.filter((_, i) => selectedIndices.has(i));
+    return processedFrames.filter((_, i) => selectedIndices.size === 0 || selectedIndices.has(i));
   }, [processedFrames, selectedIndices]);
 
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const sheetContainerRef = useRef<HTMLDivElement>(null);
+
+  // Synchronous State Adjustments (Render Phase)
+  // This is the recommended pattern to avoid cascading renders from Effects
+  if (progress === 0 && smoothProgress !== 0) {
+    setSmoothProgress(0);
+  }
+  if (activeFrames.length > 0 && previewIndex >= activeFrames.length) {
+    setPreviewIndex(0);
+  }
 
   // Progress Smoothing (Lerp)
   useEffect(() => {
@@ -104,13 +113,6 @@ export default function SpritesheetPage() {
       return () => clearTimeout(timeout);
     }
   }, [progress, smoothProgress]);
-
-  // Handle progress reset separately to avoid useEffect warnings
-  useEffect(() => {
-    if (progress === 0 && smoothProgress !== 0) {
-      setSmoothProgress(0);
-    }
-  }, [progress]);
 
   // Prevent Default Wheel Zoom
   useEffect(() => {
@@ -128,13 +130,6 @@ export default function SpritesheetPage() {
       if (sheet) sheet.removeEventListener("wheel", preventDefault);
     };
   }, []);
-
-  // Adjust previewIndex if it goes out of bounds
-  useEffect(() => {
-    if (activeFrames.length > 0 && previewIndex >= activeFrames.length) {
-      setPreviewIndex(0);
-    }
-  }, [activeFrames.length]);
 
   // Keyboard navigation
   useEffect(() => {
