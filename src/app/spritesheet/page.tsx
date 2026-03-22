@@ -41,56 +41,57 @@ import {
 } from "@/components/viewport-controls";
 
 // Memoized Frame Item for Performance
-const FrameItem = React.memo(
-  ({
-    index,
-    frame,
-    isSelected,
-    isActive,
-    gridTheme,
-    onMouseDown,
-    onMouseEnter,
-  }: {
-    index: number;
-    frame: string;
-    isSelected: boolean;
-    isActive: boolean;
-    gridTheme: "light" | "dark";
-    onMouseDown: (index: number) => void;
-    onMouseEnter: (index: number) => void;
-  }) => {
-    return (
-      <div
-        className={cn(
-          "aspect-square border rounded overflow-hidden group relative cursor-pointer transition-all",
-          gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
-          isSelected ? "ring-2 ring-primary" : "opacity-40 grayscale",
-          isActive && "ring-offset-2 ring-2 ring-blue-500",
+const FrameItem = React.memo(function SingleFrameItem({
+  index,
+  frame,
+  isSelected,
+  isActive,
+  gridTheme,
+  onMouseDown,
+  onMouseEnter,
+}: {
+  index: number;
+  frame: string;
+  isSelected: boolean;
+  isActive: boolean;
+  gridTheme: "light" | "dark";
+  onMouseDown: (index: number) => void;
+  onMouseEnter: (index: number) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "aspect-square border rounded overflow-hidden group relative cursor-pointer transition-all",
+        gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
+        isSelected ? "ring-2 ring-primary" : "opacity-40 grayscale",
+        isActive && "ring-offset-2 ring-2 ring-blue-500",
+      )}
+      onMouseDown={() => onMouseDown(index)}
+      onMouseEnter={() => onMouseEnter(index)}
+    >
+      <img
+        src={frame}
+        alt={`F${index}`}
+        className="w-full h-full object-contain pointer-events-none"
+      />
+      <div className="absolute top-1 right-1">
+        {isSelected ? (
+          <div className="w-4 h-4 bg-primary rounded shadow-sm border border-primary-foreground/20 flex items-center justify-center">
+            <Check
+              className="w-3 h-3 text-primary-foreground"
+              strokeWidth={3}
+            />
+          </div>
+        ) : (
+          <div className="w-4 h-4 bg-black/20 backdrop-blur-sm rounded border border-white/30" />
         )}
-        onMouseDown={() => onMouseDown(index)}
-        onMouseEnter={() => onMouseEnter(index)}
-      >
-        <img
-          src={frame}
-          alt={`F${index}`}
-          className="w-full h-full object-contain pointer-events-none"
-        />
-        <div className="absolute top-1 right-1">
-          {isSelected ? (
-            <div className="w-4 h-4 bg-primary rounded shadow-sm border border-primary-foreground/20 flex items-center justify-center">
-              <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />
-            </div>
-          ) : (
-            <div className="w-4 h-4 bg-black/20 backdrop-blur-sm rounded border border-white/30" />
-          )}
-        </div>
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-xs text-white font-mono">#{index}</span>
-        </div>
       </div>
-    );
-  },
-);
+      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="text-xs text-white font-mono">#{index}</span>
+      </div>
+    </div>
+  );
+});
 
 // Helper to calculate a balanced grid (columns closest to square root)
 const calculateSmartColumns = (count: number) => {
@@ -127,10 +128,10 @@ export default function SpritesheetPage() {
 
   // Shared Viewport Hooks
   const previewViewport = useViewport();
-  const { view: pView, isPanning: pIsPanning } = previewViewport;
-  
+  const { view: pView } = previewViewport;
+
   const sheetViewport = useViewport();
-  const { view: sView, isPanning: sIsPanning } = sheetViewport;
+  const { view: sView } = sheetViewport;
 
   const hasAutoFittedPreview = useRef(false);
   const hasAutoFittedSheet = useRef(false);
@@ -369,13 +370,14 @@ export default function SpritesheetPage() {
 
     setRawFrames(extracted);
     setSelectedIndices(new Set(extracted.map((_, i) => i)));
-    
+
     // Determine smart default columns
     const smartCols = calculateSmartColumns(extracted.length);
     setColumns(smartCols);
 
     const processed = await processFrames(extracted, true);
-    if (processed && processed.length > 0) await generateSpritesheet(processed, smartCols);
+    if (processed && processed.length > 0)
+      await generateSpritesheet(processed, smartCols);
 
     setIsExtracting(false);
     toast.success(`Extracted and processed ${extracted.length} frames!`);
@@ -524,7 +526,10 @@ export default function SpritesheetPage() {
     return processed;
   };
 
-  const generateSpritesheet = async (framesOverride?: string[], columnsOverride?: number) => {
+  const generateSpritesheet = async (
+    framesOverride?: string[],
+    columnsOverride?: number,
+  ) => {
     const framesToUse =
       framesOverride ||
       processedFrames.filter((_, i) => selectedIndices.has(i));
@@ -1085,7 +1090,7 @@ export default function SpritesheetPage() {
                 <CardContent>
                   <div
                     className={cn(
-                      "grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-[350px] overflow-y-auto p-1 border rounded-md select-none",
+                      "grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-87.5 overflow-y-auto p-1 border rounded-md select-none",
                     )}
                   >
                     {processedFrames.map((frame, i) => (

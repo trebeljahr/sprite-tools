@@ -1,32 +1,31 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Upload,
-  Download,
-  Trash2,
-  Move,
-  Scissors,
-  Undo,
-  RefreshCw,
-  Sparkles,
-  Palette,
-} from "lucide-react";
-import { toast } from "sonner";
-import confetti from "canvas-confetti";
-import { cn, sampleBackground, applyChromaKey } from "@/lib/utils";
 import {
   BackgroundRemovalSettings,
   type BackgroundRemovalState,
 } from "@/components/background-removal-settings";
-import { useViewport } from "@/hooks/use-viewport";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ViewportControls,
   ZoomIndicator,
 } from "@/components/viewport-controls";
+import { useViewport } from "@/hooks/use-viewport";
+import { applyChromaKey, cn, sampleBackground } from "@/lib/utils";
+import confetti from "canvas-confetti";
+import {
+  Download,
+  Move,
+  Palette,
+  RefreshCw,
+  Scissors,
+  Sparkles,
+  Trash2,
+  Undo,
+  Upload,
+} from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface Point {
   x: number;
@@ -42,32 +41,32 @@ export default function LassoPage() {
 
   // View State using shared hook
   const canvasViewport = useViewport();
-  const { 
-    view, 
-    isPanning, 
+  const {
+    view,
+    isPanning,
     containerRef: canvasContainerRef,
     baseView,
     setZoomIn,
     setZoomOut,
-    fitToView
+    fitToView,
   } = canvasViewport;
 
-  const [mode, setMode] = useState<'lasso' | 'pan'>('lasso');
+  const [mode, setMode] = useState<"lasso" | "pan">("lasso");
   const [mousePos, setMousePos] = useState<Point | null>(null);
 
   // Track movement during mouse down to differentiate click vs drag
-  const dragStartPos = useRef<{ x: number, y: number } | null>(null);
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const hasDragged = useRef(false);
 
   // Preview View State using shared hook
   const previewViewport = useViewport();
-  const { 
-    view: pView, 
+  const {
+    view: pView,
     containerRef: previewContainerRef,
     baseView: pBaseView,
     setZoomIn: pSetZoomIn,
     setZoomOut: pSetZoomOut,
-    fitToView: pFitToView
+    fitToView: pFitToView,
   } = previewViewport;
 
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
@@ -114,11 +113,7 @@ export default function LassoPage() {
 
   // Auto-fit main image when it loads or container becomes available
   useEffect(() => {
-    if (
-      image &&
-      canvasContainerRef.current &&
-      !hasAutoFittedMain.current
-    ) {
+    if (image && canvasContainerRef.current && !hasAutoFittedMain.current) {
       const raf = requestAnimationFrame(() => {
         fitToView(image.width, image.height);
         hasAutoFittedMain.current = true;
@@ -136,10 +131,7 @@ export default function LassoPage() {
       !hasAutoFittedPreview.current
     ) {
       const raf = requestAnimationFrame(() => {
-        pFitToView(
-          previewDimensions.current.w,
-          previewDimensions.current.h,
-        );
+        pFitToView(previewDimensions.current.w, previewDimensions.current.h);
         hasAutoFittedPreview.current = true;
       });
       return () => cancelAnimationFrame(raf);
@@ -300,14 +292,8 @@ export default function LassoPage() {
       }
       setIsProcessing(false);
     },
-    [generateProcessedCanvas, previewViewport],
+    [generateProcessedCanvas],
   );
-
-  useEffect(() => {
-    if (isClosed && !previewUrl && !isProcessing) {
-      processCutout(true);
-    }
-  }, [isClosed, previewUrl, isProcessing, processCutout]);
 
   const draw = useCallback(() => {
     const canvas = localCanvasRef.current;
@@ -411,15 +397,7 @@ export default function LassoPage() {
       ctx.restore();
     }
     ctx.restore();
-  }, [
-    image,
-    points,
-    view,
-    canvasContainerRef,
-    mode,
-    mousePos,
-    isClosed,
-  ]);
+  }, [image, points, view, canvasContainerRef, mode, mousePos, isClosed]);
 
   useEffect(() => {
     draw();
@@ -477,7 +455,7 @@ export default function LassoPage() {
     canvasViewport.updatePanning(e);
   };
 
-  const handleMouseLeave = (e: React.MouseEvent) => {
+  const handleMouseLeave = () => {
     if (!image) return;
     canvasViewport.stopPanning();
     dragStartPos.current = null;
@@ -496,6 +474,7 @@ export default function LassoPage() {
       if (now - lastClickTime < 300 && points.length > 2) {
         setIsClosed(true);
         setLastClickTime(0);
+        processCutout(true);
         return;
       }
       setLastClickTime(now);
@@ -519,6 +498,7 @@ export default function LassoPage() {
           );
           if (dist < 20) {
             setIsClosed(true);
+            processCutout(true);
             return;
           }
         }
@@ -577,6 +557,7 @@ export default function LassoPage() {
       } else if (e.key === "Enter" && points.length > 2 && !isClosed) {
         e.preventDefault();
         setIsClosed(true);
+        processCutout(true);
       } else if (e.key === " ") {
         e.preventDefault();
         clearSelection();
@@ -587,7 +568,7 @@ export default function LassoPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [points, isClosed, undoLastPoint, clearSelection]);
+  }, [points, isClosed, undoLastPoint, clearSelection, processCutout]);
 
   const exportClippedImage = () => {
     if (previewUrl) {
@@ -721,12 +702,9 @@ export default function LassoPage() {
                   />
                 </Button>
                 <ViewportControls
-                  onZoomIn={() =>
-                    image && setZoomIn(image.width, image.height)
-                  }
+                  onZoomIn={() => image && setZoomIn(image.width, image.height)}
                   onZoomOut={() =>
-                    image &&
-                    setZoomOut(image.width, image.height)
+                    image && setZoomOut(image.width, image.height)
                   }
                   onReset={handleResetCanvas}
                 />
@@ -895,7 +873,7 @@ export default function LassoPage() {
                   <div
                     ref={previewContainerRef}
                     className={cn(
-                      "aspect-square min-h-[400px] overflow-hidden relative cursor-move touch-none bg-muted/5",
+                      "aspect-square min-h-100 overflow-hidden relative cursor-move touch-none bg-muted/5",
                       gridTheme === "light"
                         ? "checkerboard-light"
                         : "checkerboard-dark",
