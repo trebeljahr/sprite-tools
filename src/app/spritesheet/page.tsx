@@ -114,6 +114,7 @@ export default function SpritesheetPage() {
 
   // Background Removal Settings
   const [removeBackground, setRemoveBackground] = useState(true);
+  const [autoCrop, setAutoCrop] = useState(false);
   const [similarity, setSimilarity] = useState(30);
   const [softness, setSoftness] = useState(10);
   const [spill, setSpill] = useState(20);
@@ -314,17 +315,29 @@ export default function SpritesheetPage() {
     // Revoke old object URLs to prevent memory leaks
     processedFrames.forEach((url) => URL.revokeObjectURL(url));
 
-    const processed: string[] = [];
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
+    let fw = 0,
+      fh = 0;
     if (sourceFrames.length > 0) {
       const img = new Image();
       img.src = sourceFrames[0];
       await new Promise((resolve) => (img.onload = resolve));
-      canvas.width = img.width;
-      canvas.height = img.height;
+      fw = img.width;
+      fh = img.height;
+      canvas.width = fw;
+      canvas.height = fh;
     }
+
+    // Step 1: Filter all frames and collect bounding boxes if autoCrop is enabled
+    // We'll store the intermediate ImageData to avoid redundant processing
+    const frameImageData: ImageData[] = [];
+    let globalMinX = fw,
+      globalMinY = fh,
+      globalMaxX = 0,
+      globalMaxY = 0;
+    let foundAnyContent = false;
 
     for (let i = 0; i < sourceFrames.length; i++) {
       const frameImg = new Image();
@@ -332,24 +345,24 @@ export default function SpritesheetPage() {
       await new Promise((resolve) => (frameImg.onload = resolve));
 
       if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, fw, fh);
         ctx.drawImage(frameImg, 0, 0);
 
         if (removeBackground) {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, fw, fh);
           const data = imageData.data;
 
           const corners = [
             { r: data[0], g: data[1], b: data[2] },
             {
-              r: data[(canvas.width - 1) * 4],
-              g: data[(canvas.width - 1) * 4 + 1],
-              b: data[(canvas.width - 1) * 4 + 2],
+              r: data[(fw - 1) * 4],
+              g: data[(fw - 1) * 4 + 1],
+              b: data[(fw - 1) * 4 + 2],
             },
             {
-              r: data[data.length - canvas.width * 4],
-              g: data[data.length - canvas.width * 4 + 1],
-              b: data[data.length - canvas.width * 4 + 2],
+              r: data[data.length - fw * 4],
+              g: data[data.length - fw * 4 + 1],
+              b: data[data.length - fw * 4 + 2],
             },
             {
               r: data[data.length - 4],
@@ -416,22 +429,17 @@ export default function SpritesheetPage() {
             const originalAlphas = new Uint8Array(data.length / 4);
             for (let k = 0; k < originalAlphas.length; k++)
               originalAlphas[k] = data[k * 4 + 3];
-            for (let y = 0; y < canvas.height; y++) {
-              for (let x = 0; x < canvas.width; x++) {
-                const idx = (y * canvas.width + x) * 4;
+            for (let y = 0; y < fh; y++) {
+              for (let x = 0; x < fw; x++) {
+                const idx = (y * fw + x) * 4;
                 if (data[idx + 3] === 0) continue;
                 let minAlpha = data[idx + 3];
                 for (let dy = -choke; dy <= choke; dy++) {
                   for (let dx = -choke; dx <= choke; dx++) {
                     const ny = y + dy,
                       nx = x + dx;
-                    if (
-                      ny >= 0 &&
-                      ny < canvas.height &&
-                      nx >= 0 &&
-                      nx < canvas.width
-                    ) {
-                      const nAlpha = originalAlphas[ny * canvas.width + nx];
+                    if (ny >= 0 && ny < fh && nx >= 0 && nx < fw) {
+                      const nAlpha = originalAlphas[ny * fw + nx];
                       if (nAlpha < minAlpha) minAlpha = nAlpha;
                     }
                   }
@@ -440,18 +448,92 @@ export default function SpritesheetPage() {
               }
             }
           }
-          ctx.putImageData(imageData, 0, 0);
+
+          // While we have the data, check bounding box if autoCrop is on
+          if (autoCrop) {
+            for (let y = 0; y < fh; y++) {
+              for (let x = 0; x < fw; x++) {
+                if (data[(y * fw + x) * 4 + 3] > 0) {
+                  if (x < globalMinX) globalMinX = x;
+                  if (y < globalMinY) globalMinY = y;
+                  if (x > globalMaxX) globalMaxX = x;
+                  if (y > globalMaxY) globalMaxY = y;
+                  foundAnyContent = true;
+                }
+              }
+            }
+          }
+
+          frameImageData.push(imageData);
+        } else {
+          // No background removal, but still need content box if autoCrop is on
+          const imageData = ctx.getImageData(0, 0, fw, fh);
+          if (autoCrop) {
+            const data = imageData.data;
+            for (let y = 0; y < fh; y++) {
+              for (let x = 0; x < fw; x++) {
+                if (data[(y * fw + x) * 4 + 3] > 0) {
+                  if (x < globalMinX) globalMinX = x;
+                  if (y < globalMinY) globalMinY = y;
+                  if (x > globalMaxX) globalMaxX = x;
+                  if (y > globalMaxY) globalMaxY = y;
+                  foundAnyContent = true;
+                }
+              }
+            }
+          }
+          frameImageData.push(imageData);
         }
+      }
+
+      // Update progress for Step 1 (up to 70%)
+      const step1Progress = Math.round(
+        ((i + 1) / sourceFrames.length) * (isInitial ? 35 : 70),
+      );
+      setProgress(isInitial ? 50 + step1Progress : step1Progress);
+    }
+
+    // Step 2: Crop and generate final blobs
+    const processed: string[] = [];
+    const padding = 2; // Add a small safe padding
+    let cropX = 0,
+      cropY = 0,
+      cropW = fw,
+      cropH = fh;
+
+    if (autoCrop && foundAnyContent) {
+      cropX = Math.max(0, globalMinX - padding);
+      cropY = Math.max(0, globalMinY - padding);
+      cropW = Math.min(fw - cropX, globalMaxX - globalMinX + 1 + padding * 2);
+      cropH = Math.min(fh - cropY, globalMaxY - globalMinY + 1 + padding * 2);
+    }
+
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = cropW;
+    outputCanvas.height = cropH;
+    const octx = outputCanvas.getContext("2d");
+
+    for (let i = 0; i < frameImageData.length; i++) {
+      if (octx) {
+        octx.clearRect(0, 0, cropW, cropH);
+        // Put the data with offset to crop
+        octx.putImageData(frameImageData[i], -cropX, -cropY);
+
         const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, "image/png"),
+          outputCanvas.toBlob(resolve, "image/png"),
         );
         if (blob) processed.push(URL.createObjectURL(blob));
       }
-      const stepProgress = Math.round(
-        ((i + 1) / sourceFrames.length) * (isInitial ? 50 : 100),
+
+      // Final progress (70% -> 100%)
+      const step2Progress = Math.round(((i + 1) / frameImageData.length) * 30);
+      setProgress(
+        isInitial
+          ? 50 + 70 + Math.round((step2Progress / 100) * 30)
+          : 70 + step2Progress,
       );
-      setProgress(isInitial ? 50 + stepProgress : stepProgress);
     }
+
     setProcessedFrames(processed);
     setIsProcessing(false);
     if (!isInitial) toast.success("Frames processed!");
@@ -702,6 +784,15 @@ export default function SpritesheetPage() {
                   checked={removeBackground}
                   onCheckedChange={setRemoveBackground}
                 />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Auto-Crop Frames</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Tight uniform bounds
+                  </p>
+                </div>
+                <Switch checked={autoCrop} onCheckedChange={setAutoCrop} />
               </div>
               {removeBackground && (
                 <div className="space-y-4 pt-2">
