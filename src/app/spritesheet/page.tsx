@@ -1,48 +1,43 @@
 "use client";
 
-import * as React from "react";
-import { useState, useRef, useEffect, useMemo } from "react";
-import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
-  Upload,
-  Scissors,
-  LayoutGrid,
-  Download,
-  Loader2,
-  Play,
-  Pause,
-  RefreshCw,
-  Video as VideoIcon,
-  ImageIcon,
-  MonitorPlay,
-  ZoomIn,
-  ZoomOut,
-  Maximize,
   CheckCircle2,
-  Circle,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  Sparkles,
+  Circle,
+  Download,
+  ImageIcon,
+  Loader2,
+  Maximize,
   Palette,
+  Pause,
+  Play,
+  RefreshCw,
+  Scissors,
+  Sparkles,
+  Upload,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
+import * as React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
+import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { Slider } from "@/components/ui/slider";
+import { applyChromaKey, cn } from "@/lib/utils";
 
 // Memoized Frame Item for Performance
 const FrameItem = React.memo(
@@ -123,13 +118,15 @@ export default function SpritesheetPage() {
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
 
   // Background Removal Settings
-  const [removeBackground, setRemoveBackground] = useState(true);
-  const [autoCrop, setAutoCrop] = useState(true);
+  const [brState, setBrState] = useState({
+    removeBackground: true,
+    autoCrop: true,
+    similarity: 30,
+    softness: 10,
+    spill: 20,
+    choke: 1,
+  });
   const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
-  const [similarity, setSimilarity] = useState(30);
-  const [softness, setSoftness] = useState(10);
-  const [spill, setSpill] = useState(20);
-  const [choke, setChoke] = useState(1);
 
   // Animation Preview State
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -173,7 +170,6 @@ export default function SpritesheetPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Synchronous State Adjustments (Render Phase)
-  // This is the recommended pattern to avoid cascading renders from Effects
   if (progress === 0 && smoothProgress !== 0) {
     setSmoothProgress(0);
   }
@@ -316,30 +312,17 @@ export default function SpritesheetPage() {
     }
 
     setIsExtracting(false);
-
-    // 1. Success Toast (Trigger immediately once data is ready)
     toast.success(`Extracted and processed ${extracted.length} frames!`);
-
-    // 2. Short Delay before Confetti
     await new Promise((r) => setTimeout(r, 200));
-
-    // 5. Show Results just before scrolling
     setShowResults(true);
-
-    // 6. Smooth Scroll to Results
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     }, 50);
-
     setActionOrigin(null);
-
-    // 4. Short Delay to let the confetti burst be seen
     await new Promise((r) => setTimeout(r, 500));
-
-    // 3. DELIGHT: Confetti Success Animation!
     confetti({
       particleCount: 150,
       spread: 70,
@@ -361,8 +344,6 @@ export default function SpritesheetPage() {
     }
 
     setProgressLabel("Removing background...");
-
-    // Revoke old object URLs to prevent memory leaks
     processedFrames.forEach((url) => URL.revokeObjectURL(url));
 
     const canvas = document.createElement("canvas");
@@ -380,8 +361,6 @@ export default function SpritesheetPage() {
       canvas.height = fh;
     }
 
-    // Step 1: Filter all frames and collect bounding boxes if autoCrop is enabled
-    // We'll store the intermediate ImageData to avoid redundant processing
     const frameImageData: ImageData[] = [];
     let globalMinX = fw,
       globalMinY = fh,
@@ -398,7 +377,7 @@ export default function SpritesheetPage() {
         ctx.clearRect(0, 0, fw, fh);
         ctx.drawImage(frameImg, 0, 0);
 
-        if (removeBackground) {
+        if (brState.removeBackground) {
           const imageData = ctx.getImageData(0, 0, fw, fh);
           const data = imageData.data;
 
@@ -441,69 +420,14 @@ export default function SpritesheetPage() {
             }
           }
 
-          const targetR = target.r,
-            targetG = target.g,
-            targetB = target.b;
+          applyChromaKey(ctx, fw, fh, target, brState);
+          const processedData = ctx.getImageData(0, 0, fw, fh);
 
-          for (let j = 0; j < data.length; j += 4) {
-            const r = data[j],
-              g = data[j + 1],
-              b = data[j + 2];
-            const dist = Math.sqrt(
-              Math.pow(r - targetR, 2) +
-                Math.pow(g - targetG, 2) +
-                Math.pow(b - targetB, 2),
-            );
-            if (dist < similarity) data[j + 3] = 0;
-            else if (dist < similarity + softness) {
-              data[j + 3] = Math.min(
-                data[j + 3],
-                ((dist - similarity) / softness) * 255,
-              );
-            }
-            if (dist < similarity + softness + spill) {
-              const sf =
-                1 -
-                Math.max(
-                  0,
-                  Math.min(1, (dist - similarity) / (softness + spill)),
-                );
-              const gray = (r + g + b) / 3;
-              data[j] = r * (1 - sf) + gray * sf;
-              data[j + 1] = g * (1 - sf) + gray * sf;
-              data[j + 2] = b * (1 - sf) + gray * sf;
-            }
-          }
-
-          if (choke > 0) {
-            const originalAlphas = new Uint8Array(data.length / 4);
-            for (let k = 0; k < originalAlphas.length; k++)
-              originalAlphas[k] = data[k * 4 + 3];
+          if (brState.autoCrop) {
+            const d = processedData.data;
             for (let y = 0; y < fh; y++) {
               for (let x = 0; x < fw; x++) {
-                const idx = (y * fw + x) * 4;
-                if (data[idx + 3] === 0) continue;
-                let minAlpha = data[idx + 3];
-                for (let dy = -choke; dy <= choke; dy++) {
-                  for (let dx = -choke; dx <= choke; dx++) {
-                    const ny = y + dy,
-                      nx = x + dx;
-                    if (ny >= 0 && ny < fh && nx >= 0 && nx < fw) {
-                      const nAlpha = originalAlphas[ny * fw + nx];
-                      if (nAlpha < minAlpha) minAlpha = nAlpha;
-                    }
-                  }
-                }
-                data[idx + 3] = minAlpha;
-              }
-            }
-          }
-
-          // While we have the data, check bounding box if autoCrop is on
-          if (autoCrop) {
-            for (let y = 0; y < fh; y++) {
-              for (let x = 0; x < fw; x++) {
-                if (data[(y * fw + x) * 4 + 3] > 0) {
+                if (d[(y * fw + x) * 4 + 3] > 0) {
                   if (x < globalMinX) globalMinX = x;
                   if (y < globalMinY) globalMinY = y;
                   if (x > globalMaxX) globalMaxX = x;
@@ -513,46 +437,28 @@ export default function SpritesheetPage() {
               }
             }
           }
-
-          frameImageData.push(imageData);
+          frameImageData.push(processedData);
         } else {
-          // No background removal, but still need content box if autoCrop is on
           const imageData = ctx.getImageData(0, 0, fw, fh);
-          if (autoCrop) {
-            const data = imageData.data;
-            for (let y = 0; y < fh; y++) {
-              for (let x = 0; x < fw; x++) {
-                if (data[(y * fw + x) * 4 + 3] > 0) {
-                  if (x < globalMinX) globalMinX = x;
-                  if (y < globalMinY) globalMinY = y;
-                  if (x > globalMaxX) globalMaxX = x;
-                  if (y > globalMaxY) globalMaxY = y;
-                  foundAnyContent = true;
-                }
-              }
-            }
-          }
           frameImageData.push(imageData);
         }
       }
 
-      // Update progress for Step 1 (up to 70% of the processing phase)
       const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);
       setProgress(
         isInitial ? 50 + Math.round(step1Progress * 0.5) : step1Progress,
       );
     }
 
-    // Step 2: Crop and generate final blobs
     setProgressLabel("Auto-Cropping...");
     const processed: string[] = [];
-    const padding = 2; // Add a small safe padding
+    const padding = 2;
     let cropX = 0,
       cropY = 0,
       cropW = fw,
       cropH = fh;
 
-    if (autoCrop && foundAnyContent) {
+    if (brState.removeBackground && brState.autoCrop && foundAnyContent) {
       cropX = Math.max(0, globalMinX - padding);
       cropY = Math.max(0, globalMinY - padding);
       cropW = Math.min(fw - cropX, globalMaxX - globalMinX + 1 + padding * 2);
@@ -567,19 +473,14 @@ export default function SpritesheetPage() {
     for (let i = 0; i < frameImageData.length; i++) {
       if (octx) {
         octx.clearRect(0, 0, cropW, cropH);
-        // Put the data with offset to crop
         octx.putImageData(frameImageData[i], -cropX, -cropY);
-
         const blob = await new Promise<Blob | null>((resolve) =>
           outputCanvas.toBlob(resolve, "image/png"),
         );
         if (blob) processed.push(URL.createObjectURL(blob));
       }
-
-      // Final progress (70% -> 100% of the processing phase)
       const step2Progress = Math.round(((i + 1) / frameImageData.length) * 30);
       const currentProcessingProgress = 70 + step2Progress;
-
       setProgress(
         isInitial
           ? 50 + Math.round(currentProcessingProgress * 0.5)
@@ -600,15 +501,12 @@ export default function SpritesheetPage() {
     const framesToUse =
       framesOverride ||
       processedFrames.filter((_, i) => selectedIndices.has(i));
-
     if (framesToUse.length === 0) {
       setSpritesheetUrl(null);
       return;
     }
-
     setIsCompiling(true);
     if (spritesheetUrl) URL.revokeObjectURL(spritesheetUrl);
-
     try {
       const img = new Image();
       img.src = framesToUse[0];
@@ -838,101 +736,12 @@ export default function SpritesheetPage() {
               <CardTitle>Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">
-                      Background Removal
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      For true transparency.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={removeBackground}
-                    onCheckedChange={setRemoveBackground}
-                  />
-                </div>
-
-                {removeBackground && (
-                  <div className="pt-1">
-                    <button
-                      onClick={() => setShowAdvancedChroma(!showAdvancedChroma)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group"
-                    >
-                      <ChevronDown
-                        className={cn(
-                          "w-3 h-3 transition-transform duration-200",
-                          showAdvancedChroma && "rotate-180",
-                        )}
-                      />
-                      Advanced Settings
-                    </button>
-                  </div>
-                )}
-
-                {removeBackground && showAdvancedChroma && (
-                  <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-300">
-                    <div className="flex items-center justify-between pb-2 border-b border-dashed">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs text-muted-foreground">
-                          Auto-Crop Frames
-                        </Label>
-                        <p className="text-[10px] text-muted-foreground/70">
-                          Tight uniform bounds
-                        </p>
-                      </div>
-                      <Switch
-                        checked={autoCrop}
-                        onCheckedChange={setAutoCrop}
-                        className="scale-75 origin-right"
-                      />
-                    </div>
-                    {[
-                      {
-                        label: "Similarity",
-                        val: similarity,
-                        set: setSimilarity,
-                        max: 150,
-                      },
-                      {
-                        label: "Edge Softness",
-                        val: softness,
-                        set: setSoftness,
-                        max: 50,
-                      },
-                      {
-                        label: "Color Spill",
-                        val: spill,
-                        set: setSpill,
-                        max: 100,
-                      },
-                      {
-                        label: "Mask Choke",
-                        val: choke,
-                        set: setChoke,
-                        max: 5,
-                      },
-                    ].map((s) => (
-                      <div key={s.label} className="space-y-2">
-                        <div className="flex justify-between">
-                          <Label className="text-xs text-muted-foreground">
-                            {s.label}
-                          </Label>
-                          <span className="text-xs font-mono">{s.val}</span>
-                        </div>
-                        <Slider
-                          value={[s.val]}
-                          min={0}
-                          max={s.max}
-                          step={1}
-                          onValueChange={(v) => s.set(v as number)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <BackgroundRemovalSettings
+                state={brState}
+                setState={setBrState}
+                showAdvanced={showAdvancedChroma}
+                setShowAdvanced={setShowAdvancedChroma}
+              />
 
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
@@ -1139,10 +948,7 @@ export default function SpritesheetPage() {
                   )}
                 >
                   <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg">Sprite Sheet</CardTitle>
-                    </div>
-
+                    <CardTitle className="text-lg">Sprite Sheet</CardTitle>
                     <div className="flex gap-1 items-center">
                       <Button
                         size="icon"
@@ -1244,7 +1050,6 @@ export default function SpritesheetPage() {
                         </div>
                       )}
                     </div>
-
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
                         <Label className="text-xs">Columns</Label>

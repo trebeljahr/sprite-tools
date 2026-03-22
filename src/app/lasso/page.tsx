@@ -4,44 +4,54 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Upload, Download, Trash2, ZoomIn, ZoomOut, Move, Scissors, Undo, RefreshCw, ChevronDown, Sparkles, Maximize, Palette } from 'lucide-react';
+import { Upload, Download, Trash2, ZoomIn, ZoomOut, Move, Scissors, Undo, RefreshCw, Sparkles, Maximize, Palette } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, sampleBackground, applyChromaKey } from '@/lib/utils';
+import { BackgroundRemovalSettings, type BackgroundRemovalState } from '@/components/background-removal-settings';
 
 interface Point {
   x: number;
   y: number;
 }
 
+interface ViewState {
+  zoom: number;
+  offset: { x: number, y: number };
+}
+
 export default function LassoPage() {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [points, setPoints] = useState<Point[]>([]);
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [mode, setMode] = useState<'lasso' | 'pan'>('lasso');
-  const [mousePos, setMousePos] = useState<Point | null>(null);
   const [isClosed, setIsClosed] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [lastClickTime, setLastClickTime] = useState(0);
+  
+  // Main Canvas View State
+  const [view, setView] = useState<ViewState>({ zoom: 1, offset: { x: 0, y: 0 } });
+  const [mode, setMode] = useState<'lasso' | 'pan'>('lasso');
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [mousePos, setMousePos] = useState<Point | null>(null);
 
-  // Preview Zoom/Pan State
-  const [pZoom, setPZoom] = useState(1);
-  const [pOffset, setPOffset] = useState({ x: 0, y: 0 });
+  // Track movement during mouse down to differentiate click vs drag
+  const dragStartPos = useRef<{ x: number, y: number } | null>(null);
+  const hasDragged = useRef(false);
+
+  // Preview View State
+  const [pView, setPView] = useState<ViewState>({ zoom: 1, offset: { x: 0, y: 0 } });
   const [isPanningPreview, setIsPanningPreview] = useState(false);
   const [gridTheme, setGridTheme] = useState<'light' | 'dark'>('light');
 
   // Background Removal Settings
-  const [removeBackground, setRemoveBackground] = useState(false);
-  const [autoCrop, setAutoCrop] = useState(true);
+  const [brState, setBrState] = useState<BackgroundRemovalState>({
+    removeBackground: false,
+    autoCrop: true,
+    similarity: 30,
+    softness: 10,
+    spill: 20,
+    choke: 1,
+  });
   const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
-  const [similarity, setSimilarity] = useState(30);
-  const [softness, setSoftness] = useState(10);
-  const [spill, setSpill] = useState(20);
-  const [choke, setChoke] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,8 +67,7 @@ export default function LassoPage() {
         img.onload = () => {
           setImage(img);
           setPoints([]);
-          setZoom(1);
-          setOffset({ x: 0, y: 0 });
+          setView({ zoom: 1, offset: { x: 0, y: 0 } });
           setIsClosed(false);
           setPreviewUrl(null);
         };
@@ -66,89 +75,6 @@ export default function LassoPage() {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const getSampledColor = useCallback(() => {
-    if (!image) return { r: 255, g: 255, b: 255 };
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return { r: 255, g: 255, b: 255 };
-    ctx.drawImage(image, 0, 0);
-    
-    let samples: Uint8ClampedArray[] = [];
-    
-    if (points.length > 0) {
-      // Sample colors along the polygon vertices to match the immediate surroundings
-      points.forEach(p => {
-        const x = Math.max(0, Math.min(image.width - 1, Math.round(p.x)));
-        const y = Math.max(0, Math.min(image.height - 1, Math.round(p.y)));
-        samples.push(ctx.getImageData(x, y, 1, 1).data);
-      });
-    } else {
-      // Fallback to corners if no points placed yet
-      samples = [
-        ctx.getImageData(0, 0, 1, 1).data,
-        ctx.getImageData(image.width - 1, 0, 1, 1).data,
-        ctx.getImageData(0, image.height - 1, 1, 1).data,
-        ctx.getImageData(image.width - 1, image.height - 1, 1, 1).data
-      ];
-    }
-    
-    const r = Math.round(samples.reduce((acc, c) => acc + c[0], 0) / samples.length);
-    const g = Math.round(samples.reduce((acc, c) => acc + c[1], 0) / samples.length);
-    const b = Math.round(samples.reduce((acc, c) => acc + c[2], 0) / samples.length);
-    
-    return { r, g, b };
-  }, [image, points]);
-
-  const applyChromaKey = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const target = getSampledColor();
-    const targetR = target.r, targetG = target.g, targetB = target.b;
-
-    for (let j = 0; j < data.length; j += 4) {
-      const r = data[j], g = data[j + 1], b = data[j + 2];
-      const dist = Math.sqrt(
-        Math.pow(r - targetR, 2) + Math.pow(g - targetG, 2) + Math.pow(b - targetB, 2)
-      );
-      if (dist < similarity) data[j + 3] = 0;
-      else if (dist < similarity + softness) {
-        data[j + 3] = Math.min(data[j + 3], ((dist - similarity) / softness) * 255);
-      }
-      if (dist < similarity + softness + spill) {
-        const sf = 1 - Math.max(0, Math.min(1, (dist - similarity) / (softness + spill)));
-        const gray = (r + g + b) / 3;
-        data[j] = r * (1 - sf) + gray * sf;
-        data[j + 1] = g * (1 - sf) + gray * sf;
-        data[j + 2] = b * (1 - sf) + gray * sf;
-      }
-    }
-
-    if (choke > 0) {
-      const originalAlphas = new Uint8Array(data.length / 4);
-      for (let k = 0; k < originalAlphas.length; k++) originalAlphas[k] = data[k * 4 + 3];
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = (y * width + x) * 4;
-          if (data[idx + 3] === 0) continue;
-          let minAlpha = data[idx + 3];
-          for (let dy = -choke; dy <= choke; dy++) {
-            for (let dx = -choke; dx <= choke; dx++) {
-              const ny = y + dy, nx = x + dx;
-              if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
-                const nAlpha = originalAlphas[ny * width + nx];
-                if (nAlpha < minAlpha) minAlpha = nAlpha;
-              }
-            }
-          }
-          data[idx + 3] = minAlpha;
-        }
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
   };
 
   const generateProcessedCanvas = useCallback(() => {
@@ -167,8 +93,9 @@ export default function LassoPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    if (!removeBackground) {
-      const sampled = getSampledColor();
+    const sampled = sampleBackground(image, points);
+
+    if (!brState.removeBackground) {
       ctx.fillStyle = `rgb(${sampled.r}, ${sampled.g}, ${sampled.b})`;
       ctx.fillRect(0, 0, width, height);
     }
@@ -182,9 +109,11 @@ export default function LassoPage() {
     ctx.drawImage(image, -minX, -minY);
     ctx.restore();
 
-    if (removeBackground) applyChromaKey(ctx, width, height);
+    if (brState.removeBackground) {
+      applyChromaKey(ctx, width, height, sampled, brState);
+    }
 
-    if (autoCrop) {
+    if (brState.removeBackground && brState.autoCrop) {
       const imageData = ctx.getImageData(0, 0, width, height);
       const data = imageData.data;
       let gMinX = width, gMinY = height, gMaxX = 0, gMaxY = 0;
@@ -221,7 +150,7 @@ export default function LassoPage() {
     }
 
     return canvas;
-  }, [image, points, removeBackground, autoCrop, similarity, softness, spill, choke, getSampledColor]);
+  }, [image, points, brState]);
 
   const processCutout = async () => {
     setIsProcessing(true);
@@ -230,8 +159,7 @@ export default function LassoPage() {
     if (canvas) {
       setPreviewUrl(canvas.toDataURL('image/png'));
       toast.success('Cutout processed!');
-      setPZoom(1);
-      setPOffset({ x: 0, y: 0 });
+      setPView({ zoom: 1, offset: { x: 0, y: 0 } });
     }
     setIsProcessing(false);
   };
@@ -244,8 +172,8 @@ export default function LassoPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
-    ctx.translate(offset.x, offset.y);
-    ctx.scale(zoom, zoom);
+    ctx.translate(view.offset.x, view.offset.y);
+    ctx.scale(view.zoom, view.zoom);
     ctx.drawImage(image, 0, 0);
 
     if (points.length > 0) {
@@ -271,14 +199,14 @@ export default function LassoPage() {
         ctx.closePath();
         ctx.strokeStyle = '#00ff00';
         ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.lineWidth = 2 / zoom;
+        ctx.lineWidth = 2 / view.zoom;
         ctx.fill();
         ctx.stroke();
       } else if (mode === 'lasso') {
         if (mousePos) ctx.lineTo(mousePos.x, mousePos.y);
         ctx.strokeStyle = '#ff0000';
-        ctx.lineWidth = 2 / zoom;
-        ctx.setLineDash([5 / zoom, 5 / zoom]);
+        ctx.lineWidth = 2 / view.zoom;
+        ctx.setLineDash([5 / view.zoom, 5 / view.zoom]);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -286,23 +214,23 @@ export default function LassoPage() {
       points.forEach((p, i) => {
         ctx.fillStyle = i === 0 ? (isClosed ? '#00ff00' : '#ffff00') : '#ff0000';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5 / zoom, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 5 / view.zoom, 0, Math.PI * 2);
         ctx.fill();
         
         if (i === 0 && mousePos && !isClosed && points.length > 2) {
           const dist = Math.sqrt(Math.pow(mousePos.x - p.x, 2) + Math.pow(mousePos.y - p.y, 2));
-          if (dist < 20 / zoom) {
+          if (dist < 20 / view.zoom) {
             ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 3 / zoom;
+            ctx.lineWidth = 3 / view.zoom;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 15 / zoom, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 15 / view.zoom, 0, Math.PI * 2);
             ctx.stroke();
           }
         }
       });
     }
     ctx.restore();
-  }, [image, points, zoom, offset, mode, mousePos, isClosed]);
+  }, [image, points, view, mode, mousePos, isClosed]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -313,8 +241,8 @@ export default function LassoPage() {
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
-      x: ((e.clientX - rect.left) * scaleX - offset.x) / zoom,
-      y: ((e.clientY - rect.top) * scaleY - offset.y) / zoom
+      x: ((e.clientX - rect.left) * scaleX - view.offset.x) / view.zoom,
+      y: ((e.clientY - rect.top) * scaleY - view.offset.y) / view.zoom
     };
   };
 
@@ -336,19 +264,61 @@ export default function LassoPage() {
       return;
     }
 
-    if (mode === 'pan' || (e.button === 1)) {
-      setIsPanning(true);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    hasDragged.current = false;
+
+    // Start panning preparation regardless of mode
+    setIsPanning(true);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      setPanStart({ 
+        x: (e.clientX - rect.left) * scaleX - view.offset.x, 
+        y: (e.clientY - rect.top) * scaleY - view.offset.y 
+      });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const p = getCanvasPoint(e);
+    setMousePos(p);
+
+    if (dragStartPos.current) {
+      const dist = Math.sqrt(
+        Math.pow(e.clientX - dragStartPos.current.x, 2) + 
+        Math.pow(e.clientY - dragStartPos.current.y, 2)
+      );
+      if (dist > 5) {
+        hasDragged.current = true;
+      }
+    }
+
+    if (isPanning) {
       const canvas = canvasRef.current;
       if (canvas) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        setPanStart({ 
-          x: (e.clientX - rect.left) * scaleX - offset.x, 
-          y: (e.clientY - rect.top) * scaleY - offset.y 
-        });
+        setView(prev => ({
+          ...prev,
+          offset: {
+            x: (e.clientX - rect.left) * scaleX - panStart.x,
+            y: (e.clientY - rect.top) * scaleY - panStart.y
+          }
+        }));
       }
-    } else if (mode === 'lasso' && image && !isClosed) {
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    const wasDrag = hasDragged.current;
+    setIsPanning(false);
+    dragStartPos.current = null;
+
+    // If it was a click (not a drag) and we're in lasso mode, add a point
+    if (!wasDrag && mode === 'lasso' && image && !isClosed && e.button === 0) {
       const p = getCanvasPoint(e);
       const now = Date.now();
       
@@ -362,7 +332,7 @@ export default function LassoPage() {
       if (points.length > 2) {
         const firstPoint = points[0];
         const dist = Math.sqrt(Math.pow(p.x - firstPoint.x, 2) + Math.pow(p.y - firstPoint.y, 2));
-        if (dist < 20 / zoom) {
+        if (dist < 20 / view.zoom) {
           setIsClosed(true);
           return;
         }
@@ -371,42 +341,32 @@ export default function LassoPage() {
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const p = getCanvasPoint(e);
-    setMousePos(p);
-    if (isPanning) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        setOffset({
-          x: (e.clientX - rect.left) * scaleX - panStart.x,
-          y: (e.clientY - rect.top) * scaleY - panStart.y
-        });
-      }
-    }
-  };
-
-  const handleMouseUp = () => setIsPanning(false);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const handleWheelRaw = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.min(Math.max(zoom * delta, 0.1), 10);
+      
+      // Use a consistent power-based zoom for smoothness
+      const zoomIntensity = 0.001;
+      const zoomFactor = Math.pow(1.1, -e.deltaY * zoomIntensity);
+      
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
       const mouseX = (e.clientX - rect.left) * scaleX;
       const mouseY = (e.clientY - rect.top) * scaleY;
-      setZoom(newZoom);
-      setOffset({
-        x: mouseX - (mouseX - offset.x) * (newZoom / zoom),
-        y: mouseY - (mouseY - offset.y) * (newZoom / zoom)
+      
+      setView(prev => {
+        const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, 0.1), 10);
+        return {
+          zoom: newZoom,
+          offset: {
+            x: mouseX - (mouseX - prev.offset.x) * (newZoom / prev.zoom),
+            y: mouseY - (mouseY - prev.offset.y) * (newZoom / prev.zoom)
+          }
+        };
       });
     };
 
@@ -420,7 +380,7 @@ export default function LassoPage() {
       canvas.removeEventListener('gesturestart', preventDefault);
       canvas.removeEventListener('gesturechange', preventDefault);
     };
-  }, [zoom, offset, image]);
+  }, [image]);
 
   useEffect(() => {
     const container = previewContainerRef.current;
@@ -428,16 +388,22 @@ export default function LassoPage() {
 
     const handleWheelRaw = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.min(Math.max(pZoom * delta, 0.1), 10);
+      const zoomIntensity = 0.001;
+      const zoomFactor = Math.pow(1.1, -e.deltaY * zoomIntensity);
+      
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       
-      setPZoom(newZoom);
-      setPOffset({
-        x: mouseX - (mouseX - pOffset.x) * (newZoom / pZoom),
-        y: mouseY - (mouseY - pOffset.y) * (newZoom / pZoom)
+      setPView(prev => {
+        const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, 0.1), 10);
+        return {
+          zoom: newZoom,
+          offset: {
+            x: mouseX - (mouseX - prev.offset.x) * (newZoom / prev.zoom),
+            y: mouseY - (mouseY - prev.offset.y) * (newZoom / prev.zoom)
+          }
+        };
       });
     };
 
@@ -451,7 +417,7 @@ export default function LassoPage() {
       container.removeEventListener('gesturestart', preventDefault);
       container.removeEventListener('gesturechange', preventDefault);
     };
-  }, [pZoom, pOffset]);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -484,8 +450,7 @@ export default function LassoPage() {
   };
 
   const resetView = () => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
+    setView({ zoom: 1, offset: { x: 0, y: 0 } });
   };
 
   return (
@@ -514,7 +479,7 @@ export default function LassoPage() {
                 <span>Finish:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Enter</span>
                 <span>Undo:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Ctrl+Z / Right-Click</span>
                 <span>Clear:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Space / Esc</span>
-                <span>Move:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Middle-Click</span>
+                <span>Move:</span> <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
               </div>
             </div>
           </Card>
@@ -544,10 +509,14 @@ export default function LassoPage() {
                   <Move className="h-4 w-4 mr-2" /> Pan
                 </Button>
                 <div className="w-px h-4 bg-border mx-1" />
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => z * 1.1)} title="Zoom In">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                  setView(prev => ({ ...prev, zoom: prev.zoom * 1.1 }));
+                }} title="Zoom In">
                   <ZoomIn className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => z * 0.9)} title="Zoom Out">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                  setView(prev => ({ ...prev, zoom: prev.zoom * 0.9 }));
+                }} title="Zoom Out">
                   <ZoomOut className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetView} title="Reset View">
@@ -581,7 +550,11 @@ export default function LassoPage() {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                className={`max-w-full max-h-full object-contain ${mode === 'pan' ? 'cursor-move' : 'cursor-crosshair'}`}
+                className={cn(
+                  "max-w-full max-h-full object-contain",
+                  mode === 'pan' ? 'cursor-move' : 'cursor-crosshair',
+                  isPanning && 'cursor-grabbing'
+                )}
               />
             </div>
           </Card>
@@ -599,43 +572,14 @@ export default function LassoPage() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2 border-t border-dashed">
-                <div className="flex items-center justify-between space-x-2">
-                  <Label className="text-xs">Remove Background</Label>
-                  <Switch checked={removeBackground} onCheckedChange={setRemoveBackground} className="scale-75" />
-                </div>
-
-                <div className="flex items-center justify-between space-x-2">
-                  <Label className="text-xs">Tight Bounding Box</Label>
-                  <Switch checked={autoCrop} onCheckedChange={setAutoCrop} className="scale-75" />
-                </div>
-
-                {removeBackground && (
-                  <div className="lg:col-span-2 space-y-3">
-                    <button onClick={() => setShowAdvancedChroma(!showAdvancedChroma)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">
-                      <ChevronDown className={cn("w-3 h-3 transition-transform", showAdvancedChroma && "rotate-180")} />
-                      Advanced Chroma Key Settings
-                    </button>
-                    {showAdvancedChroma && (
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                        {[
-                          { label: "Similarity", val: similarity, set: setSimilarity, max: 150 },
-                          { label: "Softness", val: softness, set: setSoftness, max: 50 },
-                          { label: "Spill", val: spill, set: setSpill, max: 100 },
-                          { label: "Choke", val: choke, set: setChoke, max: 5 },
-                        ].map((s) => (
-                          <div key={s.label} className="space-y-1">
-                            <div className="flex justify-between text-[10px]">
-                              <span>{s.label}</span>
-                              <span className="font-mono">{s.val}</span>
-                            </div>
-                            <Slider value={[s.val]} min={0} max={s.max} step={1} onValueChange={(v) => s.set(v[0])} />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div className="pt-2 border-t border-dashed">
+                <BackgroundRemovalSettings 
+                  state={brState}
+                  setState={setBrState}
+                  showAdvanced={showAdvancedChroma}
+                  setShowAdvanced={setShowAdvancedChroma}
+                  compact={true}
+                />
               </div>
             </Card>
           )}
@@ -660,7 +604,7 @@ export default function LassoPage() {
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    onClick={() => setPZoom(prev => Math.max(0.1, prev - 0.2))}
+                    onClick={() => setPView(prev => ({ ...prev, zoom: Math.max(0.1, prev.zoom * 0.8) }))}
                   >
                     <ZoomOut className="h-4 w-4" />
                   </Button>
@@ -668,7 +612,7 @@ export default function LassoPage() {
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    onClick={() => { setPZoom(1); setPOffset({ x: 0, y: 0 }); }}
+                    onClick={() => { setPView({ zoom: 1, offset: { x: 0, y: 0 } }); }}
                   >
                     <Maximize className="h-4 w-4" />
                   </Button>
@@ -676,7 +620,7 @@ export default function LassoPage() {
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    onClick={() => setPZoom(prev => Math.min(10, prev + 0.2))}
+                    onClick={() => setPView(prev => ({ ...prev, zoom: Math.min(10, prev.zoom * 1.2) }))}
                   >
                     <ZoomIn className="h-4 w-4" />
                   </Button>
@@ -691,14 +635,23 @@ export default function LassoPage() {
                   ref={previewContainerRef}
                   className={cn(
                     "aspect-square min-h-[400px] flex items-center justify-center overflow-hidden relative cursor-move touch-none bg-muted/5",
-                    removeBackground && (gridTheme === 'light' ? "checkerboard-light" : "checkerboard-dark")
+                    brState.removeBackground && (gridTheme === 'light' ? "checkerboard-light" : "checkerboard-dark")
                   )}
-                  onMouseDown={() => setIsPanningPreview(true)}
+                  onMouseDown={(e) => {
+                    setIsPanningPreview(true);
+                    setPanStart({ 
+                      x: e.clientX - pView.offset.x, 
+                      y: e.clientY - pView.offset.y 
+                    });
+                  }}
                   onMouseMove={(e) => {
                     if (!isPanningPreview) return;
-                    setPOffset(prev => ({
-                      x: prev.x + e.movementX / pZoom,
-                      y: prev.y + e.movementY / pZoom
+                    setPView(prev => ({
+                      ...prev,
+                      offset: {
+                        x: e.clientX - panStart.x,
+                        y: e.clientY - panStart.y
+                      }
                     }));
                   }}
                   onMouseUp={() => setIsPanningPreview(false)}
@@ -709,12 +662,13 @@ export default function LassoPage() {
                     alt="Cutout Preview"
                     className="object-contain transition-transform duration-200"
                     style={{
-                      transform: `scale(${pZoom}) translate(${pOffset.x}px, ${pOffset.y}px)`,
+                      transform: `translate(${pView.offset.x}px, ${pView.offset.y}px) scale(${pView.zoom})`,
+                      transformOrigin: '0 0'
                     }}
                     draggable={false}
                   />
                   <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-mono">
-                    Zoom: {Math.round(pZoom * 100)}%
+                    Zoom: {Math.round(pView.zoom * 100)}%
                   </div>
                 </div>
               </CardContent>
