@@ -743,6 +743,7 @@ export default function SpritesheetPage() {
               <BackgroundRemovalSettings
                 state={brState}
                 setState={setBrState}
+                mode="chroma-only"
               />
 
               {showResults && (

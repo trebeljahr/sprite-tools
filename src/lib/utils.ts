@@ -73,10 +73,16 @@ export function applyChromaKey(
     const dist = Math.sqrt(
       Math.pow(r - targetR, 2) + Math.pow(g - targetG, 2) + Math.pow(b - targetB, 2)
     );
-    if (dist < similarity) data[j + 3] = 0;
+    
+    let alpha = 1.0;
+    if (dist < similarity) alpha = 0;
     else if (dist < similarity + softness) {
-      data[j + 3] = Math.min(data[j + 3], ((dist - similarity) / softness) * 255);
+      alpha = (dist - similarity) / softness;
     }
+    
+    // Apply transparency to alpha channel
+    data[j + 3] = Math.min(data[j + 3], alpha * 255);
+
     if (dist < similarity + softness + spill) {
       const sf = 1 - Math.max(0, Math.min(1, (dist - similarity) / (softness + spill)));
       const gray = (r + g + b) / 3;

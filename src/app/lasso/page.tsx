@@ -193,7 +193,49 @@ export default function LassoPage() {
     const tctx = tempCanvas.getContext("2d");
 
     if (tctx) {
-      tctx.drawImage(image, -minX + pad, -minY + pad);
+      // Create a "clean" version of the image where the background is ALREADY the target solid color
+      // This prevents the original background from bleeding in during feathering.
+      const cleanImgCanvas = document.createElement("canvas");
+      cleanImgCanvas.width = outWidth;
+      cleanImgCanvas.height = outHeight;
+      const cictx = cleanImgCanvas.getContext("2d");
+      
+      if (cictx) {
+        // Fill with target color
+        cictx.fillStyle = finalSolidColor;
+        cictx.fillRect(0, 0, outWidth, outHeight);
+        
+        // Draw hard-edged character on top
+        const hardMaskCanvas = document.createElement("canvas");
+        hardMaskCanvas.width = outWidth;
+        hardMaskCanvas.height = outHeight;
+        const hmctx = hardMaskCanvas.getContext("2d");
+        if (hmctx) {
+          hmctx.fillStyle = "black";
+          hmctx.beginPath();
+          hmctx.moveTo(points[0].x - minX + pad, points[0].y - minY + pad);
+          for (let i = 1; i < points.length; i++)
+            hmctx.lineTo(points[i].x - minX + pad, points[i].y - minY + pad);
+          hmctx.closePath();
+          hmctx.fill();
+
+          // Draw image only where mask is
+          const charOnlyCanvas = document.createElement("canvas");
+          charOnlyCanvas.width = outWidth;
+          charOnlyCanvas.height = outHeight;
+          const coctx = charOnlyCanvas.getContext("2d");
+          if (coctx) {
+            coctx.drawImage(image, -minX + pad, -minY + pad);
+            coctx.globalCompositeOperation = "destination-in";
+            coctx.drawImage(hardMaskCanvas, 0, 0);
+            cictx.drawImage(charOnlyCanvas, 0, 0);
+          }
+        }
+      }
+
+      // Now apply the feathered mask to the "clean" image
+      tctx.drawImage(cleanImgCanvas, 0, 0);
+      
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = outWidth;
       maskCanvas.height = outHeight;
@@ -213,7 +255,7 @@ export default function LassoPage() {
         tctx.drawImage(maskCanvas, 0, 0);
       }
       
-      // Draw the feathered cutout onto the main canvas
+      // Draw the feathered result onto the main canvas
       ctx.drawImage(tempCanvas, 0, 0);
     }
 

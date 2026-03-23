@@ -34,16 +34,75 @@ interface BackgroundRemovalSettingsProps {
       | ((prev: BackgroundRemovalState) => BackgroundRemovalState),
   ) => void;
   compact?: boolean;
+  mode?: "full" | "chroma-only";
 }
 
 export function BackgroundRemovalSettings({
   state,
   setState,
   compact = false,
+  mode = "full",
 }: BackgroundRemovalSettingsProps) {
   const updateField = (field: keyof BackgroundRemovalState, value: unknown) => {
     setState((prev) => ({ ...prev, [field]: value }));
   };
+
+  if (mode === "chroma-only") {
+    const isEnabled = state.backgroundMode === "chroma-transparent";
+    
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/5">
+          <div className="space-y-0.5">
+            <Label className="text-sm font-bold">Auto Background Removal</Label>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Remove color-based background using Chroma Key.
+            </p>
+          </div>
+          <Switch
+            checked={isEnabled}
+            onCheckedChange={(v) => updateField("backgroundMode", v ? "chroma-transparent" : "transparent-cutout")}
+          />
+        </div>
+
+        {isEnabled && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+             <div className="flex items-center justify-between px-1">
+              <Label className="text-xs font-medium">Auto-Crop Content</Label>
+              <Switch
+                checked={state.autoCrop}
+                onCheckedChange={(v) => updateField("autoCrop", v)}
+                className="scale-75 origin-right"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 bg-muted/20 p-3 rounded-lg border border-dashed">
+              {[
+                { label: "Similarity", val: state.similarity, field: "similarity" as const, max: 150 },
+                { label: "Softness", val: state.softness, field: "softness" as const, max: 50 },
+                { label: "Color Spill", val: state.spill, field: "spill" as const, max: 100 },
+                { label: "Mask Choke", val: state.choke, field: "choke" as const, max: 5 },
+              ].map((s) => (
+                <div key={s.label} className="space-y-1.5">
+                  <div className="flex justify-between">
+                    <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{s.label}</Label>
+                    <span className="text-[10px] font-mono">{s.val}</span>
+                  </div>
+                  <Slider
+                    value={[s.val]}
+                    min={0}
+                    max={s.max}
+                    step={1}
+                    onValueChange={(v) => updateField(s.field, Array.isArray(v) ? v[0] : v)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

@@ -507,13 +507,37 @@ function SpritesheetContent() {
               tempCanvas.height = fh;
               const tctx = tempCanvas.getContext("2d");
               if (tctx) {
-                tctx.drawImage(frameImg, 0, 0);
-                tctx.globalCompositeOperation = "destination-in";
-                if (brState.softness > 0) {
-                  tctx.filter = `blur(${brState.softness}px)`;
+                // Create a "clean" character image surrounded by the target color
+                // to prevent background bleeding during the blur/feathering step.
+                const cleanCharCanvas = document.createElement("canvas");
+                cleanCharCanvas.width = fw;
+                cleanCharCanvas.height = fh;
+                const ccctx = cleanCharCanvas.getContext("2d");
+                if (ccctx) {
+                   ccctx.fillStyle = `rgb(${finalTarget.r}, ${finalTarget.g}, ${finalTarget.b})`;
+                   ccctx.fillRect(0, 0, fw, fh);
+                   
+                   // Draw only the non-background part of the image onto the solid color
+                   const hardCharOnlyCanvas = document.createElement("canvas");
+                   hardCharOnlyCanvas.width = fw;
+                   hardCharOnlyCanvas.height = fh;
+                   const hcoctx = hardCharOnlyCanvas.getContext("2d");
+                   if (hcoctx) {
+                     hcoctx.drawImage(frameImg, 0, 0);
+                     hcoctx.globalCompositeOperation = "destination-in";
+                     hcoctx.drawImage(maskCanvas, 0, 0);
+                     ccctx.drawImage(hardCharOnlyCanvas, 0, 0);
+                   }
+                   
+                   // Now draw this "clean" image onto tempCanvas and apply feathered mask
+                   tctx.drawImage(cleanCharCanvas, 0, 0);
+                   tctx.globalCompositeOperation = "destination-in";
+                   if (brState.softness > 0) {
+                     tctx.filter = `blur(${brState.softness}px)`;
+                   }
+                   tctx.drawImage(maskCanvas, 0, 0);
+                   ctx.drawImage(tempCanvas, 0, 0);
                 }
-                tctx.drawImage(maskCanvas, 0, 0);
-                ctx.drawImage(tempCanvas, 0, 0);
               }
             }
           } else {
@@ -868,6 +892,7 @@ function SpritesheetContent() {
               <BackgroundRemovalSettings
                 state={brState}
                 setState={setBrState}
+                mode="chroma-only"
               />
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
