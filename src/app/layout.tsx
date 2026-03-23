@@ -47,13 +47,22 @@ export default function RootLayout({
                 </Link>
                 <nav className="flex items-center space-x-6 text-sm font-medium">
                   <Link 
+                    href="/generate" 
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/generate" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Design
+                  </Link>
+                  <Link 
                     href="/" 
                     className={cn(
                       "transition-colors hover:text-foreground/80",
                       pathname === "/" ? "text-foreground" : "text-foreground/60"
                     )}
                   >
-                    Grok AI
+                    Animate
                   </Link>
                   <Link 
                     href="/spritesheet" 
@@ -62,7 +71,7 @@ export default function RootLayout({
                       pathname === "/spritesheet" ? "text-foreground" : "text-foreground/60"
                     )}
                   >
-                    Sprite Sheet
+                    Stitch
                   </Link>
                   <Link 
                     href="/lasso" 
@@ -71,7 +80,7 @@ export default function RootLayout({
                       pathname === "/lasso" ? "text-foreground" : "text-foreground/60"
                     )}
                   >
-                    Lasso Tool
+                    Lasso
                   </Link>
                 </nav>
               </div>

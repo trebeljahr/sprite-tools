@@ -11,7 +11,8 @@ import {
   ZoomIndicator,
 } from "@/components/viewport-controls";
 import { useViewport } from "@/hooks/use-viewport";
-import { applyChromaKey, cn, sampleBackground } from "@/lib/utils";
+import { cn, applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground } from "@/lib/utils";
+
 import confetti from "canvas-confetti";
 import {
   Download,
@@ -53,6 +54,8 @@ export default function LassoPage() {
 
   const [mode, setMode] = useState<"lasso" | "pan">("lasso");
   const [mousePos, setMousePos] = useState<Point | null>(null);
+  const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   // Track movement during mouse down to differentiate click vs drag
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -74,16 +77,18 @@ export default function LassoPage() {
 
   // Background Removal Settings
   const [brState, setBrState] = useState<BackgroundRemovalState>({
-    removeBackground: false,
+    backgroundMode: "transparent-cutout",
     autoCrop: true,
+    aspectRatio: "free",
+    solidColor: "#ffffff",
+    autoDetermineFillColor: true,
     similarity: 30,
     softness: 10,
     spill: 20,
     choke: 1,
   });
-  const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
 
+  const [isProcessing, setIsProcessing] = useState(false);
   const hasAutoFittedMain = useRef(false);
   const hasAutoFittedPreview = useRef(false);
   const localCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -138,6 +143,12 @@ export default function LassoPage() {
     }
   }, [previewUrl, previewContainerRef, pFitToView]);
 
+  const parseAspectRatio = (ar: string): number | null => {
+    if (ar === "free") return null;
+    const [w, h] = ar.split(":").map(Number);
+    return w / h;
+  };
+
   const generateProcessedCanvas = useCallback(() => {
     if (!image || points.length < 3) return null;
 
@@ -156,27 +167,33 @@ export default function LassoPage() {
     const canvas = document.createElement("canvas");
     canvas.width = outWidth;
     canvas.height = outHeight;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return null;
 
     const sampled = sampleBackground(image, points);
+    const targetSolidRgb = hexToRgb(brState.solidColor);
+    const finalSolidColor = brState.autoDetermineFillColor 
+      ? `rgb(${sampled.r}, ${sampled.g}, ${sampled.b})` 
+      : `rgb(${targetSolidRgb.r}, ${targetSolidRgb.g}, ${targetSolidRgb.b})`;
 
-    if (!brState.removeBackground) {
-      ctx.fillStyle = `rgb(${sampled.r}, ${sampled.g}, ${sampled.b})`;
+    const isSolid = brState.backgroundMode === "chroma-solid";
+    const isCutout = brState.backgroundMode === "transparent-cutout";
+    const isChroma = brState.backgroundMode === "chroma-transparent";
+
+    // 1. Fill base canvas if solid mode
+    if (isSolid) {
+      ctx.fillStyle = finalSolidColor;
       ctx.fillRect(0, 0, outWidth, outHeight);
     }
 
-    // Create a temporary canvas for the feathered cutout
+    // 2. Create the feathered cutout (Simple Spatial Feathering)
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = outWidth;
     tempCanvas.height = outHeight;
     const tctx = tempCanvas.getContext("2d");
 
     if (tctx) {
-      // 1. Draw the image onto temp canvas (offset by padding)
       tctx.drawImage(image, -minX + pad, -minY + pad);
-
-      // 2. Create the mask canvas
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = outWidth;
       maskCanvas.height = outHeight;
@@ -191,37 +208,42 @@ export default function LassoPage() {
         mctx.closePath();
         mctx.fill();
 
-        // 3. Mask the image with feathering
         tctx.globalCompositeOperation = "destination-in";
-        if (pad > 0) {
-          tctx.filter = `blur(${pad}px)`;
-        }
+        if (pad > 0) tctx.filter = `blur(${pad}px)`;
         tctx.drawImage(maskCanvas, 0, 0);
       }
-
-      // 4. Draw the feathered cutout onto the main canvas
+      
+      // Draw the feathered cutout onto the main canvas
       ctx.drawImage(tempCanvas, 0, 0);
     }
 
-    if (brState.removeBackground) {
+    // 3. Apply chroma key ONLY if in chroma-transparent mode
+    if (isChroma) {
       applyChromaKey(ctx, outWidth, outHeight, sampled, brState);
     }
 
+    let finalCanvas = canvas;
+
+    // 4. Auto-crop content
     if (brState.autoCrop) {
       const imageData = ctx.getImageData(0, 0, outWidth, outHeight);
       const data = imageData.data;
-      const iW = imageData.width;
-      const iH = imageData.height;
-      let gMinX = iW,
-        gMinY = iH,
-        gMaxX = 0,
-        gMaxY = 0;
+      let gMinX = outWidth, gMinY = outHeight, gMaxX = 0, gMaxY = 0;
       let found = false;
 
-      for (let y = 0; y < iH; y++) {
-        for (let x = 0; x < iW; x++) {
-          const alpha = data[(y * iW + x) * 4 + 3];
-          if (alpha > 0) {
+      for (let y = 0; y < outHeight; y++) {
+        for (let x = 0; x < outWidth; x++) {
+          const idx = (y * outWidth + x) * 4;
+          let isContent = false;
+          if (brState.backgroundMode === "chroma-solid") {
+            const r = data[idx], g = data[idx+1], b = data[idx+2];
+            const dist = Math.sqrt(Math.pow(r-sampled.r,2) + Math.pow(g-sampled.g,2) + Math.pow(b-sampled.b,2));
+            if (dist > brState.similarity) isContent = true;
+          } else if (data[idx + 3] > 0) {
+            isContent = true;
+          }
+
+          if (isContent) {
             if (x < gMinX) gMinX = x;
             if (y < gMinY) gMinY = y;
             if (x > gMaxX) gMaxX = x;
@@ -235,38 +257,55 @@ export default function LassoPage() {
         const cropPadding = 2;
         const cropX = Math.max(0, gMinX - cropPadding);
         const cropY = Math.max(0, gMinY - cropPadding);
-        const cropW = gMaxX - gMinX + 1 + cropPadding * 2;
-        const cropH = gMaxY - gMinY + 1 + cropPadding * 2;
-
-        const finalCropW = Math.max(1, Math.min(cropW, iW - cropX));
-        const finalCropH = Math.max(1, Math.min(cropH, iH - cropY));
+        const cropW = Math.min(outWidth - cropX, gMaxX - gMinX + 1 + cropPadding * 2);
+        const cropH = Math.min(outHeight - cropY, gMaxY - gMinY + 1 + cropPadding * 2);
 
         const cropCanvas = document.createElement("canvas");
-        cropCanvas.width = finalCropW;
-        cropCanvas.height = finalCropH;
+        cropCanvas.width = cropW;
+        cropCanvas.height = cropH;
         const cctx = cropCanvas.getContext("2d");
         if (cctx) {
-          cctx.drawImage(
-            canvas,
-            cropX,
-            cropY,
-            finalCropW,
-            finalCropH,
-            0,
-            0,
-            finalCropW,
-            finalCropH,
-          );
-          return cropCanvas;
+          cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+          finalCanvas = cropCanvas;
         }
       }
     }
 
-    return canvas;
+    // 5. Apply Aspect Ratio and Centering
+    const targetRatio = parseAspectRatio(brState.aspectRatio);
+    if (targetRatio) {
+      const currentW = finalCanvas.width;
+      const currentH = finalCanvas.height;
+      const currentRatio = currentW / currentH;
+
+      let targetW = currentW, targetH = currentH;
+      if (currentRatio > targetRatio) {
+        targetH = currentW / targetRatio;
+      } else {
+        targetW = currentH * targetRatio;
+      }
+
+      const arCanvas = document.createElement("canvas");
+      arCanvas.width = targetW;
+      arCanvas.height = targetH;
+      const actx = arCanvas.getContext("2d");
+      if (actx) {
+        if (brState.backgroundMode === "chroma-solid") {
+          actx.fillStyle = finalSolidColor;
+          actx.fillRect(0, 0, targetW, targetH);
+        }
+        const offsetX = (targetW - currentW) / 2;
+        const offsetY = (targetH - currentH) / 2;
+        actx.drawImage(finalCanvas, offsetX, offsetY);
+        finalCanvas = arCanvas;
+      }
+    }
+
+    return finalCanvas;
   }, [image, points, brState]);
 
   const processCutout = useCallback(
-    async (silent = false) => {
+    async (silent = false, includeEffects = true) => {
       setIsProcessing(true);
       await new Promise((r) => setTimeout(r, 300));
       const canvas = generateProcessedCanvas();
@@ -277,18 +316,20 @@ export default function LassoPage() {
         if (!silent) toast.success("Cutout processed!");
 
         // Completion effects
-        setTimeout(() => {
-          resultsRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ["#4ade80", "#22c55e", "#3b82f6"],
-          });
-        }, 100);
+        if (includeEffects) {
+          setTimeout(() => {
+            resultsRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ["#4ade80", "#22c55e", "#3b82f6"],
+            });
+          }, 100);
+        }
       }
       setIsProcessing(false);
     },
@@ -375,11 +416,24 @@ export default function LassoPage() {
       }
 
       screenPoints.forEach((p, i) => {
+        const isHovered = i === hoveredPointIndex;
+        const isDragged = i === draggedPointIndex;
+        
         ctx.fillStyle =
           i === 0 ? (isClosed ? "#00ff00" : "#ffff00") : "#ff0000";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-        ctx.fill();
+        
+        if (isHovered || isDragged) {
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         if (i === 0 && screenMouse && !isClosed && points.length > 2) {
           const dist = Math.sqrt(
@@ -434,6 +488,23 @@ export default function LassoPage() {
       return;
     }
 
+    const p = getCanvasPoint(e);
+    const { zoom } = view;
+
+    // Check if clicking near a point to drag
+    if (isClosed && mode === "lasso") {
+      const threshold = 10 / zoom; // 10 screen pixels
+      const index = points.findIndex(
+        (pt) =>
+          Math.sqrt(Math.pow(pt.x - p.x, 2) + Math.pow(pt.y - p.y, 2)) <
+          threshold,
+      );
+      if (index !== -1) {
+        setDraggedPointIndex(index);
+        return;
+      }
+    }
+
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     hasDragged.current = false;
     canvasViewport.startPanning(e);
@@ -443,6 +514,28 @@ export default function LassoPage() {
     if (!image) return;
     const p = getCanvasPoint(e);
     setMousePos(p);
+
+    if (draggedPointIndex !== null) {
+      setPoints((prev) => {
+        const next = [...prev];
+        next[draggedPointIndex] = p;
+        return next;
+      });
+      return;
+    }
+
+    if (isClosed && mode === "lasso") {
+      const { zoom } = view;
+      const threshold = 10 / zoom;
+      const index = points.findIndex(
+        (pt) =>
+          Math.sqrt(Math.pow(pt.x - p.x, 2) + Math.pow(pt.y - p.y, 2)) <
+          threshold,
+      );
+      setHoveredPointIndex(index !== -1 ? index : null);
+    } else {
+      setHoveredPointIndex(null);
+    }
 
     if (dragStartPos.current) {
       const dist = Math.sqrt(
@@ -460,10 +553,19 @@ export default function LassoPage() {
     canvasViewport.stopPanning();
     dragStartPos.current = null;
     setMousePos(null);
+    setDraggedPointIndex(null);
+    setHoveredPointIndex(null);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!image) return;
+
+    if (draggedPointIndex !== null) {
+      setDraggedPointIndex(null);
+      processCutout(true, false); // Auto-regenerate without animations
+      return;
+    }
+
     const wasDrag = hasDragged.current;
     canvasViewport.stopPanning();
     dragStartPos.current = null;
@@ -764,7 +866,9 @@ export default function LassoPage() {
                   onMouseLeave={handleMouseLeave}
                   className={cn(
                     "absolute top-0 left-0 w-full h-full",
-                    mode === "pan" ? "cursor-move" : "cursor-crosshair",
+                    mode === "pan" ? "cursor-move" : 
+                      draggedPointIndex !== null ? "cursor-grabbing" :
+                      hoveredPointIndex !== null ? "cursor-grab" : "cursor-crosshair",
                     isPanning && "cursor-grabbing",
                   )}
                 />
@@ -803,8 +907,6 @@ export default function LassoPage() {
                 <BackgroundRemovalSettings
                   state={brState}
                   setState={setBrState}
-                  showAdvanced={showAdvancedChroma}
-                  setShowAdvanced={setShowAdvancedChroma}
                   compact={true}
                 />
               </div>

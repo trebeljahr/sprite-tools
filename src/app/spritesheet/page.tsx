@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -32,8 +34,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { cn, applyChromaKey } from "@/lib/utils";
-import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
+import { cn, applyChromaKey, applySolidFillChroma, hexToRgb } from "@/lib/utils";
+import { BackgroundRemovalSettings, type BackgroundRemovalState, type AspectRatio } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
 import {
   ViewportControls,
@@ -100,9 +102,20 @@ const calculateSmartColumns = (count: number) => {
   return Math.ceil(sqrt);
 };
 
-export default function SpritesheetPage() {
+function SpritesheetContent() {
+  const searchParams = useSearchParams();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  // ... (existing state)
+
+  useEffect(() => {
+    const url = searchParams.get("videoUrl");
+    if (url) {
+      setVideoUrl(url);
+      toast.success("Animation loaded from Step 2!");
+    }
+  }, [searchParams]);
 
   // Frame Management
   const [rawFrames, setRawFrames] = useState<string[]>([]);
@@ -139,15 +152,17 @@ export default function SpritesheetPage() {
   const sheetDimensions = useRef({ w: 0, h: 0 });
 
   // Background Removal Settings
-  const [brState, setBrState] = useState({
-    removeBackground: true,
+  const [brState, setBrState] = useState<BackgroundRemovalState>({
+    backgroundMode: "chroma-transparent",
     autoCrop: true,
+    aspectRatio: "free",
+    solidColor: "#ffffff",
+    autoDetermineFillColor: true,
     similarity: 30,
     softness: 10,
     spill: 20,
     choke: 1,
   });
-  const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
 
   // Animation Playback State
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -434,6 +449,8 @@ export default function SpritesheetPage() {
       globalMaxY = 0;
     let foundAnyContent = false;
 
+    const targetSolidRgb = hexToRgb(brState.solidColor);
+
     for (let i = 0; i < sourceFrames.length; i++) {
       const frameImg = new Image();
       frameImg.src = sourceFrames[i];
@@ -443,32 +460,98 @@ export default function SpritesheetPage() {
         ctx.clearRect(0, 0, fw, fh);
         ctx.drawImage(frameImg, 0, 0);
 
-        if (brState.removeBackground) {
-          const imageData = ctx.getImageData(0, 0, fw, fh);
-          const data = imageData.data;
-          const target = { r: data[0], g: data[1], b: data[2] };
+        const isChroma = brState.backgroundMode !== "transparent-cutout";
+        const isSolid = brState.backgroundMode === "chroma-solid";
+        
+        if (isChroma) {
+          const firstPixelData = ctx.getImageData(0, 0, 1, 1).data;
+          const detectedBackground = { r: firstPixelData[0], g: firstPixelData[1], b: firstPixelData[2] };
+          
+          if (isSolid) {
+            // SPATIAL FEATHERING for Solid Fill
+            const finalTarget = brState.autoDetermineFillColor ? detectedBackground : targetSolidRgb;
+            
+            // 1. Create a binary mask on a temporary canvas
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = fw;
+            maskCanvas.height = fh;
+            const mctx = maskCanvas.getContext("2d");
+            if (mctx) {
+              const imageData = ctx.getImageData(0, 0, fw, fh);
+              const data = imageData.data;
+              const { similarity } = brState;
+              
+              // Find character pixels (not matching background)
+              for (let j = 0; j < data.length; j += 4) {
+                const r = data[j], g = data[j + 1], b = data[j + 2];
+                const dist = Math.sqrt(
+                  Math.pow(r - detectedBackground.r, 2) + 
+                  Math.pow(g - detectedBackground.g, 2) + 
+                  Math.pow(b - detectedBackground.b, 2)
+                );
+                
+                // Mask: 0 for background, 255 for character
+                const isBg = dist < similarity;
+                data[j] = data[j+1] = data[j+2] = isBg ? 0 : 255;
+                data[j+3] = 255;
+              }
+              mctx.putImageData(imageData, 0, 0);
 
-          applyChromaKey(ctx, fw, fh, target, brState);
-          const processedData = ctx.getImageData(0, 0, fw, fh);
+              // 2. Clear main canvas and fill with solid color
+              ctx.fillStyle = `rgb(${finalTarget.r}, ${finalTarget.g}, ${finalTarget.b})`;
+              ctx.fillRect(0, 0, fw, fh);
 
-          if (brState.autoCrop) {
-            const d = processedData.data;
-            for (let y = 0; y < fh; y++) {
-              for (let x = 0; x < fw; x++) {
-                if (d[(y * fw + x) * 4 + 3] > 0) {
-                  if (x < globalMinX) globalMinX = x;
-                  if (y < globalMinY) globalMinY = y;
-                  if (x > globalMaxX) globalMaxX = x;
-                  if (y > globalMaxY) globalMaxY = y;
-                  foundAnyContent = true;
+              // 3. Draw the original image feathered using the mask
+              const tempCanvas = document.createElement("canvas");
+              tempCanvas.width = fw;
+              tempCanvas.height = fh;
+              const tctx = tempCanvas.getContext("2d");
+              if (tctx) {
+                tctx.drawImage(frameImg, 0, 0);
+                tctx.globalCompositeOperation = "destination-in";
+                if (brState.softness > 0) {
+                  tctx.filter = `blur(${brState.softness}px)`;
                 }
+                tctx.drawImage(maskCanvas, 0, 0);
+                ctx.drawImage(tempCanvas, 0, 0);
               }
             }
+          } else {
+            applyChromaKey(ctx, fw, fh, detectedBackground, brState);
           }
-          frameImageData.push(processedData);
-        } else {
-          frameImageData.push(ctx.getImageData(0, 0, fw, fh));
         }
+
+        const processedData = ctx.getImageData(0, 0, fw, fh);
+        const d = processedData.data;
+
+        // Record bounds based on content
+        // For solid fill, we must determine what is "content" (not the target color)
+        // or just rely on the fact that if it's chroma, we can use the same distance threshold
+        const firstPixelData = ctx.getImageData(0, 0, 1, 1).data;
+        const bgR = firstPixelData[0], bgG = firstPixelData[1], bgB = firstPixelData[2];
+
+        for (let y = 0; y < fh; y++) {
+          for (let x = 0; x < fw; x++) {
+            const idx = (y * fw + x) * 4;
+            let isContent = false;
+            if (isSolid) {
+              const r = d[idx], g = d[idx+1], b = d[idx+2];
+              const dist = Math.sqrt(Math.pow(r-bgR,2) + Math.pow(g-bgG,2) + Math.pow(b-bgB,2));
+              if (dist > brState.similarity) isContent = true;
+            } else {
+              if (d[idx + 3] > 0) isContent = true;
+            }
+
+            if (isContent) {
+              if (x < globalMinX) globalMinX = x;
+              if (y < globalMinY) globalMinY = y;
+              if (x > globalMaxX) globalMaxX = x;
+              if (y > globalMaxY) globalMaxY = y;
+              foundAnyContent = true;
+            }
+          }
+        }
+        frameImageData.push(processedData);
       }
       const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);
       setProgress(
@@ -476,7 +559,7 @@ export default function SpritesheetPage() {
       );
     }
 
-    setProgressLabel("Auto-Cropping...");
+    setProgressLabel("Finalizing output...");
     const processed: string[] = [];
     const padding = 2;
     let cropX = 0,
@@ -484,22 +567,62 @@ export default function SpritesheetPage() {
       cropW = fw,
       cropH = fh;
 
-    if (brState.removeBackground && brState.autoCrop && foundAnyContent) {
+    if (brState.autoCrop && foundAnyContent) {
       cropX = Math.max(0, globalMinX - padding);
       cropY = Math.max(0, globalMinY - padding);
       cropW = Math.min(fw - cropX, globalMaxX - globalMinX + 1 + padding * 2);
       cropH = Math.min(fh - cropY, globalMaxY - globalMinY + 1 + padding * 2);
+      
+      // Handle Aspect Ratio
+      if (brState.aspectRatio !== "free") {
+        const [rw, rh] = brState.aspectRatio.split(":").map(Number);
+        const targetRatio = rw / rh;
+        const currentRatio = cropW / cropH;
+        
+        let finalW = cropW;
+        let finalH = cropH;
+        
+        if (currentRatio > targetRatio) {
+          // Content is wider than target ratio, expand height
+          finalH = cropW / targetRatio;
+        } else {
+          // Content is taller than target ratio, expand width
+          finalW = cropH * targetRatio;
+        }
+        
+        // Center the original crop within the new aspect ratio crop
+        const dx = (finalW - cropW) / 2;
+        const dy = (finalH - cropH) / 2;
+        
+        cropX -= dx;
+        cropY -= dy;
+        cropW = finalW;
+        cropH = finalH;
+      }
     }
 
     const outputCanvas = document.createElement("canvas");
-    outputCanvas.width = cropW;
-    outputCanvas.height = cropH;
+    outputCanvas.width = Math.round(cropW);
+    outputCanvas.height = Math.round(cropH);
     const octx = outputCanvas.getContext("2d");
 
     for (let i = 0; i < frameImageData.length; i++) {
       if (octx) {
-        octx.clearRect(0, 0, cropW, cropH);
-        octx.putImageData(frameImageData[i], -cropX, -cropY);
+        octx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+        
+        if (brState.backgroundMode === "chroma-solid") {
+          let fillColor = brState.solidColor;
+          if (brState.autoDetermineFillColor) {
+            const d = frameImageData[i].data;
+            // The background pixel (0,0) of the processed data in solid mode
+            // already has the determined color
+            fillColor = `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
+          }
+          octx.fillStyle = fillColor;
+          octx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+        }
+        
+        octx.putImageData(frameImageData[i], -Math.round(cropX), -Math.round(cropY));
         const blob = await new Promise<Blob | null>((resolve) =>
           outputCanvas.toBlob(resolve, "image/png"),
         );
@@ -600,14 +723,31 @@ export default function SpritesheetPage() {
 
   return (
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
+      {/* Pipeline Progress */}
+      <div className="flex items-center justify-center mb-12 space-x-4">
+        <Link href="/generate" className="flex items-center text-muted-foreground hover:text-primary transition-colors">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">1</div>
+          <span className="ml-2 font-medium">Design</span>
+        </Link>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <Link href="/" className="flex items-center text-muted-foreground hover:text-primary transition-colors">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">2</div>
+          <span className="ml-2 font-medium">Animate</span>
+        </Link>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <div className="flex items-center text-primary">
+          <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">3</div>
+          <span className="ml-2 font-medium">Extract</span>
+        </div>
+      </div>
+
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Scissors className="w-8 h-8 text-primary" />
           Advanced Sprite Tools
         </h1>
         <p className="text-muted-foreground">
-          Extract, filter, and stitch animation sheets with pixel-perfect
-          control.
+          Step 3: Extract, filter, and stitch animation sheets.
         </p>
       </div>
 
@@ -728,8 +868,6 @@ export default function SpritesheetPage() {
               <BackgroundRemovalSettings
                 state={brState}
                 setState={setBrState}
-                showAdvanced={showAdvancedChroma}
-                setShowAdvanced={setShowAdvancedChroma}
               />
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
@@ -1113,5 +1251,13 @@ export default function SpritesheetPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SpritesheetPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-muted-foreground"><Loader2 className="w-8 h-8 animate-spin mr-2" /> Loading Step 3...</div>}>
+      <SpritesheetContent />
+    </Suspense>
   );
 }

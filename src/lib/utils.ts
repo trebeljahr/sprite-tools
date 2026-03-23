@@ -5,11 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export type BackgroundMode = "chroma-transparent" | "chroma-solid" | "transparent-cutout";
+
 export interface ChromaKeySettings {
   similarity: number;
   softness: number;
   spill: number;
   choke: number;
+  backgroundColor?: string;
 }
 
 export function sampleBackground(image: HTMLImageElement, points?: { x: number, y: number }[]) {
@@ -42,6 +45,15 @@ export function sampleBackground(image: HTMLImageElement, points?: { x: number, 
   const b = Math.round(samples.reduce((acc, c) => acc + c[2], 0) / samples.length);
 
   return { r, g, b };
+}
+
+export function hexToRgb(hex: string) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 255, g: 255, b: 255 };
 }
 
 export function applyChromaKey(
@@ -94,6 +106,51 @@ export function applyChromaKey(
         data[idx + 3] = minAlpha;
       }
     }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+export function applySolidFillChroma(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  source: { r: number, g: number, b: number },
+  target: { r: number, g: number, b: number },
+  settings: ChromaKeySettings
+) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const { similarity, softness, spill } = settings;
+  const srcR = source.r, srcG = source.g, srcB = source.b;
+  const tgtR = target.r, tgtG = target.g, tgtB = target.b;
+
+  for (let j = 0; j < data.length; j += 4) {
+    const r = data[j], g = data[j + 1], b = data[j + 2];
+    const dist = Math.sqrt(
+      Math.pow(r - srcR, 2) + Math.pow(g - srcG, 2) + Math.pow(b - srcB, 2)
+    );
+    
+    let alpha = 1.0;
+    if (dist < similarity) alpha = 0;
+    else if (dist < similarity + softness) {
+      alpha = (dist - similarity) / softness;
+    }
+
+    // Apply spill reduction (to gray) before blending
+    let finalR = r, finalG = g, finalB = b;
+    if (dist < similarity + softness + spill) {
+      const sf = 1 - Math.max(0, Math.min(1, (dist - similarity) / (softness + spill)));
+      const gray = (r + g + b) / 3;
+      finalR = r * (1 - sf) + gray * sf;
+      finalG = g * (1 - sf) + gray * sf;
+      finalB = b * (1 - sf) + gray * sf;
+    }
+
+    // Blend with target solid color
+    data[j] = finalR * alpha + tgtR * (1 - alpha);
+    data[j + 1] = finalG * alpha + tgtG * (1 - alpha);
+    data[j + 2] = finalB * alpha + tgtB * (1 - alpha);
+    data[j + 3] = 255; // Always solid
   }
   ctx.putImageData(imageData, 0, 0);
 }

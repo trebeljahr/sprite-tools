@@ -24,7 +24,7 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { BackgroundRemovalSettings } from "@/components/background-removal-settings";
+import { BackgroundRemovalSettings, type BackgroundRemovalState, type AspectRatio } from "@/components/background-removal-settings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -118,15 +118,17 @@ export default function SpritesheetPage() {
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
 
   // Background Removal Settings
-  const [brState, setBrState] = useState({
-    removeBackground: true,
+  const [brState, setBrState] = useState<BackgroundRemovalState>({
+    backgroundMode: "chroma-transparent",
     autoCrop: true,
+    aspectRatio: "free",
+    solidColor: "#ffffff",
+    autoDetermineFillColor: true,
     similarity: 30,
     softness: 10,
     spill: 20,
     choke: 1,
   });
-  const [showAdvancedChroma, setShowAdvancedChroma] = useState(false);
 
   // Animation Preview State
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -377,7 +379,9 @@ export default function SpritesheetPage() {
         ctx.clearRect(0, 0, fw, fh);
         ctx.drawImage(frameImg, 0, 0);
 
-        if (brState.removeBackground) {
+        const isChroma = brState.backgroundMode !== "transparent-cutout";
+
+        if (isChroma) {
           const imageData = ctx.getImageData(0, 0, fw, fh);
           const data = imageData.data;
 
@@ -458,7 +462,7 @@ export default function SpritesheetPage() {
       cropW = fw,
       cropH = fh;
 
-    if (brState.removeBackground && brState.autoCrop && foundAnyContent) {
+    if (brState.backgroundMode !== "transparent-cutout" && brState.autoCrop && foundAnyContent) {
       cropX = Math.max(0, globalMinX - padding);
       cropY = Math.max(0, globalMinY - padding);
       cropW = Math.min(fw - cropX, globalMaxX - globalMinX + 1 + padding * 2);
@@ -739,8 +743,6 @@ export default function SpritesheetPage() {
               <BackgroundRemovalSettings
                 state={brState}
                 setState={setBrState}
-                showAdvanced={showAdvancedChroma}
-                setShowAdvanced={setShowAdvancedChroma}
               />
 
               {showResults && (

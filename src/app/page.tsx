@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, Video, Loader2, Play, RefreshCw } from "lucide-react";
+import { Upload, Video, Loader2, Play, RefreshCw, ChevronRight, Sparkles, Scissors } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,8 +26,10 @@ import {
 } from "@/components/ui/select";
 
 import { generateVideoAction, checkStatusAction } from "./actions";
+import Link from "next/link";
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -40,6 +43,31 @@ export default function Home() {
   const [status, setStatus] = useState<string | null>(null);
 
   const pollInterval = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const imageUrl = searchParams.get("imageUrl");
+    if (imageUrl) {
+      handleLoadFromUrl(imageUrl);
+    }
+  }, [searchParams]);
+
+  const handleLoadFromUrl = async (url: string) => {
+    try {
+      setStatus("Loading image from designer...");
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const fileName = "generated-sprite.png";
+      const loadedFile = new File([blob], fileName, { type: "image/png" });
+      setFile(loadedFile);
+      setPreview(url);
+      toast.success("Image loaded from Step 1!");
+    } catch (error) {
+      console.error("Error loading image from URL:", error);
+      toast.error("Failed to load image from Step 1.");
+    } finally {
+      setStatus(null);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -73,8 +101,6 @@ export default function Home() {
     formData.append("aspect_ratio", aspectRatio!);
 
     const result = await generateVideoAction(formData);
-
-    console.log(result);
 
     if (result.success && result.id) {
       setRequestId(result.id);
@@ -123,15 +149,32 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex-1 container max-w-4xl mx-auto py-12 px-4">
+    <main className="flex-1 container max-w-6xl mx-auto py-8 px-4">
+      {/* Pipeline Progress */}
+      <div className="flex items-center justify-center mb-12 space-x-4">
+        <Link href="/generate" className="flex items-center text-muted-foreground hover:text-primary transition-colors">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">1</div>
+          <span className="ml-2 font-medium">Design</span>
+        </Link>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <div className="flex items-center text-primary">
+          <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">2</div>
+          <span className="ml-2 font-medium">Animate</span>
+        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <Link href="/spritesheet" className="flex items-center text-muted-foreground hover:text-primary transition-colors">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">3</div>
+          <span className="ml-2 font-medium">Extract</span>
+        </Link>
+      </div>
+
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Video className="w-8 h-8 text-primary" />
           Grok Imagine Video
         </h1>
         <p className="text-muted-foreground">
-          Turn any image into a cinematic 1-second video with the power of Grok
-          AI.
+          Step 2: Animate your character sprite.
         </p>
       </div>
 
@@ -140,9 +183,9 @@ export default function Home() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Configure</CardTitle>
+              <CardTitle>Configure Animation</CardTitle>
               <CardDescription>
-                Upload your image and set the prompt.
+                Set the motion prompt for your character.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -185,10 +228,10 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="prompt">Prompt</Label>
+                  <Label htmlFor="prompt">Motion Prompt</Label>
                   <Textarea
                     id="prompt"
-                    placeholder="Describe the motion (e.g., cinematic zoom, gentle breeze...)"
+                    placeholder="Describe the motion (e.g., walking, swinging sword, idle breathing...)"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     className="h-24"
@@ -201,7 +244,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div className="space-y-2">
                     <Label>Duration</Label>
-                    <Select value={duration} onValueChange={setDuration}>
+                    <Select value={duration || "1"} onValueChange={setDuration}>
                       <SelectTrigger>
                         <SelectValue placeholder="1s" />
                       </SelectTrigger>
@@ -215,7 +258,7 @@ export default function Home() {
                   </div>
                   <div className="space-y-2">
                     <Label>Resolution</Label>
-                    <Select value={resolution} onValueChange={setResolution}>
+                    <Select value={resolution || "720p"} onValueChange={setResolution}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -230,7 +273,7 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <Label>Aspect Ratio</Label>
-                  <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                  <Select value={aspectRatio || "16:9"} onValueChange={setAspectRatio}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -253,12 +296,12 @@ export default function Home() {
                 {isGenerating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
+                    Generating Video...
                   </>
                 ) : (
                   <>
                     <Play className="mr-2 h-4 w-4" />
-                    Generate Video
+                    Animate Character
                   </>
                 )}
               </Button>
@@ -270,9 +313,9 @@ export default function Home() {
         <div className="space-y-6">
           <Card className="h-full flex flex-col">
             <CardHeader>
-              <CardTitle>Result</CardTitle>
+              <CardTitle>Resulting Animation</CardTitle>
               <CardDescription>
-                Your generated cinematic clip will appear here.
+                Your animated character clip will appear here.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex items-center justify-center">
@@ -285,10 +328,17 @@ export default function Home() {
                     loop
                     className="w-full rounded-lg shadow-lg border"
                   />
-                  <div className="flex justify-center">
+                  <div className="flex flex-col gap-2">
+                    <Link 
+                      href={`/spritesheet?videoUrl=${encodeURIComponent(videoUrl)}`}
+                      className="inline-flex items-center justify-center rounded-lg h-10 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors w-full"
+                    >
+                      <Scissors className="mr-2 h-4 w-4" />
+                      Go to Step 3: Extract Spritesheet
+                    </Link>
                     <Button variant="outline" onClick={() => setVideoUrl(null)}>
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Create New
+                      Create New Animation
                     </Button>
                   </div>
                 </div>
@@ -315,5 +365,13 @@ export default function Home() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }
