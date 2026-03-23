@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { cn, applyChromaKey, applySolidFillChroma, hexToRgb } from "@/lib/utils";
+import { cn, applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground } from "@/lib/utils";
 import { BackgroundRemovalSettings, type BackgroundRemovalState, type AspectRatio } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
 import {
@@ -449,6 +449,25 @@ function SpritesheetContent() {
       globalMaxY = 0;
     let foundAnyContent = false;
 
+    const fillWithVerticalGradient = (
+      ictx: CanvasRenderingContext2D,
+      w: number,
+      h: number,
+      colors: { tl: {r:number,g:number,b:number}, tr: {r:number,g:number,b:number}, bl: {r:number,g:number,b:number}, br: {r:number,g:number,b:number} }
+    ) => {
+      const grad = ictx.createLinearGradient(0, 0, 0, h);
+      const topR = Math.round((colors.tl.r + colors.tr.r) / 2);
+      const topG = Math.round((colors.tl.g + colors.tr.g) / 2);
+      const topB = Math.round((colors.tl.b + colors.tr.b) / 2);
+      const botR = Math.round((colors.bl.r + colors.br.r) / 2);
+      const botG = Math.round((colors.bl.g + colors.br.g) / 2);
+      const botB = Math.round((colors.bl.b + colors.br.b) / 2);
+      grad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
+      grad.addColorStop(1, `rgb(${botR}, ${botG}, ${botB})`);
+      ictx.fillStyle = grad;
+      ictx.fillRect(0, 0, w, h);
+    };
+
     const targetSolidRgb = hexToRgb(brState.solidColor);
 
     for (let i = 0; i < sourceFrames.length; i++) {
@@ -463,15 +482,17 @@ function SpritesheetContent() {
         const isChroma = brState.backgroundMode !== "transparent-cutout";
         const isSolid = brState.backgroundMode === "chroma-solid";
         
+        const sampled = sampleBackground(frameImg);
+        const detectedBackground = { r: sampled.r, g: sampled.g, b: sampled.b };
+
         if (isChroma) {
-          const firstPixelData = ctx.getImageData(0, 0, 1, 1).data;
-          const detectedBackground = { r: firstPixelData[0], g: firstPixelData[1], b: firstPixelData[2] };
-          
           if (isSolid) {
-            // SPATIAL FEATHERING for Solid Fill
-            const finalTarget = brState.autoDetermineFillColor ? detectedBackground : targetSolidRgb;
+            // SPATIAL FEATHERING for Solid Fill with Vertical Gradient
+            const finalTarget = brState.autoDetermineFillColor ? sampled.corners : {
+              tl: targetSolidRgb, tr: targetSolidRgb, bl: targetSolidRgb, br: targetSolidRgb
+            };
             
-            // 1. Create a binary mask on a temporary canvas
+            // 1. Create a binary mask
             const maskCanvas = document.createElement("canvas");
             maskCanvas.width = fw;
             maskCanvas.height = fh;
@@ -481,43 +502,33 @@ function SpritesheetContent() {
               const data = imageData.data;
               const { similarity } = brState;
               
-              // Find character pixels (not matching background)
               for (let j = 0; j < data.length; j += 4) {
-                const r = data[j], g = data[j + 1], b = data[j + 2];
                 const dist = Math.sqrt(
-                  Math.pow(r - detectedBackground.r, 2) + 
-                  Math.pow(g - detectedBackground.g, 2) + 
-                  Math.pow(b - detectedBackground.b, 2)
+                  Math.pow(data[j] - detectedBackground.r, 2) + 
+                  Math.pow(data[j+1] - detectedBackground.g, 2) + 
+                  Math.pow(data[j+2] - detectedBackground.b, 2)
                 );
-                
-                // Mask: 0 for background, 255 for character
                 const isBg = dist < similarity;
                 data[j] = data[j+1] = data[j+2] = isBg ? 0 : 255;
                 data[j+3] = 255;
               }
               mctx.putImageData(imageData, 0, 0);
 
-              // 2. Clear main canvas and fill with solid color
-              ctx.fillStyle = `rgb(${finalTarget.r}, ${finalTarget.g}, ${finalTarget.b})`;
-              ctx.fillRect(0, 0, fw, fh);
+              // 2. Clear main canvas and fill with gradient/solid
+              fillWithVerticalGradient(ctx, fw, fh, finalTarget);
 
-              // 3. Draw the original image feathered using the mask
+              // 3. Draw feathered character
               const tempCanvas = document.createElement("canvas");
               tempCanvas.width = fw;
               tempCanvas.height = fh;
               const tctx = tempCanvas.getContext("2d");
               if (tctx) {
-                // Create a "clean" character image surrounded by the target color
-                // to prevent background bleeding during the blur/feathering step.
                 const cleanCharCanvas = document.createElement("canvas");
                 cleanCharCanvas.width = fw;
                 cleanCharCanvas.height = fh;
                 const ccctx = cleanCharCanvas.getContext("2d");
                 if (ccctx) {
-                   ccctx.fillStyle = `rgb(${finalTarget.r}, ${finalTarget.g}, ${finalTarget.b})`;
-                   ccctx.fillRect(0, 0, fw, fh);
-                   
-                   // Draw only the non-background part of the image onto the solid color
+                   fillWithVerticalGradient(ccctx, fw, fh, finalTarget);
                    const hardCharOnlyCanvas = document.createElement("canvas");
                    hardCharOnlyCanvas.width = fw;
                    hardCharOnlyCanvas.height = fh;
@@ -528,13 +539,9 @@ function SpritesheetContent() {
                      hcoctx.drawImage(maskCanvas, 0, 0);
                      ccctx.drawImage(hardCharOnlyCanvas, 0, 0);
                    }
-                   
-                   // Now draw this "clean" image onto tempCanvas and apply feathered mask
                    tctx.drawImage(cleanCharCanvas, 0, 0);
                    tctx.globalCompositeOperation = "destination-in";
-                   if (brState.softness > 0) {
-                     tctx.filter = `blur(${brState.softness}px)`;
-                   }
+                   if (brState.softness > 0) tctx.filter = `blur(${brState.softness}px)`;
                    tctx.drawImage(maskCanvas, 0, 0);
                    ctx.drawImage(tempCanvas, 0, 0);
                 }
@@ -548,22 +555,19 @@ function SpritesheetContent() {
         const processedData = ctx.getImageData(0, 0, fw, fh);
         const d = processedData.data;
 
-        // Record bounds based on content
-        // For solid fill, we must determine what is "content" (not the target color)
-        // or just rely on the fact that if it's chroma, we can use the same distance threshold
-        const firstPixelData = ctx.getImageData(0, 0, 1, 1).data;
-        const bgR = firstPixelData[0], bgG = firstPixelData[1], bgB = firstPixelData[2];
-
         for (let y = 0; y < fh; y++) {
           for (let x = 0; x < fw; x++) {
             const idx = (y * fw + x) * 4;
             let isContent = false;
             if (isSolid) {
-              const r = d[idx], g = d[idx+1], b = d[idx+2];
-              const dist = Math.sqrt(Math.pow(r-bgR,2) + Math.pow(g-bgG,2) + Math.pow(b-bgB,2));
+              const dist = Math.sqrt(
+                Math.pow(d[idx]-detectedBackground.r,2) + 
+                Math.pow(d[idx+1]-detectedBackground.g,2) + 
+                Math.pow(d[idx+2]-detectedBackground.b,2)
+              );
               if (dist > brState.similarity) isContent = true;
-            } else {
-              if (d[idx + 3] > 0) isContent = true;
+            } else if (d[idx + 3] > 0) {
+              isContent = true;
             }
 
             if (isContent) {
@@ -1084,7 +1088,7 @@ function SpritesheetContent() {
 
                 <Card
                   className={cn(
-                    "md:col-span-1 shadow-lg ring-1 ring-primary/5",
+                    "md:col-span-1 shadow-lg ring-1 ring-primary/10",
                     processedFrames.length === 0 && "opacity-50",
                   )}
                 >
@@ -1216,7 +1220,7 @@ function SpritesheetContent() {
                 </Card>
               </div>
 
-              <Card className="shadow-lg ring-1 ring-primary/5">
+              <Card className="shadow-lg ring-1 ring-primary/10">
                 <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                   <div>
                     <CardTitle>

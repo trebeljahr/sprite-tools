@@ -35,6 +35,7 @@ interface BackgroundRemovalSettingsProps {
   ) => void;
   compact?: boolean;
   mode?: "full" | "chroma-only";
+  renderFooter?: () => React.ReactNode;
 }
 
 export function BackgroundRemovalSettings({
@@ -42,6 +43,7 @@ export function BackgroundRemovalSettings({
   setState,
   compact = false,
   mode = "full",
+  renderFooter,
 }: BackgroundRemovalSettingsProps) {
   const updateField = (field: keyof BackgroundRemovalState, value: unknown) => {
     setState((prev) => ({ ...prev, [field]: value }));
@@ -98,6 +100,12 @@ export function BackgroundRemovalSettings({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {renderFooter && (
+          <div className="pt-4 border-t border-dashed flex justify-end">
+            {renderFooter()}
           </div>
         )}
       </div>
@@ -270,26 +278,35 @@ export function BackgroundRemovalSettings({
         </div>
       </div>
 
-      <div className="space-y-2 pt-2 border-t border-dashed">
-        <Label className={cn(compact ? "text-[10px]" : "text-xs font-medium uppercase tracking-wider text-muted-foreground/70")}>
-          Output Aspect Ratio
-        </Label>
-        <Select 
-          value={state.aspectRatio || "free"} 
-          onValueChange={(v) => updateField("aspectRatio", v as AspectRatio)}
-        >
-          <SelectTrigger className={cn(compact ? "h-7 text-[10px]" : "h-9 text-xs")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="free">Original / Free</SelectItem>
-            <SelectItem value="1:1">Square (1:1)</SelectItem>
-            <SelectItem value="16:9">Wide (16:9)</SelectItem>
-            <SelectItem value="9:16">Portrait (9:16)</SelectItem>
-            <SelectItem value="4:3">Classic (4:3)</SelectItem>
-            <SelectItem value="3:4">Classic (3:4)</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="pt-8 border-t border-dashed flex justify-end">
+        <div className="flex items-end gap-0.5">
+          <div className="space-y-1 flex-1 min-w-[110px]">
+            <Label className={cn("px-1", compact ? "text-[8px]" : "text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80")}>
+              Aspect Ratio
+            </Label>
+            <Select 
+              value={state.aspectRatio || "free"} 
+              onValueChange={(v) => updateField("aspectRatio", v as AspectRatio)}
+            >
+              <SelectTrigger className={cn("bg-background shadow-none border-border/50", compact ? "h-8 text-[10px]" : "h-9 text-xs")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="free">Free</SelectItem>
+                <SelectItem value="1:1">1:1</SelectItem>
+                <SelectItem value="16:9">16:9</SelectItem>
+                <SelectItem value="9:16">9:16</SelectItem>
+                <SelectItem value="4:3">4:3</SelectItem>
+                <SelectItem value="3:4">3:4</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {renderFooter && (
+            <div className="flex-shrink-0">
+              {renderFooter()}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

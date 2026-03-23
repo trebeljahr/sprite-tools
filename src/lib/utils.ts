@@ -20,31 +20,38 @@ export function sampleBackground(image: HTMLImageElement, points?: { x: number, 
   canvas.width = image.width;
   canvas.height = image.height;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return { r: 255, g: 255, b: 255 };
+  if (!ctx) return { r: 255, g: 255, b: 255, corners: { tl: {r:255,g:255,b:255}, tr: {r:255,g:255,b:255}, bl: {r:255,g:255,b:255}, br: {r:255,g:255,b:255} } };
   ctx.drawImage(image, 0, 0);
 
-  let samples: Uint8ClampedArray[] = [];
+  const getPixel = (x: number, y: number) => {
+    const d = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2] };
+  };
 
+  const corners = {
+    tl: getPixel(0, 0),
+    tr: getPixel(image.width - 1, 0),
+    bl: getPixel(0, image.height - 1),
+    br: getPixel(image.width - 1, image.height - 1)
+  };
+
+  let r, g, b;
   if (points && points.length > 0) {
+    let sr = 0, sg = 0, sb = 0;
     points.forEach(p => {
-      const x = Math.max(0, Math.min(image.width - 1, Math.round(p.x)));
-      const y = Math.max(0, Math.min(image.height - 1, Math.round(p.y)));
-      samples.push(ctx.getImageData(x, y, 1, 1).data);
+      const pix = getPixel(Math.max(0, Math.min(image.width - 1, p.x)), Math.max(0, Math.min(image.height - 1, p.y)));
+      sr += pix.r; sg += pix.g; sb += pix.b;
     });
+    r = Math.round(sr / points.length);
+    g = Math.round(sg / points.length);
+    b = Math.round(sb / points.length);
   } else {
-    samples = [
-      ctx.getImageData(0, 0, 1, 1).data,
-      ctx.getImageData(image.width - 1, 0, 1, 1).data,
-      ctx.getImageData(0, image.height - 1, 1, 1).data,
-      ctx.getImageData(image.width - 1, image.height - 1, 1, 1).data
-    ];
+    r = Math.round((corners.tl.r + corners.tr.r + corners.bl.r + corners.br.r) / 4);
+    g = Math.round((corners.tl.g + corners.tr.g + corners.bl.g + corners.br.g) / 4);
+    b = Math.round((corners.tl.b + corners.tr.b + corners.bl.b + corners.br.b) / 4);
   }
 
-  const r = Math.round(samples.reduce((acc, c) => acc + c[0], 0) / samples.length);
-  const g = Math.round(samples.reduce((acc, c) => acc + c[1], 0) / samples.length);
-  const b = Math.round(samples.reduce((acc, c) => acc + c[2], 0) / samples.length);
-
-  return { r, g, b };
+  return { r, g, b, corners };
 }
 
 export function hexToRgb(hex: string) {

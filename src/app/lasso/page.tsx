@@ -52,7 +52,6 @@ export default function LassoPage() {
     fitToView,
   } = canvasViewport;
 
-  const [mode, setMode] = useState<"lasso" | "pan">("lasso");
   const [mousePos, setMousePos] = useState<Point | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -149,6 +148,25 @@ export default function LassoPage() {
     return w / h;
   };
 
+  const fillWithVerticalGradient = (
+    ictx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    colors: { tl: {r:number,g:number,b:number}, tr: {r:number,g:number,b:number}, bl: {r:number,g:number,b:number}, br: {r:number,g:number,b:number} }
+  ) => {
+    const grad = ictx.createLinearGradient(0, 0, 0, h);
+    const topR = Math.round((colors.tl.r + colors.tr.r) / 2);
+    const topG = Math.round((colors.tl.g + colors.tr.g) / 2);
+    const topB = Math.round((colors.tl.b + colors.tr.b) / 2);
+    const botR = Math.round((colors.bl.r + colors.br.r) / 2);
+    const botG = Math.round((colors.bl.g + colors.br.g) / 2);
+    const botB = Math.round((colors.bl.b + colors.br.b) / 2);
+    grad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
+    grad.addColorStop(1, `rgb(${botR}, ${botG}, ${botB})`);
+    ictx.fillStyle = grad;
+    ictx.fillRect(0, 0, w, h);
+  };
+
   const generateProcessedCanvas = useCallback(() => {
     if (!image || points.length < 3) return null;
 
@@ -172,9 +190,9 @@ export default function LassoPage() {
 
     const sampled = sampleBackground(image, points);
     const targetSolidRgb = hexToRgb(brState.solidColor);
-    const finalSolidColor = brState.autoDetermineFillColor 
-      ? `rgb(${sampled.r}, ${sampled.g}, ${sampled.b})` 
-      : `rgb(${targetSolidRgb.r}, ${targetSolidRgb.g}, ${targetSolidRgb.b})`;
+    const finalTarget = brState.autoDetermineFillColor ? sampled.corners : {
+      tl: targetSolidRgb, tr: targetSolidRgb, bl: targetSolidRgb, br: targetSolidRgb
+    };
 
     const isSolid = brState.backgroundMode === "chroma-solid";
     const isCutout = brState.backgroundMode === "transparent-cutout";
@@ -182,8 +200,7 @@ export default function LassoPage() {
 
     // 1. Fill base canvas if solid mode
     if (isSolid) {
-      ctx.fillStyle = finalSolidColor;
-      ctx.fillRect(0, 0, outWidth, outHeight);
+      fillWithVerticalGradient(ctx, outWidth, outHeight, finalTarget);
     }
 
     // 2. Create the feathered cutout (Simple Spatial Feathering)
@@ -201,9 +218,8 @@ export default function LassoPage() {
       const cictx = cleanImgCanvas.getContext("2d");
       
       if (cictx) {
-        // Fill with target color
-        cictx.fillStyle = finalSolidColor;
-        cictx.fillRect(0, 0, outWidth, outHeight);
+        // Fill with target gradient/solid
+        fillWithVerticalGradient(cictx, outWidth, outHeight, finalTarget);
         
         // Draw hard-edged character on top
         const hardMaskCanvas = document.createElement("canvas");
@@ -219,7 +235,6 @@ export default function LassoPage() {
           hmctx.closePath();
           hmctx.fill();
 
-          // Draw image only where mask is
           const charOnlyCanvas = document.createElement("canvas");
           charOnlyCanvas.width = outWidth;
           charOnlyCanvas.height = outHeight;
@@ -233,9 +248,7 @@ export default function LassoPage() {
         }
       }
 
-      // Now apply the feathered mask to the "clean" image
       tctx.drawImage(cleanImgCanvas, 0, 0);
-      
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = outWidth;
       maskCanvas.height = outHeight;
@@ -254,19 +267,15 @@ export default function LassoPage() {
         if (pad > 0) tctx.filter = `blur(${pad}px)`;
         tctx.drawImage(maskCanvas, 0, 0);
       }
-      
-      // Draw the feathered result onto the main canvas
       ctx.drawImage(tempCanvas, 0, 0);
     }
 
-    // 3. Apply chroma key ONLY if in chroma-transparent mode
     if (isChroma) {
       applyChromaKey(ctx, outWidth, outHeight, sampled, brState);
     }
 
     let finalCanvas = canvas;
 
-    // 4. Auto-crop content
     if (brState.autoCrop) {
       const imageData = ctx.getImageData(0, 0, outWidth, outHeight);
       const data = imageData.data;
@@ -277,7 +286,7 @@ export default function LassoPage() {
         for (let x = 0; x < outWidth; x++) {
           const idx = (y * outWidth + x) * 4;
           let isContent = false;
-          if (brState.backgroundMode === "chroma-solid") {
+          if (isSolid) {
             const r = data[idx], g = data[idx+1], b = data[idx+2];
             const dist = Math.sqrt(Math.pow(r-sampled.r,2) + Math.pow(g-sampled.g,2) + Math.pow(b-sampled.b,2));
             if (dist > brState.similarity) isContent = true;
@@ -313,7 +322,6 @@ export default function LassoPage() {
       }
     }
 
-    // 5. Apply Aspect Ratio and Centering
     const targetRatio = parseAspectRatio(brState.aspectRatio);
     if (targetRatio) {
       const currentW = finalCanvas.width;
@@ -332,9 +340,8 @@ export default function LassoPage() {
       arCanvas.height = targetH;
       const actx = arCanvas.getContext("2d");
       if (actx) {
-        if (brState.backgroundMode === "chroma-solid") {
-          actx.fillStyle = finalSolidColor;
-          actx.fillRect(0, 0, targetW, targetH);
+        if (isSolid) {
+          fillWithVerticalGradient(actx, targetW, targetH, finalTarget);
         }
         const offsetX = (targetW - currentW) / 2;
         const offsetY = (targetH - currentH) / 2;
@@ -448,7 +455,7 @@ export default function LassoPage() {
         ctx.lineWidth = 1;
         ctx.fill();
         ctx.stroke();
-      } else if (mode === "lasso") {
+      } else {
         if (screenMouse) ctx.lineTo(screenMouse.x, screenMouse.y);
         ctx.strokeStyle = "#ff0000";
         ctx.lineWidth = 1;
@@ -493,7 +500,7 @@ export default function LassoPage() {
       ctx.restore();
     }
     ctx.restore();
-  }, [image, points, view, canvasContainerRef, mode, mousePos, isClosed]);
+  }, [image, points, view, canvasContainerRef, mousePos, isClosed]);
 
   useEffect(() => {
     draw();
@@ -534,7 +541,7 @@ export default function LassoPage() {
     const { zoom } = view;
 
     // Check if clicking near a point to drag
-    if (isClosed && mode === "lasso") {
+    if (isClosed) {
       const threshold = 10 / zoom; // 10 screen pixels
       const index = points.findIndex(
         (pt) =>
@@ -566,7 +573,7 @@ export default function LassoPage() {
       return;
     }
 
-    if (isClosed && mode === "lasso") {
+    if (isClosed) {
       const { zoom } = view;
       const threshold = 10 / zoom;
       const index = points.findIndex(
@@ -612,7 +619,7 @@ export default function LassoPage() {
     canvasViewport.stopPanning();
     dragStartPos.current = null;
 
-    if (!wasDrag && mode === "lasso" && image && !isClosed && e.button === 0) {
+    if (!wasDrag && image && !isClosed && e.button === 0) {
       const p = getCanvasPoint(e);
       const now = Date.now();
       if (now - lastClickTime < 300 && points.length > 2) {
@@ -754,7 +761,7 @@ export default function LassoPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-6">
-          <Card className="p-4 space-y-4 h-fit">
+          <Card className="p-4 space-y-4 h-fit ring-1 ring-primary/10 shadow-md">
             <div className="text-xs text-muted-foreground space-y-2">
               <p className="font-semibold text-foreground">Shortcuts:</p>
               <div className="grid grid-cols-2 gap-y-1 border rounded-md p-3 bg-muted/20">
@@ -785,7 +792,7 @@ export default function LassoPage() {
 
         <div className="lg:col-span-3 flex flex-col gap-6">
           <Card
-            className="relative overflow-hidden min-h-150 flex flex-col border shadow-xl"
+            className="relative overflow-hidden min-h-150 flex flex-col shadow-xl p-0 gap-0 ring-1 ring-primary/10"
             onContextMenu={(e) => e.preventDefault()}
           >
             <div className="flex items-center justify-between p-2 bg-muted/30 border-b backdrop-blur-sm z-10">
@@ -804,25 +811,6 @@ export default function LassoPage() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="h-4 w-4" /> {image ? "Change" : "Upload"}
-                </Button>
-                <div className="w-px h-4 bg-border mx-1" />
-                <Button
-                  variant={mode === "lasso" ? "default" : "ghost"}
-                  size="sm"
-                  className="h-8 px-3"
-                  onClick={() => setMode("lasso")}
-                  title="Lasso Tool"
-                >
-                  <Scissors className="h-4 w-4 mr-2" /> Lasso
-                </Button>
-                <Button
-                  variant={mode === "pan" ? "default" : "ghost"}
-                  size="sm"
-                  className="h-8 px-3"
-                  onClick={() => setMode("pan")}
-                  title="Pan Tool"
-                >
-                  <Move className="h-4 w-4 mr-2" /> Pan
                 </Button>
                 <div className="w-px h-4 bg-border mx-1" />
                 <Button
@@ -908,8 +896,7 @@ export default function LassoPage() {
                   onMouseLeave={handleMouseLeave}
                   className={cn(
                     "absolute top-0 left-0 w-full h-full",
-                    mode === "pan" ? "cursor-move" : 
-                      draggedPointIndex !== null ? "cursor-grabbing" :
+                    draggedPointIndex !== null ? "cursor-grabbing" :
                       hoveredPointIndex !== null ? "cursor-grab" : "cursor-crosshair",
                     isPanning && "cursor-grabbing",
                   )}
@@ -926,30 +913,31 @@ export default function LassoPage() {
           </Card>
 
           {isClosed && (
-            <Card className="p-4 space-y-4 animate-in slide-in-from-top-4 duration-500 shadow-md">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  Process Selection
-                </CardTitle>
-                <Button
-                  onClick={() => processCutout()}
-                  disabled={isProcessing}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  {isProcessing ? (
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  {isProcessing ? "Processing..." : "Process Cutout"}
-                </Button>
+            <Card className="p-4 space-y-4 animate-in slide-in-from-top-4 duration-500 shadow-md ring-1 ring-primary/10">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="w-5 h-5 text-primary" />
+                <CardTitle className="text-lg">Process Selection</CardTitle>
               </div>
               <div className="pt-2 border-t border-dashed">
                 <BackgroundRemovalSettings
                   state={brState}
                   setState={setBrState}
                   compact={true}
+                  renderFooter={() => (
+                    <Button
+                      onClick={() => processCutout()}
+                      disabled={isProcessing}
+                      size="default"
+                      className="bg-primary hover:bg-primary/90 h-10 px-6 shadow-lg"
+                    >
+                      {isProcessing ? (
+                        <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-5 w-5" />
+                      )}
+                      Process Cutout
+                    </Button>
+                  )}
                 />
               </div>
             </Card>
@@ -960,8 +948,8 @@ export default function LassoPage() {
               ref={resultsRef}
               className="animate-in fade-in slide-in-from-bottom-8 duration-700"
             >
-              <Card className="shadow-2xl ring-1 ring-primary/10 overflow-hidden">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0 bg-muted/20 border-b">
+              <Card className="shadow-2xl ring-1 ring-primary/10 overflow-hidden p-0 gap-0">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0 bg-muted/20 border-b px-2 py-2">
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-lg">Final Result</CardTitle>
                     <Button
