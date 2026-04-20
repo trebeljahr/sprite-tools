@@ -131,6 +131,7 @@ function SpritesheetContent() {
   const [progress, setProgress] = useState(0);
   const [smoothProgress, setSmoothProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const [actionOrigin, setActionOrigin] = useState<
     "extract" | "settings" | null
   >(null);
@@ -153,11 +154,9 @@ function SpritesheetContent() {
 
   // Background Removal Settings
   const [brState, setBrState] = useState<BackgroundRemovalState>({
-    backgroundMode: "chroma-transparent",
+    backgroundMode: "chroma-solid",
     autoCrop: true,
-    aspectRatio: "free",
-    solidColor: "#ffffff",
-    autoDetermineFillColor: true,
+    aspectRatio: "1:1",
     similarity: 30,
     softness: 10,
     spill: 20,
@@ -201,40 +200,42 @@ function SpritesheetContent() {
   // Auto-fit animation preview when frames are processed or selection changes (only once)
   useEffect(() => {
     if (
+      showResults &&
       processedFrames.length > 0 &&
       frameDimensions.current.w > 0 &&
       previewViewport.containerRef.current &&
       !hasAutoFittedPreview.current
     ) {
-      const raf = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
         previewViewport.fitToView(
           frameDimensions.current.w,
           frameDimensions.current.h,
         );
         hasAutoFittedPreview.current = true;
-      });
-      return () => cancelAnimationFrame(raf);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [processedFrames, activeFrames.length, previewViewport]);
+  }, [processedFrames, activeFrames.length, previewViewport, showResults]);
 
   // Auto-fit spritesheet when generated (only once)
   useEffect(() => {
     if (
+      showResults &&
       spritesheetUrl &&
       sheetDimensions.current.w > 0 &&
       sheetViewport.containerRef.current &&
       !hasAutoFittedSheet.current
     ) {
-      const raf = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
         sheetViewport.fitToView(
           sheetDimensions.current.w,
           sheetDimensions.current.h,
         );
         hasAutoFittedSheet.current = true;
-      });
-      return () => cancelAnimationFrame(raf);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [spritesheetUrl, sheetViewport]);
+  }, [spritesheetUrl, sheetViewport, showResults]);
 
   // Progress Smoothing
   useEffect(() => {
@@ -325,21 +326,56 @@ function SpritesheetContent() {
     return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
   }, []);
 
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("video/")) {
+      toast.error("Unsupported file type. Please upload a video.");
+      return;
+    }
+    setVideoFile(file);
+    setVideoUrl(URL.createObjectURL(file));
+    setRawFrames([]);
+    setProcessedFrames([]);
+    setSpritesheetUrl(null);
+    setShowResults(false);
+    setPreviewIndex(0);
+    setIsPlaying(false);
+    setProgress(0);
+    hasAutoFittedPreview.current = false;
+    hasAutoFittedSheet.current = false;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
-      setRawFrames([]);
-      setProcessedFrames([]);
-      setSpritesheetUrl(null);
-      setShowResults(false);
-      setPreviewIndex(0);
-      setIsPlaying(false);
-      setProgress(0);
-      hasAutoFittedPreview.current = false;
-      hasAutoFittedSheet.current = false;
-    }
+    if (file) handleFile(file);
+  };
+
+  // Global Paste Support
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const item = e.clipboardData?.items[0];
+      if (item?.type.startsWith("video/")) {
+        const file = item.getAsFile();
+        if (file) handleFile(file);
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   const extractFrames = async () => {
@@ -449,27 +485,6 @@ function SpritesheetContent() {
       globalMaxY = 0;
     let foundAnyContent = false;
 
-    const fillWithVerticalGradient = (
-      ictx: CanvasRenderingContext2D,
-      w: number,
-      h: number,
-      colors: { tl: {r:number,g:number,b:number}, tr: {r:number,g:number,b:number}, bl: {r:number,g:number,b:number}, br: {r:number,g:number,b:number} }
-    ) => {
-      const grad = ictx.createLinearGradient(0, 0, 0, h);
-      const topR = Math.round((colors.tl.r + colors.tr.r) / 2);
-      const topG = Math.round((colors.tl.g + colors.tr.g) / 2);
-      const topB = Math.round((colors.tl.b + colors.tr.b) / 2);
-      const botR = Math.round((colors.bl.r + colors.br.r) / 2);
-      const botG = Math.round((colors.bl.g + colors.br.g) / 2);
-      const botB = Math.round((colors.bl.b + colors.br.b) / 2);
-      grad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
-      grad.addColorStop(1, `rgb(${botR}, ${botG}, ${botB})`);
-      ictx.fillStyle = grad;
-      ictx.fillRect(0, 0, w, h);
-    };
-
-    const targetSolidRgb = hexToRgb(brState.solidColor);
-
     for (let i = 0; i < sourceFrames.length; i++) {
       const frameImg = new Image();
       frameImg.src = sourceFrames[i];
@@ -484,24 +499,26 @@ function SpritesheetContent() {
         
         const sampled = sampleBackground(frameImg);
         const detectedBackground = { r: sampled.r, g: sampled.g, b: sampled.b };
+        const finalSolidColorStr = `rgb(${detectedBackground.r}, ${detectedBackground.g}, ${detectedBackground.b})`;
 
         if (isChroma) {
-          if (isSolid) {
-            // SPATIAL FEATHERING for Solid Fill with Vertical Gradient
-            const finalTarget = brState.autoDetermineFillColor ? sampled.corners : {
-              tl: targetSolidRgb, tr: targetSolidRgb, bl: targetSolidRgb, br: targetSolidRgb
-            };
+          // 1. Create a "clean" character cutout
+          const charCanvas = document.createElement("canvas");
+          charCanvas.width = fw;
+          charCanvas.height = fh;
+          const cctx = charCanvas.getContext("2d");
+          if (cctx) {
+            const imageData = ctx.getImageData(0, 0, fw, fh);
+            const data = imageData.data;
+            const { similarity } = brState;
             
-            // 1. Create a binary mask
+            // Generate binary mask for hard cutout
             const maskCanvas = document.createElement("canvas");
             maskCanvas.width = fw;
             maskCanvas.height = fh;
             const mctx = maskCanvas.getContext("2d");
             if (mctx) {
-              const imageData = ctx.getImageData(0, 0, fw, fh);
-              const data = imageData.data;
-              const { similarity } = brState;
-              
+              const maskData = mctx.createImageData(fw, fh);
               for (let j = 0; j < data.length; j += 4) {
                 const dist = Math.sqrt(
                   Math.pow(data[j] - detectedBackground.r, 2) + 
@@ -509,45 +526,25 @@ function SpritesheetContent() {
                   Math.pow(data[j+2] - detectedBackground.b, 2)
                 );
                 const isBg = dist < similarity;
-                data[j] = data[j+1] = data[j+2] = isBg ? 0 : 255;
-                data[j+3] = 255;
+                maskData.data[j] = maskData.data[j+1] = maskData.data[j+2] = isBg ? 0 : 255;
+                maskData.data[j+3] = 255;
               }
-              mctx.putImageData(imageData, 0, 0);
+              mctx.putImageData(maskData, 0, 0);
 
-              // 2. Clear main canvas and fill with gradient/solid
-              fillWithVerticalGradient(ctx, fw, fh, finalTarget);
-
-              // 3. Draw feathered character
-              const tempCanvas = document.createElement("canvas");
-              tempCanvas.width = fw;
-              tempCanvas.height = fh;
-              const tctx = tempCanvas.getContext("2d");
-              if (tctx) {
-                const cleanCharCanvas = document.createElement("canvas");
-                cleanCharCanvas.width = fw;
-                cleanCharCanvas.height = fh;
-                const ccctx = cleanCharCanvas.getContext("2d");
-                if (ccctx) {
-                   fillWithVerticalGradient(ccctx, fw, fh, finalTarget);
-                   const hardCharOnlyCanvas = document.createElement("canvas");
-                   hardCharOnlyCanvas.width = fw;
-                   hardCharOnlyCanvas.height = fh;
-                   const hcoctx = hardCharOnlyCanvas.getContext("2d");
-                   if (hcoctx) {
-                     hcoctx.drawImage(frameImg, 0, 0);
-                     hcoctx.globalCompositeOperation = "destination-in";
-                     hcoctx.drawImage(maskCanvas, 0, 0);
-                     ccctx.drawImage(hardCharOnlyCanvas, 0, 0);
-                   }
-                   tctx.drawImage(cleanCharCanvas, 0, 0);
-                   tctx.globalCompositeOperation = "destination-in";
-                   if (brState.softness > 0) tctx.filter = `blur(${brState.softness}px)`;
-                   tctx.drawImage(maskCanvas, 0, 0);
-                   ctx.drawImage(tempCanvas, 0, 0);
-                }
-              }
+              cctx.drawImage(frameImg, 0, 0);
+              cctx.globalCompositeOperation = "destination-in";
+              cctx.drawImage(maskCanvas, 0, 0);
             }
+          }
+
+          if (isSolid) {
+            ctx.fillStyle = finalSolidColorStr;
+            ctx.fillRect(0, 0, fw, fh);
+            ctx.drawImage(charCanvas, 0, 0);
+            applySolidFillChroma(ctx, fw, fh, detectedBackground, detectedBackground, brState);
           } else {
+            ctx.clearRect(0, 0, fw, fh);
+            ctx.drawImage(charCanvas, 0, 0);
             applyChromaKey(ctx, fw, fh, detectedBackground, brState);
           }
         }
@@ -565,7 +562,8 @@ function SpritesheetContent() {
                 Math.pow(d[idx+1]-detectedBackground.g,2) + 
                 Math.pow(d[idx+2]-detectedBackground.b,2)
               );
-              if (dist > brState.similarity) isContent = true;
+              // Use a small epsilon to detect content against the solid fill
+              if (dist > 1) isContent = true;
             } else if (d[idx + 3] > 0) {
               isContent = true;
             }
@@ -639,13 +637,10 @@ function SpritesheetContent() {
         octx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
         
         if (brState.backgroundMode === "chroma-solid") {
-          let fillColor = brState.solidColor;
-          if (brState.autoDetermineFillColor) {
-            const d = frameImageData[i].data;
-            // The background pixel (0,0) of the processed data in solid mode
-            // already has the determined color
-            fillColor = `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
-          }
+          const d = frameImageData[i].data;
+          // The background pixel (0,0) of the processed data in solid mode
+          // already has the determined color
+          const fillColor = `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
           octx.fillStyle = fillColor;
           octx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
         }
@@ -788,14 +783,18 @@ function SpritesheetContent() {
             <CardContent className="space-y-6">
               <div
                 className={cn(
-                  "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",
+                  "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all relative",
                   videoUrl
                     ? "border-primary/50 aspect-video"
                     : "border-muted-foreground/20 hover:border-primary/50 p-6",
+                  isDragging && "ring-4 ring-primary ring-inset bg-primary/5 border-primary/50",
                 )}
                 onClick={() =>
                   !videoUrl && document.getElementById("video-upload")?.click()
                 }
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 {videoUrl ? (
                   <>

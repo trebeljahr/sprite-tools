@@ -16,7 +16,6 @@ import { cn, applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground } 
 import confetti from "canvas-confetti";
 import {
   Download,
-  Move,
   Palette,
   RefreshCw,
   Scissors,
@@ -76,11 +75,9 @@ export default function LassoPage() {
 
   // Background Removal Settings
   const [brState, setBrState] = useState<BackgroundRemovalState>({
-    backgroundMode: "transparent-cutout",
+    backgroundMode: "chroma-solid",
     autoCrop: true,
-    aspectRatio: "free",
-    solidColor: "#ffffff",
-    autoDetermineFillColor: true,
+    aspectRatio: "1:1",
     similarity: 30,
     softness: 10,
     spill: 20,
@@ -95,24 +92,61 @@ export default function LassoPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Unsupported file type. Please upload an image.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        setImage(img);
+        setPoints([]);
+        setIsClosed(false);
+        setPreviewUrl(null);
+        hasAutoFittedMain.current = false;
+        hasAutoFittedPreview.current = false;
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          setImage(img);
-          setPoints([]);
-          setIsClosed(false);
-          setPreviewUrl(null);
-          hasAutoFittedMain.current = false;
-          hasAutoFittedPreview.current = false;
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) handleFile(file);
+  };
+
+  // Global Paste Support
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const item = e.clipboardData?.items[0];
+      if (item?.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) handleFile(file);
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   // Auto-fit main image when it loads or container becomes available
@@ -134,11 +168,11 @@ export default function LassoPage() {
       previewContainerRef.current &&
       !hasAutoFittedPreview.current
     ) {
-      const raf = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
         pFitToView(previewDimensions.current.w, previewDimensions.current.h);
         hasAutoFittedPreview.current = true;
-      });
-      return () => cancelAnimationFrame(raf);
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [previewUrl, previewContainerRef, pFitToView]);
 
@@ -146,25 +180,6 @@ export default function LassoPage() {
     if (ar === "free") return null;
     const [w, h] = ar.split(":").map(Number);
     return w / h;
-  };
-
-  const fillWithVerticalGradient = (
-    ictx: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    colors: { tl: {r:number,g:number,b:number}, tr: {r:number,g:number,b:number}, bl: {r:number,g:number,b:number}, br: {r:number,g:number,b:number} }
-  ) => {
-    const grad = ictx.createLinearGradient(0, 0, 0, h);
-    const topR = Math.round((colors.tl.r + colors.tr.r) / 2);
-    const topG = Math.round((colors.tl.g + colors.tr.g) / 2);
-    const topB = Math.round((colors.tl.b + colors.tr.b) / 2);
-    const botR = Math.round((colors.bl.r + colors.br.r) / 2);
-    const botG = Math.round((colors.bl.g + colors.br.g) / 2);
-    const botB = Math.round((colors.bl.b + colors.br.b) / 2);
-    grad.addColorStop(0, `rgb(${topR}, ${topG}, ${topB})`);
-    grad.addColorStop(1, `rgb(${botR}, ${botG}, ${botB})`);
-    ictx.fillStyle = grad;
-    ictx.fillRect(0, 0, w, h);
   };
 
   const generateProcessedCanvas = useCallback(() => {
@@ -177,7 +192,6 @@ export default function LassoPage() {
     const width = maxX - minX;
     const height = maxY - minY;
 
-    // Add padding to accommodate feathering
     const pad = Math.ceil(Math.max(0, brState.softness));
     const outWidth = Math.ceil(Math.max(1, width + pad * 2));
     const outHeight = Math.ceil(Math.max(1, height + pad * 2));
@@ -189,71 +203,22 @@ export default function LassoPage() {
     if (!ctx) return null;
 
     const sampled = sampleBackground(image, points);
-    const targetSolidRgb = hexToRgb(brState.solidColor);
-    const finalTarget = brState.autoDetermineFillColor ? sampled.corners : {
-      tl: targetSolidRgb, tr: targetSolidRgb, bl: targetSolidRgb, br: targetSolidRgb
-    };
+    const finalSolidColorRgb = sampled;
+    const finalSolidColorStr = `rgb(${finalSolidColorRgb.r}, ${finalSolidColorRgb.g}, ${finalSolidColorRgb.b})`;
 
     const isSolid = brState.backgroundMode === "chroma-solid";
-    const isCutout = brState.backgroundMode === "transparent-cutout";
     const isChroma = brState.backgroundMode === "chroma-transparent";
 
-    // 1. Fill base canvas if solid mode
-    if (isSolid) {
-      fillWithVerticalGradient(ctx, outWidth, outHeight, finalTarget);
-    }
-
-    // 2. Create the feathered cutout (Simple Spatial Feathering)
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = outWidth;
-    tempCanvas.height = outHeight;
-    const tctx = tempCanvas.getContext("2d");
-
-    if (tctx) {
-      // Create a "clean" version of the image where the background is ALREADY the target solid color
-      // This prevents the original background from bleeding in during feathering.
-      const cleanImgCanvas = document.createElement("canvas");
-      cleanImgCanvas.width = outWidth;
-      cleanImgCanvas.height = outHeight;
-      const cictx = cleanImgCanvas.getContext("2d");
-      
-      if (cictx) {
-        // Fill with target gradient/solid
-        fillWithVerticalGradient(cictx, outWidth, outHeight, finalTarget);
-        
-        // Draw hard-edged character on top
-        const hardMaskCanvas = document.createElement("canvas");
-        hardMaskCanvas.width = outWidth;
-        hardMaskCanvas.height = outHeight;
-        const hmctx = hardMaskCanvas.getContext("2d");
-        if (hmctx) {
-          hmctx.fillStyle = "black";
-          hmctx.beginPath();
-          hmctx.moveTo(points[0].x - minX + pad, points[0].y - minY + pad);
-          for (let i = 1; i < points.length; i++)
-            hmctx.lineTo(points[i].x - minX + pad, points[i].y - minY + pad);
-          hmctx.closePath();
-          hmctx.fill();
-
-          const charOnlyCanvas = document.createElement("canvas");
-          charOnlyCanvas.width = outWidth;
-          charOnlyCanvas.height = outHeight;
-          const coctx = charOnlyCanvas.getContext("2d");
-          if (coctx) {
-            coctx.drawImage(image, -minX + pad, -minY + pad);
-            coctx.globalCompositeOperation = "destination-in";
-            coctx.drawImage(hardMaskCanvas, 0, 0);
-            cictx.drawImage(charOnlyCanvas, 0, 0);
-          }
-        }
-      }
-
-      tctx.drawImage(cleanImgCanvas, 0, 0);
+    // 1. Create a "clean" character cutout
+    const charCanvas = document.createElement("canvas");
+    charCanvas.width = outWidth;
+    charCanvas.height = outHeight;
+    const cctx = charCanvas.getContext("2d");
+    if (cctx) {
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = outWidth;
       maskCanvas.height = outHeight;
       const mctx = maskCanvas.getContext("2d");
-
       if (mctx) {
         mctx.fillStyle = "black";
         mctx.beginPath();
@@ -263,20 +228,27 @@ export default function LassoPage() {
         mctx.closePath();
         mctx.fill();
 
-        tctx.globalCompositeOperation = "destination-in";
-        if (pad > 0) tctx.filter = `blur(${pad}px)`;
-        tctx.drawImage(maskCanvas, 0, 0);
+        cctx.drawImage(image, -minX + pad, -minY + pad);
+        cctx.globalCompositeOperation = "destination-in";
+        cctx.drawImage(maskCanvas, 0, 0);
       }
-      ctx.drawImage(tempCanvas, 0, 0);
     }
 
-    if (isChroma) {
+    if (isSolid) {
+      ctx.fillStyle = finalSolidColorStr;
+      ctx.fillRect(0, 0, outWidth, outHeight);
+      ctx.drawImage(charCanvas, 0, 0);
+      applySolidFillChroma(ctx, outWidth, outHeight, sampled, finalSolidColorRgb, brState);
+    } else if (isChroma) {
+      ctx.drawImage(charCanvas, 0, 0);
       applyChromaKey(ctx, outWidth, outHeight, sampled, brState);
+    } else {
+      ctx.drawImage(charCanvas, 0, 0);
     }
 
     let finalCanvas = canvas;
 
-    if (brState.autoCrop) {
+    if (brState.backgroundMode === "chroma-transparent" && brState.autoCrop) {
       const imageData = ctx.getImageData(0, 0, outWidth, outHeight);
       const data = imageData.data;
       let gMinX = outWidth, gMinY = outHeight, gMaxX = 0, gMaxY = 0;
@@ -285,16 +257,7 @@ export default function LassoPage() {
       for (let y = 0; y < outHeight; y++) {
         for (let x = 0; x < outWidth; x++) {
           const idx = (y * outWidth + x) * 4;
-          let isContent = false;
-          if (isSolid) {
-            const r = data[idx], g = data[idx+1], b = data[idx+2];
-            const dist = Math.sqrt(Math.pow(r-sampled.r,2) + Math.pow(g-sampled.g,2) + Math.pow(b-sampled.b,2));
-            if (dist > brState.similarity) isContent = true;
-          } else if (data[idx + 3] > 0) {
-            isContent = true;
-          }
-
-          if (isContent) {
+          if (data[idx + 3] > 0) {
             if (x < gMinX) gMinX = x;
             if (y < gMinY) gMinY = y;
             if (x > gMaxX) gMaxX = x;
@@ -341,7 +304,8 @@ export default function LassoPage() {
       const actx = arCanvas.getContext("2d");
       if (actx) {
         if (isSolid) {
-          fillWithVerticalGradient(actx, targetW, targetH, finalTarget);
+          actx.fillStyle = finalSolidColorStr;
+          actx.fillRect(0, 0, targetW, targetH);
         }
         const offsetX = (targetW - currentW) / 2;
         const offsetY = (targetH - currentH) / 2;
@@ -866,14 +830,18 @@ export default function LassoPage() {
             <div
               ref={canvasContainerRef}
               className={cn(
-                "flex-1 relative overflow-hidden group transition-colors duration-500",
+                "flex-1 relative overflow-hidden group transition-all duration-500",
                 image
                   ? gridTheme === "light"
                     ? "checkerboard-light"
                     : "checkerboard-dark"
                   : "bg-muted/5 hover:bg-muted/10 cursor-pointer",
+                isDragging && "ring-4 ring-primary ring-inset bg-primary/5",
               )}
               onClick={() => !image && fileInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               {!image ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground animate-in fade-in zoom-in duration-500">

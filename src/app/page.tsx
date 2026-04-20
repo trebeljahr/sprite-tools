@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, Video, Loader2, Play, RefreshCw, ChevronRight, Sparkles, Scissors } from "lucide-react";
+import { Upload, Video, Loader2, Play, RefreshCw, ChevronRight, Scissors } from "lucide-react";
+import { cn } from "@/lib/utils";
+
 
 import { Button } from "@/components/ui/button";
 import {
@@ -69,17 +71,54 @@ function HomeContent() {
     }
   };
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Unsupported file type. Please upload an image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+    setFile(file);
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
-        return;
+    if (selectedFile) handleFile(selectedFile);
+  };
+
+  // Global Paste Support
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const item = e.clipboardData?.items[0];
+      if (item?.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) handleFile(file);
       }
-      setFile(selectedFile);
-      const url = URL.createObjectURL(selectedFile);
-      setPreview(url);
-    }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -193,8 +232,15 @@ function HomeContent() {
                 <div className="space-y-2">
                   <Label htmlFor="image">Source Image</Label>
                   <div
-                    className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${preview ? "border-primary/50" : "border-muted-foreground/20 hover:border-primary/50"}`}
+                    className={cn(
+                      "border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all",
+                      preview ? "border-primary/50" : "border-muted-foreground/20 hover:border-primary/50",
+                      isDragging && "ring-4 ring-primary ring-inset bg-primary/5 border-primary/50"
+                    )}
                     onClick={() => document.getElementById("image")?.click()}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                   >
                     {preview ? (
                       <div className="relative w-full aspect-video">

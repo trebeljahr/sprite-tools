@@ -37,7 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
-import { applyChromaKey, cn } from "@/lib/utils";
+import { applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground, cn } from "@/lib/utils";
 
 // Memoized Frame Item for Performance
 const FrameItem = React.memo(
@@ -119,11 +119,9 @@ export default function SpritesheetPage() {
 
   // Background Removal Settings
   const [brState, setBrState] = useState<BackgroundRemovalState>({
-    backgroundMode: "chroma-transparent",
+    backgroundMode: "chroma-solid",
     autoCrop: true,
-    aspectRatio: "free",
-    solidColor: "#ffffff",
-    autoDetermineFillColor: true,
+    aspectRatio: "1:1",
     similarity: 30,
     softness: 10,
     spill: 20,
@@ -380,72 +378,89 @@ export default function SpritesheetPage() {
         ctx.drawImage(frameImg, 0, 0);
 
         const isChroma = brState.backgroundMode !== "transparent-cutout";
+        const isSolid = brState.backgroundMode === "chroma-solid";
+        
+        const sampled = sampleBackground(frameImg);
+        const detectedBackground = { r: sampled.r, g: sampled.g, b: sampled.b };
+        const finalSolidColorStr = `rgb(${detectedBackground.r}, ${detectedBackground.g}, ${detectedBackground.b})`;
 
         if (isChroma) {
-          const imageData = ctx.getImageData(0, 0, fw, fh);
-          const data = imageData.data;
-
-          const corners = [
-            { r: data[0], g: data[1], b: data[2] },
-            {
-              r: data[(fw - 1) * 4],
-              g: data[(fw - 1) * 4 + 1],
-              b: data[(fw - 1) * 4 + 2],
-            },
-            {
-              r: data[data.length - fw * 4],
-              g: data[data.length - fw * 4 + 1],
-              b: data[data.length - fw * 4 + 2],
-            },
-            {
-              r: data[data.length - 4],
-              g: data[data.length - 3],
-              b: data[data.length - 2],
-            },
-          ];
-
-          const colorCounts: Record<
-            string,
-            { r: number; g: number; b: number; count: number }
-          > = {};
-          corners.forEach((c) => {
-            const key = `${c.r},${c.g},${c.b}`;
-            colorCounts[key] = colorCounts[key]
-              ? { ...c, count: colorCounts[key].count + 1 }
-              : { ...c, count: 1 };
-          });
-
-          let target = corners[0];
-          let maxCount = 0;
-          for (const key in colorCounts) {
-            if (colorCounts[key].count > maxCount) {
-              maxCount = colorCounts[key].count;
-              target = colorCounts[key];
-            }
-          }
-
-          applyChromaKey(ctx, fw, fh, target, brState);
-          const processedData = ctx.getImageData(0, 0, fw, fh);
-
-          if (brState.autoCrop) {
-            const d = processedData.data;
-            for (let y = 0; y < fh; y++) {
-              for (let x = 0; x < fw; x++) {
-                if (d[(y * fw + x) * 4 + 3] > 0) {
-                  if (x < globalMinX) globalMinX = x;
-                  if (y < globalMinY) globalMinY = y;
-                  if (x > globalMaxX) globalMaxX = x;
-                  if (y > globalMaxY) globalMaxY = y;
-                  foundAnyContent = true;
-                }
+          // 1. Create a "clean" character cutout
+          const charCanvas = document.createElement("canvas");
+          charCanvas.width = fw;
+          charCanvas.height = fh;
+          const cctx = charCanvas.getContext("2d");
+          if (cctx) {
+            const imageData = ctx.getImageData(0, 0, fw, fh);
+            const data = imageData.data;
+            const { similarity } = brState;
+            
+            // Generate binary mask for hard cutout
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = fw;
+            maskCanvas.height = fh;
+            const mctx = maskCanvas.getContext("2d");
+            if (mctx) {
+              const maskData = mctx.createImageData(fw, fh);
+              for (let j = 0; j < data.length; j += 4) {
+                const dist = Math.sqrt(
+                  Math.pow(data[j] - detectedBackground.r, 2) + 
+                  Math.pow(data[j+1] - detectedBackground.g, 2) + 
+                  Math.pow(data[j+2] - detectedBackground.b, 2)
+                );
+                const isBg = dist < similarity;
+                maskData.data[j] = maskData.data[j+1] = maskData.data[j+2] = isBg ? 0 : 255;
+                maskData.data[j+3] = 255;
               }
+              mctx.putImageData(maskData, 0, 0);
+
+              cctx.drawImage(frameImg, 0, 0);
+              cctx.globalCompositeOperation = "destination-in";
+              cctx.drawImage(maskCanvas, 0, 0);
             }
           }
-          frameImageData.push(processedData);
-        } else {
-          const imageData = ctx.getImageData(0, 0, fw, fh);
-          frameImageData.push(imageData);
+
+          if (isSolid) {
+            ctx.fillStyle = finalSolidColorStr;
+            ctx.fillRect(0, 0, fw, fh);
+            ctx.drawImage(charCanvas, 0, 0);
+            applySolidFillChroma(ctx, fw, fh, detectedBackground, detectedBackground, brState);
+          } else {
+            ctx.clearRect(0, 0, fw, fh);
+            ctx.drawImage(charCanvas, 0, 0);
+            applyChromaKey(ctx, fw, fh, detectedBackground, brState);
+          }
         }
+
+        const processedData = ctx.getImageData(0, 0, fw, fh);
+        const d = processedData.data;
+
+        for (let y = 0; y < fh; y++) {
+          for (let x = 0; x < fw; x++) {
+            const idx = (y * fw + x) * 4;
+            let isContent = false;
+            if (isSolid) {
+              const dist = Math.sqrt(
+                Math.pow(d[idx]-detectedBackground.r,2) + 
+                Math.pow(d[idx+1]-detectedBackground.g,2) + 
+                Math.pow(d[idx+2]-detectedBackground.b,2)
+              );
+              // Use a small epsilon to detect content against the solid fill
+              if (dist > 1) isContent = true;
+            } else if (d[idx + 3] > 0) {
+              isContent = true;
+            }
+
+            if (isContent) {
+              if (x < globalMinX) globalMinX = x;
+              if (y < globalMinY) globalMinY = y;
+              if (x > globalMaxX) globalMaxX = x;
+              if (y > globalMaxY) globalMaxY = y;
+              foundAnyContent = true;
+            }
+          }
+        }
+        frameImageData.push(processedData);
       }
 
       const step1Progress = Math.round(((i + 1) / sourceFrames.length) * 70);

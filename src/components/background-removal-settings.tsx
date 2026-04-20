@@ -22,8 +22,6 @@ export interface BackgroundRemovalState extends ChromaKeySettings {
   backgroundMode: BackgroundMode;
   autoCrop: boolean;
   aspectRatio: AspectRatio;
-  solidColor: string;
-  autoDetermineFillColor: boolean;
 }
 
 interface BackgroundRemovalSettingsProps {
@@ -207,32 +205,6 @@ export function BackgroundRemovalSettings({
             {state.backgroundMode === "chroma-solid" && (
               <div className="p-3 pt-0 space-y-4 border-t border-primary/10 bg-primary/5 animate-in slide-in-from-top-2 duration-200">
                 <div className="space-y-3 pt-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">Auto-Determine Color</Label>
-                    <Switch
-                      checked={state.autoDetermineFillColor}
-                      onCheckedChange={(v) => updateField("autoDetermineFillColor", v)}
-                      className="scale-75 origin-right"
-                    />
-                  </div>
-                  
-                  {!state.autoDetermineFillColor && (
-                    <div className="flex items-center gap-3 p-2 rounded bg-background/50 border border-border/50">
-                      <input
-                        type="color"
-                        value={state.solidColor}
-                        onChange={(e) => updateField("solidColor", e.target.value)}
-                        className="w-6 h-6 rounded bg-transparent border-none cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={state.solidColor}
-                        onChange={(e) => updateField("solidColor", e.target.value)}
-                        className="flex-1 h-7 px-2 text-[10px] font-mono rounded bg-background border border-border"
-                      />
-                    </div>
-                  )}
-
                   <div className="space-y-1.5">
                     <div className="flex justify-between">
                       <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Edge Softness (Feather)</Label>
