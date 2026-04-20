@@ -20,6 +20,8 @@ import {
   Sparkles,
   Palette,
   Check,
+  Crop,
+  RotateCcw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,9 +35,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { cn, applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground } from "@/lib/utils";
 import { BackgroundRemovalSettings, type BackgroundRemovalState, type AspectRatio } from "@/components/background-removal-settings";
+import { CropOverlay, EMPTY_CROP, isCropEmpty, type FrameCrop } from "@/components/crop-overlay";
 import { useViewport } from "@/hooks/use-viewport";
 import {
   ViewportControls,
@@ -176,6 +180,13 @@ function SpritesheetContent() {
 
   // Background Grid Theme
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
+
+  // Manual Grid Crop (applied per-frame after auto-crop)
+  const [frameCrop, setFrameCrop] = useState<FrameCrop>(EMPTY_CROP);
+  const [pendingCrop, setPendingCrop] = useState<FrameCrop>(EMPTY_CROP);
+  const [cropEnabled, setCropEnabled] = useState(false);
+  const [sheetGrid, setSheetGrid] = useState({ cols: 1, rows: 1 });
+  const cropDirty = useMemo(() => !isCropEmpty(pendingCrop), [pendingCrop]);
 
   const activeIndices = useMemo(() => {
     const indices: number[] = [];
@@ -453,7 +464,9 @@ function SpritesheetContent() {
   const processFrames = async (
     sourceFrames = rawFrames,
     isInitial = false,
+    cropOverride?: FrameCrop,
   ): Promise<string[]> => {
+    const effectiveCrop = cropOverride ?? frameCrop;
     if (sourceFrames.length === 0) return [];
     setIsProcessing(true);
     if (!isInitial) {
@@ -627,6 +640,18 @@ function SpritesheetContent() {
       }
     }
 
+    // Apply manual grid crop (normalized insets) on top of auto-crop
+    if (!isCropEmpty(effectiveCrop)) {
+      const mx = cropW * effectiveCrop.left;
+      const my = cropH * effectiveCrop.top;
+      const mxr = cropW * effectiveCrop.right;
+      const myb = cropH * effectiveCrop.bottom;
+      cropX += mx;
+      cropY += my;
+      cropW = Math.max(1, cropW - mx - mxr);
+      cropH = Math.max(1, cropH - my - myb);
+    }
+
     const outputCanvas = document.createElement("canvas");
     outputCanvas.width = Math.round(cropW);
     outputCanvas.height = Math.round(cropH);
@@ -712,6 +737,7 @@ function SpritesheetContent() {
         setSpritesheetUrl(url);
         sheetDimensions.current = { w: canvas.width, h: canvas.height };
         hasAutoFittedSheet.current = false;
+        setSheetGrid({ cols, rows });
       }
     } finally {
       setIsCompiling(false);
@@ -742,6 +768,32 @@ function SpritesheetContent() {
     link.href = spritesheetUrl;
     link.download = "spritesheet.png";
     link.click();
+  };
+
+  const applyCrop = async () => {
+    if (rawFrames.length === 0) return;
+    // Compose pendingCrop (relative to currently-cropped view) onto frameCrop (absolute from auto-crop)
+    const innerW = 1 - frameCrop.left - frameCrop.right;
+    const innerH = 1 - frameCrop.top - frameCrop.bottom;
+    const newFrameCrop: FrameCrop = {
+      top: frameCrop.top + pendingCrop.top * innerH,
+      bottom: frameCrop.bottom + pendingCrop.bottom * innerH,
+      left: frameCrop.left + pendingCrop.left * innerW,
+      right: frameCrop.right + pendingCrop.right * innerW,
+    };
+    setFrameCrop(newFrameCrop);
+    setPendingCrop(EMPTY_CROP);
+    const processed = await processFrames(rawFrames, false, newFrameCrop);
+    if (processed.length > 0) await generateSpritesheet(processed);
+  };
+
+  const resetCrop = async () => {
+    const wasCropped = !isCropEmpty(frameCrop);
+    setPendingCrop(EMPTY_CROP);
+    setFrameCrop(EMPTY_CROP);
+    if (!wasCropped || rawFrames.length === 0) return;
+    const processed = await processFrames(rawFrames, false, EMPTY_CROP);
+    if (processed.length > 0) await generateSpritesheet(processed);
   };
 
   return (
@@ -899,6 +951,77 @@ function SpritesheetContent() {
               />
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
+                  <div className="space-y-3 rounded-lg border bg-muted/5 p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm font-bold flex items-center gap-1.5">
+                          <Crop className="h-3.5 w-3.5" />
+                          Manual Grid Crop
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground leading-tight">
+                          Drag handles on Preview or Sheet to trim every cell.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={cropEnabled}
+                        onCheckedChange={(v) => {
+                          setCropEnabled(v);
+                          if (v) setPendingCrop(frameCrop);
+                        }}
+                      />
+                    </div>
+                    {cropEnabled && (
+                      <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] font-mono text-muted-foreground">
+                          <div className="flex justify-between">
+                            <span>Top</span>
+                            <span>{(pendingCrop.top * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Right</span>
+                            <span>{(pendingCrop.right * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Bottom</span>
+                            <span>{(pendingCrop.bottom * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Left</span>
+                            <span>{(pendingCrop.left * 100).toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={applyCrop}
+                            disabled={!cropDirty || isProcessing || isExtracting}
+                            size="sm"
+                            className="flex-1 h-8 text-xs"
+                          >
+                            {isProcessing && actionOrigin === "settings" ? (
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            ) : null}
+                            Apply & Recompile
+                          </Button>
+                          <Button
+                            onClick={resetCrop}
+                            disabled={
+                              (isCropEmpty(frameCrop) &&
+                                isCropEmpty(pendingCrop)) ||
+                              isProcessing ||
+                              isExtracting
+                            }
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs"
+                          >
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            Reset
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <Button
                     onClick={async () => {
                       const processed = await processFrames();
@@ -1014,16 +1137,33 @@ function SpritesheetContent() {
                     >
                       {activeFrames.length > 0 ? (
                         <>
-                          <img
-                            src={activeFrames[previewIndex]}
-                            alt="Preview"
-                            className="absolute top-0 left-0 max-w-none"
+                          <div
+                            className="absolute top-0 left-0"
                             style={{
+                              width: frameDimensions.current.w || undefined,
+                              height: frameDimensions.current.h || undefined,
                               transform: `translate(${pView.offset.x}px, ${pView.offset.y}px) scale(${pView.zoom})`,
                               transformOrigin: "0 0",
                             }}
-                            draggable={false}
-                          />
+                          >
+                            <img
+                              src={activeFrames[previewIndex]}
+                              alt="Preview"
+                              className="block max-w-none"
+                              style={{
+                                width: frameDimensions.current.w || undefined,
+                                height: frameDimensions.current.h || undefined,
+                              }}
+                              draggable={false}
+                            />
+                            {cropEnabled && frameDimensions.current.w > 0 && (
+                              <CropOverlay
+                                crop={pendingCrop}
+                                onCropChange={setPendingCrop}
+                                zoom={pView.zoom}
+                              />
+                            )}
+                          </div>
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-mono">
                             <ChevronLeft
                               className="w-3 h-3 cursor-pointer"
@@ -1180,16 +1320,35 @@ function SpritesheetContent() {
                       onMouseLeave={sheetViewport.stopPanning}
                     >
                       {spritesheetUrl ? (
-                        <img
-                          src={spritesheetUrl}
-                          alt="Result"
-                          className="absolute top-0 left-0 max-w-none"
+                        <div
+                          className="absolute top-0 left-0"
                           style={{
+                            width: sheetDimensions.current.w || undefined,
+                            height: sheetDimensions.current.h || undefined,
                             transform: `translate(${sView.offset.x}px, ${sView.offset.y}px) scale(${sView.zoom})`,
                             transformOrigin: "0 0",
                           }}
-                          draggable={false}
-                        />
+                        >
+                          <img
+                            src={spritesheetUrl}
+                            alt="Result"
+                            className="block max-w-none"
+                            style={{
+                              width: sheetDimensions.current.w || undefined,
+                              height: sheetDimensions.current.h || undefined,
+                            }}
+                            draggable={false}
+                          />
+                          {cropEnabled && sheetDimensions.current.w > 0 && (
+                            <CropOverlay
+                              crop={pendingCrop}
+                              onCropChange={setPendingCrop}
+                              zoom={sView.zoom}
+                              cellCols={sheetGrid.cols}
+                              cellRows={sheetGrid.rows}
+                            />
+                          )}
+                        </div>
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 opacity-20">
                           <ImageIcon className="w-12 h-12" />
