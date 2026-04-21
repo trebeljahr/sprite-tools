@@ -73,14 +73,23 @@ export default function RootLayout({
                   >
                     Stitch
                   </Link>
-                  <Link 
-                    href="/lasso" 
+                  <Link
+                    href="/lasso"
                     className={cn(
                       "transition-colors hover:text-foreground/80",
                       pathname === "/lasso" ? "text-foreground" : "text-foreground/60"
                     )}
                   >
                     Lasso
+                  </Link>
+                  <Link
+                    href="/collision"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/collision" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Collision
                   </Link>
                 </nav>
               </div>
