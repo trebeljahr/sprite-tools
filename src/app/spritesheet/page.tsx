@@ -25,7 +25,6 @@ import {
   Redo2,
   Video,
   Grid3x3,
-  Images,
   FileArchive,
   Sparkles,
   Wand2,
@@ -61,7 +60,6 @@ import {
   usePipeline,
   buildImportVideoStep,
   buildImportSheetStep,
-  buildImportFilesStep,
   buildChromaKeyStep,
   buildAutoCropStep,
   buildManualCropStep,
@@ -165,7 +163,7 @@ const calculateSmartColumns = (count: number) => {
   return Math.ceil(Math.sqrt(count));
 };
 
-type SourceTab = "video" | "sheet" | "files";
+type SourceTab = "video" | "sheet";
 
 // -----------------------------------------------------------------
 // Main content
@@ -184,7 +182,6 @@ function SpritesheetContent() {
   const [sheetCols, setSheetCols] = useState(8);
   const [sheetRows, setSheetRows] = useState(1);
   const [detectedGrid, setDetectedGrid] = useState<{ cols: number; rows: number } | null>(null);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [fps, setFps] = useState(10);
 
   // ------- Chroma-key (applied on "Re-do Background Removal") -------
@@ -348,16 +345,6 @@ function SpritesheetContent() {
     }
   };
 
-  const handleImageFiles = (files: File[]) => {
-    const imgs = files.filter((f) => f.type.startsWith("image/"));
-    if (imgs.length === 0) {
-      toast.error("No image files found.");
-      return;
-    }
-    setImageFiles(imgs);
-    clearSourceState();
-  };
-
   const handleSingleFile = (file: File) => {
     if (file.type.startsWith("video/")) {
       setSourceTab("video");
@@ -372,11 +359,6 @@ function SpritesheetContent() {
 
   const onFilesDropped = (files: File[]) => {
     if (files.length === 0) return;
-    if (sourceTab === "files" || files.length > 1) {
-      setSourceTab("files");
-      handleImageFiles(files);
-      return;
-    }
     handleSingleFile(files[0]);
   };
 
@@ -412,20 +394,11 @@ function SpritesheetContent() {
         buildManualCropStep(crop),
       ];
       void src;
-    } else if (tab === "sheet") {
+    } else {
       if (!sheetFile && !sheetUrl) return;
       pipeline.setSource({ file: sheetFile ?? undefined, url: sheetUrl ?? undefined });
       steps = [
         buildImportSheetStep({ cols: sheetCols, rows: sheetRows }, sheetFile?.name),
-        buildChromaKeyStep(chromaConfigFromBr(brState)),
-        buildAutoCropStep(autoCropConfigFromBr(brState)),
-        buildManualCropStep(crop),
-      ];
-    } else {
-      if (imageFiles.length === 0) return;
-      pipeline.setSource({ images: imageFiles });
-      steps = [
-        buildImportFilesStep(imageFiles.length, `${imageFiles.length} images`),
         buildChromaKeyStep(chromaConfigFromBr(brState)),
         buildAutoCropStep(autoCropConfigFromBr(brState)),
         buildManualCropStep(crop),
@@ -773,12 +746,11 @@ function SpritesheetContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/30 border">
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
                 {(
                   [
                     { id: "video" as const, label: "Video", Icon: Video },
                     { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                    { id: "files" as const, label: "Images", Icon: Images },
                   ] as const
                 ).map(({ id, label, Icon }) => (
                   <button
@@ -825,16 +797,6 @@ function SpritesheetContent() {
                   running={pipeline.state.running}
                   progressLabel={pipeline.state.progress?.step ?? ""}
                   progressPct={progressPct}
-                />
-              )}
-              {sourceTab === "files" && (
-                <FilesSource
-                  files={imageFiles}
-                  uploadZoneProps={uploadZoneProps}
-                  isDragging={isDragging}
-                  onFiles={handleImageFiles}
-                  onRun={() => runFromSource("files")}
-                  running={pipeline.state.running}
                 />
               )}
             </CardContent>
@@ -1546,57 +1508,6 @@ function SheetSource({
   );
 }
 
-function FilesSource({
-  files,
-  uploadZoneProps,
-  isDragging,
-  onFiles,
-  onRun,
-  running,
-}: {
-  files: File[];
-  uploadZoneProps: React.ComponentProps<typeof UploadZone>["uploadZoneProps"];
-  isDragging: boolean;
-  onFiles: (f: File[]) => void;
-  onRun: () => void;
-  running: boolean;
-}) {
-  return (
-    <div className="space-y-4">
-      <UploadZone
-        isDragging={isDragging}
-        hasFile={files.length > 0}
-        uploadZoneProps={uploadZoneProps}
-        accept="image/*"
-        multiple
-        onChange={onFiles}
-      >
-        {files.length > 0 ? (
-          <div className="p-3 text-center">
-            <Images className="w-8 h-8 text-primary mb-2 mx-auto" />
-            <p className="text-sm font-medium">{files.length} images</p>
-            <p className="text-[10px] text-muted-foreground mt-1 truncate">
-              {files
-                .slice(0, 3)
-                .map((f) => f.name)
-                .join(", ")}
-              {files.length > 3 && ` +${files.length - 3} more`}
-            </p>
-          </div>
-        ) : (
-          <div className="text-center">
-            <Images className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-            <p className="text-sm text-muted-foreground">Upload / drop multiple images</p>
-          </div>
-        )}
-      </UploadZone>
-      <Button onClick={onRun} disabled={running || files.length === 0} className="w-full">
-        {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Images className="mr-2 h-4 w-4" />}
-        Load Images
-      </Button>
-    </div>
-  );
-}
 
 // -----------------------------------------------------------------
 
