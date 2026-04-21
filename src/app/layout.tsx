@@ -100,6 +100,15 @@ export default function RootLayout({
                   >
                     Pixelate
                   </Link>
+                  <Link
+                    href="/pivot"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/pivot" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Pivot
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
