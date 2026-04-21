@@ -41,7 +41,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
@@ -68,11 +67,9 @@ import { stitchSheet, exportAsZip } from "@/lib/pipeline/export";
 import { detectSheetGrid } from "@/lib/pipeline/import";
 import {
   ensurePreviewUrl,
-  EMPTY_CROP,
   type AutoCropConfig,
   type ChromaKeyConfig,
   type Frame,
-  type Frames,
   type BackgroundMode,
 } from "@/lib/pipeline/types";
 import { composeCrops } from "@/lib/pipeline/transforms";

@@ -1,4 +1,4 @@
-import { applyChromaKey, hexToRgb, sampleBackground } from "@/lib/utils";
+import { applyChromaKey, hexToRgb } from "@/lib/utils";
 import {
   AutoCropConfig,
   ChromaKeyConfig,
