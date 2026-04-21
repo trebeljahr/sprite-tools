@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const geistSans = Geist({
@@ -34,11 +34,7 @@ const geistMono = Geist_Mono({
 // of metadata / transform / export tools go behind a single "Tools" dropdown
 // so the navbar stops wrapping on narrow screens.
 const PRIMARY = [
-  { href: "/generate", label: "Design" },
-  { href: "/", label: "Animate" },
-  { href: "/spritesheet", label: "Stitch" },
-  { href: "/lasso", label: "Lasso" },
-  { href: "/overview", label: "Overview" },
+  { href: "/spritesheet", label: "Sheet Builder" },
   { href: "/docs", label: "Docs" },
 ];
 
@@ -46,9 +42,23 @@ interface ToolLink {
   href: string;
   label: string;
   hint: string;
+  paid?: boolean;
 }
 
 const TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
+  {
+    label: "AI (sign-in required)",
+    items: [
+      { href: "/generate", label: "AI Character", hint: "generate sprite art", paid: true },
+      { href: "/animate", label: "AI Animation", hint: "animate a character", paid: true },
+    ],
+  },
+  {
+    label: "Extract",
+    items: [
+      { href: "/lasso", label: "Lasso", hint: "manual polygon cutout" },
+    ],
+  },
   {
     label: "Metadata",
     items: [
@@ -153,7 +163,12 @@ export default function RootLayout({
                                   />
                                 }
                               >
-                                <span className="font-medium">{item.label}</span>
+                                <span className="font-medium flex items-center gap-1.5">
+                                  {item.label}
+                                  {item.paid && (
+                                    <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                                  )}
+                                </span>
                                 <span className="text-[10px] text-muted-foreground">
                                   {item.hint}
                                 </span>
