@@ -24,7 +24,7 @@ export interface OutlineOptions {
 
 export const DEFAULT_OUTLINE_OPTIONS: OutlineOptions = {
   alphaThreshold: 10,
-  simplifyTolerance: 1.5,
+  simplifyTolerance: 10,
   convexHull: false,
 };
 
