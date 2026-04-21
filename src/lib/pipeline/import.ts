@@ -96,6 +96,19 @@ export async function importFromSpriteSheet(
     throw new Error("Invalid grid: cell size is zero");
   }
 
+  // Sample the sheet's background from its four corners so we can skip
+  // cells that are entirely that background / transparent.
+  const sheetCanvas = document.createElement("canvas");
+  sheetCanvas.width = bitmap.width;
+  sheetCanvas.height = bitmap.height;
+  const sheetCtx = sheetCanvas.getContext("2d", { willReadFrequently: true });
+  if (!sheetCtx) {
+    bitmap.close?.();
+    throw new Error("2D context unavailable");
+  }
+  sheetCtx.drawImage(bitmap, 0, 0);
+  const bg = sampleCornerBg(sheetCtx, bitmap.width, bitmap.height);
+
   const out: Frame[] = [];
   let idx = 0;
   for (let r = 0; r < cfg.rows; r++) {
@@ -107,6 +120,10 @@ export async function importFromSpriteSheet(
         cellW,
         cellH,
       );
+      if (isCellEmpty(cell, bg)) {
+        cell.close?.();
+        continue;
+      }
       out.push({
         id: nextFrameId(),
         bitmap: cell,
@@ -120,6 +137,65 @@ export async function importFromSpriteSheet(
   }
   bitmap.close?.();
   return { frames: out, stats: computeStats(out) };
+}
+
+interface BgSample {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+  transparent: boolean;
+}
+
+function sampleCornerBg(ctx: CanvasRenderingContext2D, W: number, H: number): BgSample {
+  const d = ctx.getImageData(0, 0, W, H).data;
+  const corners = [
+    [0, 0],
+    [W - 1, 0],
+    [0, H - 1],
+    [W - 1, H - 1],
+  ];
+  let r = 0, g = 0, b = 0, a = 0;
+  for (const [x, y] of corners) {
+    const i = (y * W + x) * 4;
+    r += d[i];
+    g += d[i + 1];
+    b += d[i + 2];
+    a += d[i + 3];
+  }
+  r /= 4; g /= 4; b /= 4; a /= 4;
+  return { r, g, b, a, transparent: a < 128 };
+}
+
+function isCellEmpty(cell: ImageBitmap, bg: BgSample): boolean {
+  const W = cell.width;
+  const H = cell.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+  ctx.drawImage(cell, 0, 0);
+  const d = ctx.getImageData(0, 0, W, H).data;
+
+  // Sample ~4k pixels max for speed
+  const step = Math.max(1, Math.floor(Math.sqrt((W * H) / 4000)));
+  const THRESHOLD = 30;
+  let sampled = 0;
+  let bgLike = 0;
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      const i = (y * W + x) * 4;
+      sampled += 1;
+      if (bg.transparent) {
+        if (d[i + 3] < 32) bgLike += 1;
+      } else {
+        const dist = Math.hypot(d[i] - bg.r, d[i + 1] - bg.g, d[i + 2] - bg.b);
+        if (dist < THRESHOLD) bgLike += 1;
+      }
+    }
+  }
+  return sampled > 0 && bgLike / sampled > 0.98;
 }
 
 // -----------------------------------------------------------------
@@ -212,28 +288,27 @@ export async function detectSheetGrid(
     );
   };
 
-  // Scan for rows that are fully-background horizontal strips
+  // Scan for rows/cols that are >=95% background — sprites may contain
+  // small interior transparent/bg pixels that shouldn't break a strip.
   const rowIsBg: boolean[] = new Array(H);
   for (let y = 0; y < H; y++) {
-    let allBg = true;
+    let bgCount = 0;
+    let sampled = 0;
     for (let x = 0; x < W; x += 2) {
-      if (!isBg((y * W + x) * 4)) {
-        allBg = false;
-        break;
-      }
+      sampled += 1;
+      if (isBg((y * W + x) * 4)) bgCount += 1;
     }
-    rowIsBg[y] = allBg;
+    rowIsBg[y] = sampled > 0 && bgCount / sampled >= 0.95;
   }
   const colIsBg: boolean[] = new Array(W);
   for (let x = 0; x < W; x++) {
-    let allBg = true;
+    let bgCount = 0;
+    let sampled = 0;
     for (let y = 0; y < H; y += 2) {
-      if (!isBg((y * W + x) * 4)) {
-        allBg = false;
-        break;
-      }
+      sampled += 1;
+      if (isBg((y * W + x) * 4)) bgCount += 1;
     }
-    colIsBg[x] = allBg;
+    colIsBg[x] = sampled > 0 && bgCount / sampled >= 0.95;
   }
 
   // Count gap runs (stretches of rowIsBg=true that are >= 2px)

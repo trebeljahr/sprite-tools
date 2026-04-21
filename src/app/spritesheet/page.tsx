@@ -1307,6 +1307,81 @@ function UploadZone({
   );
 }
 
+function SheetPreviewWithGrid({
+  src,
+  cols,
+  rows,
+}: {
+  src: string;
+  cols: number;
+  rows: number;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ left: number; top: number; w: number; h: number } | null>(
+    null,
+  );
+
+  React.useLayoutEffect(() => {
+    const img = imgRef.current;
+    const container = containerRef.current;
+    if (!img || !container) return;
+    const compute = () => {
+      const ir = img.getBoundingClientRect();
+      const cr = container.getBoundingClientRect();
+      setBox({
+        left: ir.left - cr.left,
+        top: ir.top - cr.top,
+        w: ir.width,
+        h: ir.height,
+      });
+    };
+    const onLoad = () => compute();
+    if (img.complete) compute();
+    img.addEventListener("load", onLoad);
+    const ro = new ResizeObserver(compute);
+    ro.observe(img);
+    ro.observe(container);
+    return () => {
+      img.removeEventListener("load", onLoad);
+      ro.disconnect();
+    };
+  }, [src]);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-black/5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        ref={imgRef}
+        src={src}
+        alt="Sheet preview"
+        className="max-w-full max-h-full object-contain"
+      />
+      {box && (cols > 1 || rows > 1) && (
+        <div
+          className="absolute pointer-events-none"
+          style={{ left: box.left, top: box.top, width: box.w, height: box.h }}
+        >
+          {Array.from({ length: cols - 1 }).map((_, i) => (
+            <div
+              key={`c${i}`}
+              className="absolute top-0 bottom-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
+              style={{ left: `${((i + 1) / cols) * 100}%`, width: 1 }}
+            />
+          ))}
+          {Array.from({ length: rows - 1 }).map((_, i) => (
+            <div
+              key={`r${i}`}
+              className="absolute left-0 right-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
+              style={{ top: `${((i + 1) / rows) * 100}%`, height: 1 }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VideoSource({
   videoUrl,
   fps,
@@ -1417,11 +1492,7 @@ function SheetSource({
         onChange={(files) => onFile(files[0])}
       >
         {sheetUrl ? (
-          <img
-            src={sheetUrl}
-            alt="Sheet preview"
-            className="w-full h-full object-contain bg-black/5"
-          />
+          <SheetPreviewWithGrid src={sheetUrl} cols={cols} rows={rows} />
         ) : (
           <div className="text-center">
             <Grid3x3 className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
