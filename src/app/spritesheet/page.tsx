@@ -320,6 +320,9 @@ function SpritesheetContent() {
     setVideoFile(file);
     setVideoUrl(URL.createObjectURL(file));
     clearSourceState();
+    // Video frames typically come from an opaque recording; default chroma
+    // removal to on (the original behavior).
+    setBrState((prev) => ({ ...prev, backgroundMode: "chroma-transparent" }));
   };
 
   const handleSheetFile = async (file: File) => {
@@ -331,6 +334,10 @@ function SpritesheetContent() {
     const url = URL.createObjectURL(file);
     setSheetUrl(url);
     clearSourceState();
+    // Sheets usually come with the background already removed; default the
+    // chroma-key to passthrough. User can re-enable via the Auto Background
+    // Removal switch.
+    setBrState((prev) => ({ ...prev, backgroundMode: "transparent-cutout" }));
     // Try auto-detection
     try {
       const det = await detectSheetGrid(file);
