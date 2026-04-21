@@ -57,10 +57,26 @@ function cloneSteps(s: PipelineStep[]): PipelineStep[] {
   return s.map((st) => ({ ...st, config: { ...st.config } }) as PipelineStep);
 }
 
+type SourceInput = PipelineState["source"];
+
+function sourceEqual(a: SourceInput, b: SourceInput): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.file !== b.file || a.url !== b.url) return false;
+  const ai = a.images, bi = b.images;
+  if (ai === bi) return true;
+  if (!ai || !bi || ai.length !== bi.length) return false;
+  for (let i = 0; i < ai.length; i++) if (ai[i] !== bi[i]) return false;
+  return true;
+}
+
 function reducer(state: PipelineState, action: Action): PipelineState {
   switch (action.type) {
     case "set-source": {
-      // New source clears history.
+      // Idempotent: same source object means no reset (keeps the pipeline
+      // output in place for re-runs that happen to pass the same source
+      // twice, e.g. back-to-back clicks of Split Sheet).
+      if (sourceEqual(state.source, action.payload)) return state;
       return {
         ...state,
         source: action.payload,
