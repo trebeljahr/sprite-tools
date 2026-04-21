@@ -38,7 +38,14 @@ interface CropOverlayProps {
   className?: string;
 }
 
-const MIN_REMAINING = 0.05;
+const MIN_REMAINING = 0.02;
+
+// Constant on-screen sizes. We divide by zoom so a transformed parent
+// doesn't shrink/grow them — the handles should feel the same whatever
+// zoom level the user is at.
+const SCREEN_HANDLE_PX = 14;
+const SCREEN_HIT_PX = 36;
+const SCREEN_BORDER_PX = 2;
 
 export function CropOverlay({
   crop,
@@ -126,7 +133,10 @@ export function CropOverlay({
   });
 
   const cropRect = insetStyle(crop);
-  const scaledHandle = Math.max(6, Math.min(14, 10 / zoom));
+  const z = Math.max(zoom, 0.01);
+  const handleSize = SCREEN_HANDLE_PX / z;
+  const hitSize = SCREEN_HIT_PX / z;
+  const borderPx = SCREEN_BORDER_PX / z;
 
   return (
     <div
@@ -145,11 +155,7 @@ export function CropOverlay({
             height: `${cellHFrac * 100}%`,
           };
           return (
-            <div
-              key={`${row}-${col}`}
-              className="absolute"
-              style={cellStyle}
-            >
+            <div key={`${row}-${col}`} className="absolute" style={cellStyle}>
               {/* Dimmed mask panels outside the crop */}
               <div
                 className="absolute bg-black/55"
@@ -181,18 +187,34 @@ export function CropOverlay({
               {/* Crop rectangle border */}
               <div
                 className={cn(
-                  "absolute border-2 border-primary/90",
-                  isPrimary ? "shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" : "border-primary/50 border-dashed",
+                  "absolute border-solid",
+                  isPrimary
+                    ? "border-primary shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+                    : "border-primary/60 border-dashed",
                 )}
-                style={cropRect}
+                style={{
+                  ...cropRect,
+                  borderWidth: `${borderPx}px`,
+                }}
               >
-                {/* Rule-of-thirds */}
                 {isPrimary && hover && (
                   <>
-                    <div className="absolute inset-y-0 left-1/3 w-px bg-white/30" />
-                    <div className="absolute inset-y-0 left-2/3 w-px bg-white/30" />
-                    <div className="absolute inset-x-0 top-1/3 h-px bg-white/30" />
-                    <div className="absolute inset-x-0 top-2/3 h-px bg-white/30" />
+                    <div
+                      className="absolute inset-y-0 left-1/3 bg-white/30"
+                      style={{ width: `${Math.max(borderPx / 2, 0.5)}px` }}
+                    />
+                    <div
+                      className="absolute inset-y-0 left-2/3 bg-white/30"
+                      style={{ width: `${Math.max(borderPx / 2, 0.5)}px` }}
+                    />
+                    <div
+                      className="absolute inset-x-0 top-1/3 bg-white/30"
+                      style={{ height: `${Math.max(borderPx / 2, 0.5)}px` }}
+                    />
+                    <div
+                      className="absolute inset-x-0 top-2/3 bg-white/30"
+                      style={{ height: `${Math.max(borderPx / 2, 0.5)}px` }}
+                    />
                   </>
                 )}
               </div>
@@ -205,77 +227,30 @@ export function CropOverlay({
                     style={{ ...cropRect, pointerEvents: "auto" }}
                     className="cursor-move"
                     onPointerDown={startDrag}
-                    size={scaledHandle}
                     variant="move"
                   />
-                  <Handle
-                    kind="n"
-                    style={{
-                      left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`,
-                      top: `${crop.top * 100}%`,
-                    }}
-                    className="cursor-ns-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="s"
-                    style={{
-                      left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`,
-                      bottom: `${crop.bottom * 100}%`,
-                    }}
-                    className="cursor-ns-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="w"
-                    style={{
-                      left: `${crop.left * 100}%`,
-                      top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)`,
-                    }}
-                    className="cursor-ew-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="e"
-                    style={{
-                      right: `${crop.right * 100}%`,
-                      top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)`,
-                    }}
-                    className="cursor-ew-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="nw"
-                    style={{ left: `${crop.left * 100}%`, top: `${crop.top * 100}%` }}
-                    className="cursor-nwse-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="ne"
-                    style={{ right: `${crop.right * 100}%`, top: `${crop.top * 100}%` }}
-                    className="cursor-nesw-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="sw"
-                    style={{ left: `${crop.left * 100}%`, bottom: `${crop.bottom * 100}%` }}
-                    className="cursor-nesw-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
-                  <Handle
-                    kind="se"
-                    style={{ right: `${crop.right * 100}%`, bottom: `${crop.bottom * 100}%` }}
-                    className="cursor-nwse-resize"
-                    onPointerDown={startDrag}
-                    size={scaledHandle}
-                  />
+                  {(
+                    [
+                      ["n", { left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`, top: `${crop.top * 100}%` }, "cursor-ns-resize"],
+                      ["s", { left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`, bottom: `${crop.bottom * 100}%` }, "cursor-ns-resize"],
+                      ["w", { left: `${crop.left * 100}%`, top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)` }, "cursor-ew-resize"],
+                      ["e", { right: `${crop.right * 100}%`, top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)` }, "cursor-ew-resize"],
+                      ["nw", { left: `${crop.left * 100}%`, top: `${crop.top * 100}%` }, "cursor-nwse-resize"],
+                      ["ne", { right: `${crop.right * 100}%`, top: `${crop.top * 100}%` }, "cursor-nesw-resize"],
+                      ["sw", { left: `${crop.left * 100}%`, bottom: `${crop.bottom * 100}%` }, "cursor-nesw-resize"],
+                      ["se", { right: `${crop.right * 100}%`, bottom: `${crop.bottom * 100}%` }, "cursor-nwse-resize"],
+                    ] as const
+                  ).map(([kind, pos, cur]) => (
+                    <Handle
+                      key={kind}
+                      kind={kind}
+                      style={pos as React.CSSProperties}
+                      className={cur}
+                      onPointerDown={startDrag}
+                      visualSize={handleSize}
+                      hitSize={hitSize}
+                    />
+                  ))}
                 </>
               )}
             </div>
@@ -290,12 +265,21 @@ interface HandleProps {
   kind: HandleKind;
   style: React.CSSProperties;
   className?: string;
-  size: number;
-  variant?: "corner" | "edge" | "move";
+  visualSize?: number;
+  hitSize?: number;
+  variant?: "move";
   onPointerDown: (e: React.PointerEvent, kind: HandleKind) => void;
 }
 
-function Handle({ kind, style, className, size, variant, onPointerDown }: HandleProps) {
+function Handle({
+  kind,
+  style,
+  className,
+  visualSize = 12,
+  hitSize = 28,
+  variant,
+  onPointerDown,
+}: HandleProps) {
   if (variant === "move") {
     return (
       <div
@@ -306,15 +290,30 @@ function Handle({ kind, style, className, size, variant, onPointerDown }: Handle
       />
     );
   }
+  // Hit zone (larger, invisible, clickable) with a visible dot centered.
   return (
     <div
       className={cn(
-        "absolute pointer-events-auto bg-white border border-primary rounded-sm -translate-x-1/2 -translate-y-1/2 shadow-md",
+        "absolute pointer-events-auto flex items-center justify-center",
         className,
       )}
-      style={{ ...style, width: size, height: size }}
+      style={{
+        ...style,
+        width: hitSize,
+        height: hitSize,
+        transform: "translate(-50%, -50%)",
+      }}
       onPointerDown={(e) => onPointerDown(e, kind)}
       onMouseDown={(e) => e.stopPropagation()}
-    />
+    >
+      <div
+        className="rounded-sm bg-white border border-primary shadow-md"
+        style={{
+          width: visualSize,
+          height: visualSize,
+          borderWidth: Math.max(1, visualSize / 8),
+        }}
+      />
+    </div>
   );
 }

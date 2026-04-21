@@ -198,7 +198,6 @@ function SpritesheetContent() {
   // ------- Manual crop (overlay-driven) -------
   const [pendingCrop, setPendingCrop] = useState<FrameCrop>(OVERLAY_EMPTY);
   const [appliedCrop, setAppliedCrop] = useState<FrameCrop>(OVERLAY_EMPTY);
-  const [cropEnabled, setCropEnabled] = useState(false);
   const cropDirty = useMemo(() => !isCropEmpty(pendingCrop), [pendingCrop]);
 
   // ------- Selection -------
@@ -818,75 +817,6 @@ function SpritesheetContent() {
 
               {showResults && (
                 <div className="space-y-4 border-t border-dashed pt-4">
-                  <div className="space-y-3 rounded-lg border bg-muted/5 p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm font-bold flex items-center gap-1.5">
-                          <Crop className="h-3.5 w-3.5" />
-                          Manual Grid Crop
-                        </Label>
-                        <p className="text-[10px] text-muted-foreground leading-tight">
-                          Drag handles on Preview or Sheet to trim every cell.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={cropEnabled}
-                        onCheckedChange={(v) => {
-                          setCropEnabled(v);
-                          if (v) setPendingCrop(OVERLAY_EMPTY);
-                        }}
-                      />
-                    </div>
-                    {cropEnabled && (
-                      <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] font-mono text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Top</span>
-                            <span>{(pendingCrop.top * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Right</span>
-                            <span>{(pendingCrop.right * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Bottom</span>
-                            <span>{(pendingCrop.bottom * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Left</span>
-                            <span>{(pendingCrop.left * 100).toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={applyCrop}
-                            disabled={!cropDirty || pipeline.state.running}
-                            size="sm"
-                            className="flex-1 h-8 text-xs"
-                          >
-                            {pipeline.state.running ? (
-                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                            ) : null}
-                            Apply & Recompile
-                          </Button>
-                          <Button
-                            onClick={resetCrop}
-                            disabled={
-                              (isCropEmpty(appliedCrop) && isCropEmpty(pendingCrop)) ||
-                              pipeline.state.running
-                            }
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs"
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Reset
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
                   <Button
                     onClick={redoBgRemoval}
                     disabled={pipeline.state.running || allFrames.length === 0}
@@ -1026,7 +956,7 @@ function SpritesheetContent() {
                               }}
                               draggable={false}
                             />
-                            {cropEnabled && frameDimensions.current.w > 0 && (
+                            {frameDimensions.current.w > 0 && (
                               <CropOverlay
                                 crop={pendingCrop}
                                 onCropChange={setPendingCrop}
@@ -1187,7 +1117,7 @@ function SpritesheetContent() {
                             }}
                             draggable={false}
                           />
-                          {cropEnabled && sheetDimensions.current.w > 0 && (
+                          {sheetDimensions.current.w > 0 && (
                             <CropOverlay
                               crop={pendingCrop}
                               onCropChange={setPendingCrop}
@@ -1208,6 +1138,41 @@ function SpritesheetContent() {
                         baseZoom={sheetViewport.baseView.zoom}
                         className="absolute bottom-2 right-2"
                       />
+                      {(cropDirty || !isCropEmpty(appliedCrop)) && (
+                        <div className="absolute bottom-2 left-2 right-16 flex items-center gap-2 bg-black/75 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs">
+                          <Crop className="w-3 h-3 text-primary-foreground" />
+                          <span className="font-mono hidden sm:inline">
+                            {cropDirty
+                              ? `${(pendingCrop.top * 100).toFixed(0)}/${(pendingCrop.right * 100).toFixed(0)}/${(pendingCrop.bottom * 100).toFixed(0)}/${(pendingCrop.left * 100).toFixed(0)}%`
+                              : "crop locked"}
+                          </span>
+                          <div className="flex-1" />
+                          <Button
+                            onClick={applyCrop}
+                            disabled={!cropDirty || pipeline.state.running}
+                            size="sm"
+                            className="h-6 text-xs px-2"
+                          >
+                            {pipeline.state.running ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              "Apply"
+                            )}
+                          </Button>
+                          <Button
+                            onClick={resetCrop}
+                            disabled={
+                              (isCropEmpty(appliedCrop) && isCropEmpty(pendingCrop)) ||
+                              pipeline.state.running
+                            }
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs px-2 text-white hover:bg-white/20 hover:text-white"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
