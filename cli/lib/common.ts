@@ -2,8 +2,34 @@
 
 import { writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import type { Command } from "commander";
 import { loadPng } from "./image-io";
 import { detectGridFromImageData } from "../../src/lib/pipeline/detect";
+
+/**
+ * Append an "Examples" block and optional "Output" block to a subcommand's
+ * --help. Keeps examples discoverable right next to the option list, which
+ * is the main thing a cold-context agent reads.
+ */
+export function addHelpExtras(
+  cmd: Command,
+  opts: { examples?: string[]; output?: string[] },
+): Command {
+  const sections: string[] = [];
+  if (opts.examples && opts.examples.length > 0) {
+    sections.push("Examples:");
+    for (const e of opts.examples) sections.push(`  ${e}`);
+  }
+  if (opts.output && opts.output.length > 0) {
+    if (sections.length > 0) sections.push("");
+    sections.push("Output shape:");
+    for (const o of opts.output) sections.push(`  ${o}`);
+  }
+  if (sections.length > 0) {
+    cmd.addHelpText("after", "\n" + sections.join("\n") + "\n");
+  }
+  return cmd;
+}
 
 export function writeJsonOutput(json: unknown, outPath?: string): void {
   const text = JSON.stringify(json, null, 2);

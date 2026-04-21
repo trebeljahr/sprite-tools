@@ -5,6 +5,7 @@ import {
   fail,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 import { imageToPngBuffer, stitchSheet } from "../lib/image-io";
 import {
@@ -16,7 +17,7 @@ import {
 import type { RGB } from "../../src/lib/pixel-art/pixelate";
 
 export function registerPaletteCommand(program: Command) {
-  program
+  const cmd = program
     .command("palette <input>")
     .description("Extract dominant colors and optionally recolor via swaps.")
     .option("--cols <n>", "sheet columns", (v) => parseIntArg("cols", v))
@@ -24,13 +25,28 @@ export function registerPaletteCommand(program: Command) {
     .option("--colors <n>", "palette size", (v) => parseIntArg("colors", v), 8)
     .option(
       "--swap <from>=<to>",
-      "repeatable: hex-to-hex swap, e.g. --swap #ff0000=#0000ff",
+      'repeatable: hex=hex swap, e.g. "#ff0000=#0000ff"',
       collectSwap,
       [],
     )
     .option("--image <file>", "write recolored sheet PNG here (in addition to JSON)")
-    .option("-o, --output <file>", "output JSON file (default: stdout)")
-    .action(
+    .option("-o, --output <file>", "output JSON file (default: stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools palette hero.png --colors 12",
+      'sprite-tools palette hero.png --swap "#ff0000=#0000ff" --image hero-blue.png',
+      "# extract once, reuse the palette:",
+      "sprite-tools palette hero.png | jq -r '.palette[]'",
+    ],
+    output: [
+      "{ source, frameWidth, frameHeight, grid, options,",
+      "  palette: ['#rrggbb', ...],",
+      "  swaps: [{ from: '#rrggbb', to: '#rrggbb' }, ...] }",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: {

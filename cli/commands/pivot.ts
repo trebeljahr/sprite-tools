@@ -4,6 +4,7 @@ import {
   fail,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 
 interface PivotPreset {
@@ -23,7 +24,7 @@ const PRESETS: PivotPreset[] = [
 ];
 
 export function registerPivotCommand(program: Command) {
-  program
+  const cmd = program
     .command("pivot <input>")
     .description("Emit pivot (anchor) metadata for each frame.")
     .option("--cols <n>", "sheet columns", (v) => parseIntArg("cols", v))
@@ -35,8 +36,22 @@ export function registerPivotCommand(program: Command) {
     )
     .option("--x <n>", "explicit pivot X (overrides preset)", (v) => parseIntArg("x", v))
     .option("--y <n>", "explicit pivot Y (overrides preset)", (v) => parseIntArg("y", v))
-    .option("-o, --output <file>", "output JSON file (default: stdout)")
-    .action(
+    .option("-o, --output <file>", "output JSON file (default: stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools pivot hero.png                                    # default: bottom-center",
+      "sprite-tools pivot hero.png --preset center",
+      "sprite-tools pivot hero.png --preset bottom-center --cols 8 --rows 4",
+      "sprite-tools pivot hero.png --x 32 --y 48     # override preset with explicit coords",
+    ],
+    output: [
+      "{ source, frameWidth, frameHeight, grid, options,",
+      "  pivots: [{ index, cell:{row,col}, pivot:{x,y} }, ...] }",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: {

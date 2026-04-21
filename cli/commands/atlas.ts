@@ -4,6 +4,7 @@ import {
   writeJsonOutput,
   fail,
   parseIntArg,
+  addHelpExtras,
 } from "../lib/common";
 import { loadPng, imageToPngBuffer } from "../lib/image-io";
 import { writeFileSync } from "node:fs";
@@ -14,15 +15,30 @@ import {
 } from "../../src/lib/atlas/pack";
 
 export function registerAtlasCommand(program: Command) {
-  program
+  const cmd = program
     .command("atlas <inputs...>")
     .description("Pack multiple sprites into a single PNG atlas + JSON manifest.")
     .option("--padding <n>", "gutter between packed sprites", (v) => parseIntArg("padding", v), 2)
     .option("--pow2", "round atlas size up to power of 2", false)
     .option("--no-trim", "don't auto-trim transparent borders (default: trim)")
     .option("-o, --output <file>", "output atlas PNG file", "atlas.png")
-    .option("--json <file>", "output JSON manifest file", "atlas.json")
-    .action(
+    .option("--json <file>", "output JSON manifest file", "atlas.json");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools atlas sprites/*.png",
+      "sprite-tools atlas sprites/*.png --padding 4 --pow2 -o game.png --json game.json",
+      "sprite-tools atlas sprites/*.png --no-trim   # keep original canvas sizes",
+    ],
+    output: [
+      "PNG atlas + TexturePacker-style JSON manifest:",
+      "  { atlas, width, height,",
+      "    frames: { 'name.png': { frame:{x,y,w,h}, trimmed,",
+      "                            sourceSize, spriteSourceSize }, ... } }",
+    ],
+  });
+
+  cmd.action(
       (
         inputs: string[],
         opts: {

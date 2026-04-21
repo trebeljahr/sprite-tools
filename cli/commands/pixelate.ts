@@ -4,13 +4,14 @@ import {
   fail,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 import { imageToPngBuffer, stitchSheet } from "../lib/image-io";
 import { pixelate, hexToRgb } from "../../src/lib/pixel-art/pixelate";
 import { paletteById, PALETTES } from "../../src/lib/pixel-art/palettes";
 
 export function registerPixelateCommand(program: Command) {
-  program
+  const cmd = program
     .command("pixelate <input>")
     .description("Downscale + quantize + dither + palette-snap. Outputs a PNG.")
     .option("--cols <n>", "sheet columns (default 1)", (v) => parseIntArg("cols", v))
@@ -26,8 +27,22 @@ export function registerPixelateCommand(program: Command) {
     .option("--dither", "Floyd–Steinberg dither", false)
     .option("--alpha-threshold <n>", "binarize alpha above/below this", (v) => parseIntArg("alpha-threshold", v), 0)
     .option("--no-upscale", "keep output at the downscaled size (default: upscale to source size)")
-    .option("-o, --output <file>", "output PNG file (default: stdout, use - for explicit stdout)")
-    .action(
+    .option("-o, --output <file>", "output PNG file (default: stdout, use - for explicit stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools pixelate hero.png -o hero-pixel.png",
+      "sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy -o gb.png",
+      "sprite-tools pixelate hero.png --colors 16 --dither -o fs.png",
+      "sprite-tools pixelate sheet.png --cols 8 --rows 4 --no-upscale -o tiny.png",
+    ],
+    output: [
+      "PNG. --upscale (default) keeps source dimensions with blocky pixels.",
+      "--no-upscale emits native low-res (source/pixelSize on each axis).",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: {
