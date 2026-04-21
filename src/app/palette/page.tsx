@@ -309,13 +309,24 @@ export default function PalettePage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // Same shape as `sprite-tools palette` CLI output.
   const exportPaletteJson = () => {
     if (!sourceFile || palette.length === 0) return;
+    const f0 = frames[0];
+    const swaps = palette
+      .map((p, i) => ({
+        from: rgbToHex(p),
+        to: swapHex[i] ?? rgbToHex(p),
+      }))
+      .filter((s) => s.from.toLowerCase() !== s.to.toLowerCase());
     const payload = {
       source: sourceFile.name,
-      colorCount,
+      frameWidth: f0?.width ?? 0,
+      frameHeight: f0?.height ?? 0,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
+      options: { colors: colorCount },
       palette: palette.map(rgbToHex),
-      swap: swapHex,
+      swaps,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",

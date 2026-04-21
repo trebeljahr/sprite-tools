@@ -374,21 +374,21 @@ export default function PivotPage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // Same shape as `sprite-tools pivot` CLI output.
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const f0 = frames[0];
     return {
       source: sourceFile.name,
-      mode: sourceMode,
-      grid: sourceMode === "sheet" ? { cols: sheetCols, rows: sheetRows } : null,
       frameWidth: f0.width,
       frameHeight: f0.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       pivots: frames.map((f, i) => ({
         index: f.index,
         cell:
           f.cellRow != null && f.cellCol != null
             ? { row: f.cellRow, col: f.cellCol }
-            : null,
+            : { row: Math.floor(f.index / sheetCols), col: f.index % sheetCols },
         pivot: pivots[i] ?? { x: 0, y: 0 },
       })),
     };

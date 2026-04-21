@@ -346,15 +346,15 @@ export default function TagsPage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // Same shape as `sprite-tools tags` CLI output.
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const f0 = frames[0];
     return {
       source: sourceFile.name,
-      mode: sourceMode,
-      grid: sourceMode === "sheet" ? { cols: sheetCols, rows: sheetRows } : null,
       frameWidth: f0.width,
       frameHeight: f0.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       frameCount: frames.length,
       tags: tags.map((t) => ({
         name: t.name,
@@ -363,17 +363,8 @@ export default function TagsPage() {
         direction: t.direction,
         fps: t.fps,
       })),
-      // Also emit a frames[] so engines that prefer frame-list JSON have it
-      frames: frames.map((f) => ({
-        index: f.index,
-        cell:
-          f.cellRow != null && f.cellCol != null
-            ? { row: f.cellRow, col: f.cellCol }
-            : null,
-        duration: Math.round(1000 / Math.max(1, globalFps)),
-      })),
     };
-  }, [frames, tags, sourceFile, sourceMode, sheetCols, sheetRows, globalFps]);
+  }, [frames, tags, sourceFile, sourceMode, sheetCols, sheetRows]);
 
   const downloadJson = () => {
     if (!jsonPayload || !sourceFile) return;

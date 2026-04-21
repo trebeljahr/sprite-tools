@@ -426,15 +426,16 @@ export default function CollisionPage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // JSON shape mirrors `sprite-tools collision` CLI output so files produced
+  // in the browser can be consumed by the same tooling (and merged with jq).
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const anyFrame = frames[0];
     return {
       source: sourceFile.name,
-      mode: sourceMode,
-      grid: sourceMode === "sheet" ? { cols: sheetCols, rows: sheetRows } : null,
       frameWidth: anyFrame.width,
       frameHeight: anyFrame.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       options: {
         alphaThreshold,
         simplifyTolerance,
@@ -449,12 +450,12 @@ export default function CollisionPage() {
               }
             : null,
       },
-      frames: frames.map((f) => ({
+      collision: frames.map((f) => ({
         index: f.index,
         cell:
           f.cellRow != null && f.cellCol != null
             ? { row: f.cellRow, col: f.cellCol }
-            : null,
+            : { row: Math.floor(f.index / sheetCols), col: f.index % sheetCols },
         pointCount: f.outline.polygon.length,
         bounds: f.outline.bounds,
         polygon: f.outline.polygon.map((p) => [p.x, p.y] as const),
