@@ -12,6 +12,16 @@ import {
   type Progress,
 } from "./types";
 
+// Yield to the event loop without the setTimeout-4ms floor, so the browser
+// can paint + process user input between per-frame CPU bursts.
+function yieldToMain(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    channel.port2.postMessage(null);
+  });
+}
+
 async function bitmapToCanvas(
   bitmap: ImageBitmap,
 ): Promise<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }> {
@@ -103,6 +113,9 @@ export async function* chromaKey(
     src.bitmap.close?.();
     out.push({ ...src, id: nextFrameId(), bitmap, width: w, height: h });
     yield { step: "chroma-key", current: i + 1, total };
+    // Let the browser paint + handle user input between frames. Matters for
+    // big sheets where a single frame can take tens of milliseconds.
+    await yieldToMain();
   }
 
   return { frames: out, stats: computeStats(out) };
@@ -208,12 +221,35 @@ export async function autoCrop(
     maxX = -Infinity,
     maxY = -Infinity;
   let anyContent = false;
-  for (const f of frames.frames) {
+  for (let fi = 0; fi < frames.frames.length; fi++) {
+    const f = frames.frames[fi];
     const { canvas, ctx } = await bitmapToCanvas(f.bitmap);
-    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        if (d[(y * canvas.width + x) * 4 + 3] > 0) {
+    const W = canvas.width, H = canvas.height;
+    const d = ctx.getImageData(0, 0, W, H).data;
+
+    // Opacity fast-path: if the corners are all fully opaque the frame has
+    // no transparent background to trim, so cropping is already a no-op —
+    // mark the full frame as content and skip the per-pixel scan.
+    const a0 = d[3];
+    const aTR = d[(W - 1) * 4 + 3];
+    const aBL = d[((H - 1) * W) * 4 + 3];
+    const aBR = d[(H * W - 1) * 4 + 3];
+    if (a0 === 255 && aTR === 255 && aBL === 255 && aBR === 255) {
+      minX = Math.min(minX, 0);
+      minY = Math.min(minY, 0);
+      maxX = Math.max(maxX, W - 1);
+      maxY = Math.max(maxY, H - 1);
+      anyContent = true;
+      if (fi % 4 === 3) await yieldToMain();
+      continue;
+    }
+
+    // Scan rows top→bottom and bottom→top to narrow Y first, then the
+    // remaining vertical slice for X. This is still O(W·H) in the worst
+    // case but runs much faster when content is small on a big canvas.
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (d[(y * W + x) * 4 + 3] > 0) {
           if (x < minX) minX = x;
           if (y < minY) minY = y;
           if (x > maxX) maxX = x;
@@ -222,6 +258,7 @@ export async function autoCrop(
         }
       }
     }
+    if (fi % 4 === 3) await yieldToMain();
   }
   if (!anyContent) return frames;
 
