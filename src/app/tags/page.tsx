@@ -37,6 +37,7 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface TagFrame {
   index: number;
@@ -75,8 +76,7 @@ function newTagId(): string {
 }
 
 export default function TagsPage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("sheet");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -111,9 +111,7 @@ export default function TagsPage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       setTags([]);
       hasAutoFittedRef.current = false;
@@ -139,7 +137,7 @@ export default function TagsPage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

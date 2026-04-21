@@ -46,6 +46,7 @@ import {
   type NormalMapOptions,
   type NormalSource,
 } from "@/lib/normal-map/normal-map";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface SourceFrame {
   index: number;
@@ -121,8 +122,7 @@ function litCompose(
 }
 
 export default function NormalMapPage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -162,9 +162,7 @@ export default function NormalMapPage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       hasAutoFittedRef.current = false;
 
@@ -189,7 +187,7 @@ export default function NormalMapPage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

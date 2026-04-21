@@ -34,6 +34,7 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface PivotFrame {
   index: number;
@@ -86,8 +87,7 @@ function applyPreset(preset: PivotPreset, w: number, h: number): Pivot {
 }
 
 export default function PivotPage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -120,9 +120,7 @@ export default function PivotPage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       hasAutoFittedRef.current = false;
 
@@ -147,7 +145,7 @@ export default function PivotPage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -45,6 +45,7 @@ import {
   generateOutline,
   type OutlineResult,
 } from "@/lib/collision/outline";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface RawFrame {
   index: number;
@@ -96,9 +97,8 @@ async function frameToImageData(frame: Frame): Promise<{ imageData: ImageData; u
 }
 
 export default function CollisionPage() {
-  // --- Source ---
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  // --- Source (persisted in IndexedDB, shared across all tool tabs) ---
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -154,10 +154,7 @@ export default function CollisionPage() {
       toast.error("Please upload an image file.");
       return;
     }
-    setSourceFile(file);
-    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-    const url = URL.createObjectURL(file);
-    setSourceUrl(url);
+    await setSharedSource(file);
     setCurrentIndex(0);
     hasAutoFittedRef.current = false;
 
@@ -182,7 +179,7 @@ export default function CollisionPage() {
       setSheetRows(1);
       setDetectedGrid(null);
     }
-  }, [sourceUrl]);
+  }, [setSharedSource]);
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -331,7 +328,7 @@ export default function CollisionPage() {
   useEffect(() => {
     return () => {
       for (const f of rawFrames) URL.revokeObjectURL(f.previewUrl);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+      // sourceUrl lifecycle is owned by useSharedProjectSource now.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
