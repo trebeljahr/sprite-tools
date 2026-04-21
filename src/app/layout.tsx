@@ -127,6 +127,15 @@ export default function RootLayout({
                   >
                     Normals
                   </Link>
+                  <Link
+                    href="/palette"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/palette" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Palette
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
