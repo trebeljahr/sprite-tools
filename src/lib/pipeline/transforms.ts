@@ -1,4 +1,3 @@
-import { applyChromaKey, hexToRgb } from "@/lib/utils";
 import {
   AutoCropConfig,
   ChromaKeyConfig,
@@ -11,6 +10,7 @@ import {
   type Frame,
   type Progress,
 } from "./types";
+import type { ChromaWorkerRequest, ChromaWorkerResponse } from "./chroma.worker";
 
 // Yield to the event loop without the setTimeout-4ms floor, so the browser
 // can paint + process user input between per-frame CPU bursts.
@@ -19,6 +19,63 @@ function yieldToMain(): Promise<void> {
     const channel = new MessageChannel();
     channel.port1.onmessage = () => resolve();
     channel.port2.postMessage(null);
+  });
+}
+
+// -----------------------------------------------------------------
+// Chroma-key worker pool
+// -----------------------------------------------------------------
+// One shared worker does all the heavy per-pixel work off the main
+// thread. Each request carries an id so responses can be routed back
+// to the right caller.
+
+let _chromaWorker: Worker | null = null;
+let _chromaReqId = 0;
+const _chromaPending = new Map<number, (r: ChromaWorkerResponse) => void>();
+
+function getChromaWorker(): Worker {
+  if (_chromaWorker) return _chromaWorker;
+  const w = new Worker(new URL("./chroma.worker.ts", import.meta.url), {
+    type: "module",
+  });
+  w.onmessage = (e: MessageEvent<ChromaWorkerResponse>) => {
+    const cb = _chromaPending.get(e.data.id);
+    if (cb) {
+      _chromaPending.delete(e.data.id);
+      cb(e.data);
+    }
+  };
+  _chromaWorker = w;
+  return w;
+}
+
+async function runChromaInWorker(
+  bitmap: ImageBitmap,
+  config: ChromaKeyConfig,
+): Promise<ImageBitmap> {
+  const worker = getChromaWorker();
+  const id = ++_chromaReqId;
+  return new Promise<ImageBitmap>((resolve, reject) => {
+    _chromaPending.set(id, (resp) => {
+      if (resp.ok) resolve(resp.bitmap);
+      else reject(new Error(resp.error));
+    });
+    const req: ChromaWorkerRequest = {
+      id,
+      bitmap,
+      config: {
+        mode:
+          config.mode === "chroma-solid" ? "chroma-solid" : "chroma-transparent",
+        similarity: config.similarity,
+        softness: config.softness,
+        spill: config.spill,
+        choke: config.choke,
+        solidColor: config.solidColor,
+        autoDetermineFillColor: config.autoDetermineFillColor,
+      },
+    };
+    // Transfer the bitmap to the worker — it's consumed there.
+    worker.postMessage(req, [bitmap]);
   });
 }
 
@@ -58,151 +115,23 @@ export async function* chromaKey(
 
   for (let i = 0; i < total; i++) {
     const src = frames.frames[i];
-    const { canvas, ctx } = await bitmapToCanvas(src.bitmap);
-
-    // Use the existing sampleBackground helper by rendering through an img.
-    // Simpler: sample 4 corners directly from the ImageData.
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imgData.data;
-    const w = canvas.width;
-    const h = canvas.height;
-    const corners = [
-      { r: d[0], g: d[1], b: d[2] },
-      { r: d[(w - 1) * 4], g: d[(w - 1) * 4 + 1], b: d[(w - 1) * 4 + 2] },
-      {
-        r: d[d.length - w * 4],
-        g: d[d.length - w * 4 + 1],
-        b: d[d.length - w * 4 + 2],
-      },
-      { r: d[d.length - 4], g: d[d.length - 3], b: d[d.length - 2] },
-    ];
-    const counts: Record<string, { r: number; g: number; b: number; n: number }> = {};
-    for (const c of corners) {
-      const k = `${c.r},${c.g},${c.b}`;
-      counts[k] = counts[k]
-        ? { ...c, n: counts[k].n + 1 }
-        : { ...c, n: 1 };
-    }
-    let target = corners[0];
-    let best = 0;
-    for (const k of Object.keys(counts)) {
-      if (counts[k].n > best) {
-        best = counts[k].n;
-        target = counts[k];
-      }
-    }
-
-    if (cfg.mode === "chroma-solid") {
-      // Solid fill mode: replace background with sampled/solid color.
-      const sampled = sampleBackgroundFromImageData(imgData);
-      const tgt = cfg.autoDetermineFillColor
-        ? sampled.corners
-        : {
-            tl: hexToRgb(cfg.solidColor ?? "#ffffff"),
-            tr: hexToRgb(cfg.solidColor ?? "#ffffff"),
-            bl: hexToRgb(cfg.solidColor ?? "#ffffff"),
-            br: hexToRgb(cfg.solidColor ?? "#ffffff"),
-          };
-      applySolidFill(ctx, w, h, sampled, tgt, cfg);
-    } else {
-      // Transparent mode: the existing chroma key helper.
-      applyChromaKey(ctx, w, h, target, cfg);
-    }
-
-    const bitmap = await canvasToBitmap(canvas);
-    src.bitmap.close?.();
-    out.push({ ...src, id: nextFrameId(), bitmap, width: w, height: h });
+    // Clone the bitmap so the worker can consume (transfer-kill) its copy
+    // without invalidating the upstream cache's original.
+    const clone = await createImageBitmap(src.bitmap);
+    const processed = await runChromaInWorker(clone, cfg);
+    out.push({
+      ...src,
+      id: nextFrameId(),
+      bitmap: processed,
+      width: processed.width,
+      height: processed.height,
+    });
     yield { step: "chroma-key", current: i + 1, total };
-    // Let the browser paint + handle user input between frames. Matters for
-    // big sheets where a single frame can take tens of milliseconds.
+    // Brief yield so the event loop can paint between frames.
     await yieldToMain();
   }
 
   return { frames: out, stats: computeStats(out) };
-}
-
-function sampleBackgroundFromImageData(data: ImageData) {
-  const W = data.width,
-    H = data.height;
-  const d = data.data;
-  const pixel = (x: number, y: number) => {
-    const i = (y * W + x) * 4;
-    return { r: d[i], g: d[i + 1], b: d[i + 2] };
-  };
-  const corners = {
-    tl: pixel(0, 0),
-    tr: pixel(W - 1, 0),
-    bl: pixel(0, H - 1),
-    br: pixel(W - 1, H - 1),
-  };
-  const r = Math.round((corners.tl.r + corners.tr.r + corners.bl.r + corners.br.r) / 4);
-  const g = Math.round((corners.tl.g + corners.tr.g + corners.bl.g + corners.br.g) / 4);
-  const b = Math.round((corners.tl.b + corners.tr.b + corners.bl.b + corners.br.b) / 4);
-  return { r, g, b, corners };
-}
-
-function applySolidFill(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  sampled: ReturnType<typeof sampleBackgroundFromImageData>,
-  target: { tl: { r: number; g: number; b: number }; tr: { r: number; g: number; b: number }; bl: { r: number; g: number; b: number }; br: { r: number; g: number; b: number } },
-  cfg: ChromaKeyConfig,
-) {
-  const { similarity, softness } = cfg;
-  const srcR = sampled.r,
-    srcG = sampled.g,
-    srcB = sampled.b;
-  const img = ctx.getImageData(0, 0, w, h);
-  const data = img.data;
-
-  // Build a feathered mask (255 = keep, 0 = replace)
-  const mask = new Uint8Array(w * h);
-  for (let j = 0, k = 0; j < data.length; j += 4, k++) {
-    const dist = Math.sqrt(
-      Math.pow(data[j] - srcR, 2) +
-        Math.pow(data[j + 1] - srcG, 2) +
-        Math.pow(data[j + 2] - srcB, 2),
-    );
-    let m = 255;
-    if (dist < similarity) m = 0;
-    else if (dist < similarity + softness) m = Math.round(((dist - similarity) / softness) * 255);
-    mask[k] = m;
-  }
-
-  // Bilinear-blend target corners across the frame
-  const colorAt = (x: number, y: number) => {
-    const u = x / (w - 1 || 1);
-    const v = y / (h - 1 || 1);
-    const top = {
-      r: target.tl.r * (1 - u) + target.tr.r * u,
-      g: target.tl.g * (1 - u) + target.tr.g * u,
-      b: target.tl.b * (1 - u) + target.tr.b * u,
-    };
-    const bot = {
-      r: target.bl.r * (1 - u) + target.br.r * u,
-      g: target.bl.g * (1 - u) + target.br.g * u,
-      b: target.bl.b * (1 - u) + target.br.b * u,
-    };
-    return {
-      r: top.r * (1 - v) + bot.r * v,
-      g: top.g * (1 - v) + bot.g * v,
-      b: top.b * (1 - v) + bot.b * v,
-    };
-  };
-
-  for (let y = 0, k = 0; y < h; y++) {
-    for (let x = 0; x < w; x++, k++) {
-      const j = k * 4;
-      const m = mask[k] / 255;
-      const fill = colorAt(x, y);
-      data[j] = data[j] * m + fill.r * (1 - m);
-      data[j + 1] = data[j + 1] * m + fill.g * (1 - m);
-      data[j + 2] = data[j + 2] * m + fill.b * (1 - m);
-      data[j + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
 }
 
 // -----------------------------------------------------------------
