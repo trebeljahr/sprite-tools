@@ -25,52 +25,106 @@ async function urlToBitmap(url: string): Promise<ImageBitmap> {
 // -----------------------------------------------------------------
 // Video → Frames (sample N fps)
 // -----------------------------------------------------------------
+// We spin up several <video> elements pointing at the same blob URL
+// and stripe frame extraction across them. Each element is its own
+// decoder state, so seeks run in parallel across CPU decoders and we
+// get near-linear speedup for large fps × duration.
+
+async function loadVideoMeta(url: string): Promise<HTMLVideoElement> {
+  const v = document.createElement("video");
+  v.src = url;
+  v.muted = true;
+  v.playsInline = true;
+  await new Promise<void>((resolve, reject) => {
+    v.onloadedmetadata = () => resolve();
+    v.onerror = () => reject(new Error("Video load failed"));
+  });
+  return v;
+}
+
+async function seekAndGrab(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  tSec: number,
+): Promise<ImageBitmap> {
+  await new Promise<void>((resolve) => {
+    video.onseeked = () => resolve();
+    video.currentTime = tSec;
+  });
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return await createImageBitmap(canvas);
+}
 
 export async function* importFromVideo(
   source: File | string,
   cfg: VideoImportConfig,
 ): AsyncGenerator<Progress, Frames> {
-  const url = typeof source === "string" ? source : URL.createObjectURL(source);
-  const video = document.createElement("video");
-  video.src = url;
-  video.muted = true;
-  video.playsInline = true;
-  await new Promise<void>((resolve, reject) => {
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("Video load failed"));
-  });
+  const url =
+    typeof source === "string" ? source : URL.createObjectURL(source);
 
-  const duration = video.duration;
+  // One element to read metadata + frame dimensions.
+  const meta = await loadVideoMeta(url);
+  const duration = meta.duration;
   const total = Math.max(1, Math.floor(duration * cfg.fps));
   const interval = 1 / cfg.fps;
+  const vw = meta.videoWidth;
+  const vh = meta.videoHeight;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("2D context unavailable");
+  // Scale the parallelism down for tiny videos; spinning 4 decoders for
+  // 3 frames is pure overhead.
+  const PAR = Math.min(
+    total,
+    typeof navigator !== "undefined"
+      ? Math.min(4, Math.max(2, (navigator.hardwareConcurrency || 4) - 1))
+      : 2,
+  );
 
-  const out: Frame[] = [];
-  for (let i = 0; i < total; i++) {
-    video.currentTime = i * interval;
-    await new Promise<void>((resolve) => (video.onseeked = () => resolve()));
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png"),
-    );
-    if (blob) {
-      const bitmap = await blobToBitmap(blob);
-      out.push({
+  // Reuse the meta element as one of the workers; build the rest.
+  const videos: HTMLVideoElement[] = [meta];
+  for (let i = 1; i < PAR; i++) videos.push(await loadVideoMeta(url));
+  const canvases: HTMLCanvasElement[] = [];
+  const ctxs: CanvasRenderingContext2D[] = [];
+  for (let i = 0; i < PAR; i++) {
+    const c = document.createElement("canvas");
+    c.width = vw;
+    c.height = vh;
+    const cx = c.getContext("2d");
+    if (!cx) throw new Error("2D context unavailable");
+    canvases.push(c);
+    ctxs.push(cx);
+  }
+
+  const out: Frame[] = new Array(total);
+  let completed = 0;
+
+  const stripes = videos.map(async (v, vIdx) => {
+    const c = canvases[vIdx];
+    const ctx = ctxs[vIdx];
+    for (let i = vIdx; i < total; i += PAR) {
+      const bitmap = await seekAndGrab(v, c, ctx, i * interval);
+      out[i] = {
         id: nextFrameId(),
         bitmap,
         width: bitmap.width,
         height: bitmap.height,
         sourceIndex: i,
         metadata: { timestamp: i * interval },
-      });
+      };
+      completed += 1;
     }
-    yield { step: "import-video", current: i + 1, total };
+  });
+
+  const allDone = Promise.all(stripes);
+  yield { step: "import-video", current: 0, total };
+  while (completed < total) {
+    await Promise.race([
+      new Promise<void>((r) => setTimeout(r, 60)),
+      allDone.then(() => {}).catch(() => {}),
+    ]);
+    yield { step: "import-video", current: completed, total };
   }
+  await allDone;
 
   if (typeof source !== "string") URL.revokeObjectURL(url);
   return { frames: out, stats: computeStats(out) };
