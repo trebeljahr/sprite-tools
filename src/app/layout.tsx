@@ -109,6 +109,15 @@ export default function RootLayout({
                   >
                     Pivot
                   </Link>
+                  <Link
+                    href="/tags"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/tags" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Tags
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
