@@ -5,11 +5,12 @@ import {
   parseFloatArg,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 import { generateOutline } from "../../src/lib/collision/outline";
 
 export function registerCollisionCommand(program: Command) {
-  program
+  const cmd = program
     .command("collision <input>")
     .description("Generate per-frame collision polygon JSON from a sprite or sheet")
     .option("--cols <n>", "columns (auto-detected if omitted)", (v) => parseIntArg("cols", v))
@@ -21,8 +22,23 @@ export function registerCollisionCommand(program: Command) {
       parseFloatArg("tolerance", v), 10,
     )
     .option("--convex-hull", "reduce each polygon to its convex hull", false)
-    .option("-o, --output <file>", "output JSON file (default: stdout)")
-    .action(
+    .option("-o, --output <file>", "output JSON file (default: stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools collision sprite.png > collision.json",
+      "sprite-tools collision sheet.png --tolerance 4 -o collision.json",
+      "sprite-tools collision sheet.png --cols 8 --rows 4 --convex-hull",
+      "# lower --tolerance = more vertices; --convex-hull = engine-friendly convex fixtures",
+    ],
+    output: [
+      "{ source, frameWidth, frameHeight, grid, options,",
+      "  collision: [{ index, cell:{row,col}, pointCount, bounds,",
+      "               polygon: [[x,y], ...] }, ...] }",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: {

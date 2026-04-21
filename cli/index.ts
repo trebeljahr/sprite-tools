@@ -27,21 +27,43 @@ const program = new Command();
 
 program
   .name("sprite-tools")
-  .description(
-    [
-      "CLI for sprite-sheet processing.",
-      "",
-      "Composable: pipe JSON between commands, or merge with `jq -s add`.",
-      "",
-      "Examples:",
-      "  sprite-tools detect sheet.png",
-      "  sprite-tools collision sheet.png --tolerance 4 -o collision.json",
-      "  sprite-tools pixelate sprite.png --pixel-size 4 --palette gameboy -o pixel.png",
-      "  sprite-tools atlas sprites/*.png -o atlas.png --json atlas.json",
-      "",
-    ].join("\n"),
-  )
+  .description("CLI for sprite-sheet processing. Run any subcommand with --help for full options, examples, and output shape.")
   .version("0.1.0");
+
+program.addHelpText(
+  "after",
+  [
+    "",
+    "Commands that emit JSON (default: stdout):",
+    "  detect     grid auto-detection             { grid:{cols,rows}, confidence }",
+    "  collision  per-frame collision polygons    { collision: [...] }",
+    "  pivot      anchor / origin metadata        { pivots: [...] }",
+    "  tags       named animation ranges          { tags: [...] }",
+    "  palette    dominant colors + swaps         { palette: [...], swaps: [...] }",
+    "  atlas      packed-atlas manifest           { atlas, width, height, frames:{...} }  (plus PNG)",
+    "",
+    "Commands that emit PNG/GIF (default: stdout, use -o <file>):",
+    "  pixelate   downscale + quantize + dither",
+    "  normal-map alpha/luminance → tangent-space normals",
+    "  gif        animated GIF from sheet",
+    "",
+    "Composing: the JSON commands share top-level {source, frameWidth, frameHeight, grid}",
+    "so you can merge them with jq:",
+    "",
+    "  sprite-tools collision hero.png -o c.json",
+    "  sprite-tools pivot    hero.png -o p.json",
+    "  sprite-tools tags     hero.png --tag idle=0-5 --tag run=6-11 -o t.json",
+    "  jq -s 'add' c.json p.json t.json > hero-meta.json",
+    "",
+    "Auto-detect a grid and feed it to another command:",
+    "",
+    "  G=$(sprite-tools detect sheet.png | jq -r '.grid | \"--cols \\(.cols) --rows \\(.rows)\"')",
+    "  sprite-tools collision sheet.png $G --tolerance 4",
+    "",
+    "Run `sprite-tools <command> --help` for the full shape of each output.",
+    "",
+  ].join("\n"),
+);
 
 registerDetectCommand(program);
 registerCollisionCommand(program);

@@ -4,6 +4,7 @@ import {
   fail,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 
 type Direction = "forward" | "reverse" | "pingpong";
@@ -17,20 +18,34 @@ interface ParsedTag {
 }
 
 export function registerTagsCommand(program: Command) {
-  program
+  const cmd = program
     .command("tags <input>")
     .description("Emit animation tag (named frame range) metadata.")
     .option("--cols <n>", "sheet columns", (v) => parseIntArg("cols", v))
     .option("--rows <n>", "sheet rows", (v) => parseIntArg("rows", v))
     .option(
       "--tag <spec>",
-      'repeatable: "name=from-to[:fps[:direction]]", e.g. --tag idle=0-5:10:forward',
+      'repeatable: "name=from-to[:fps[:direction]]"',
       collect,
       [],
     )
     .option("--fps <n>", "default FPS for tags", (v) => parseIntArg("fps", v), 10)
-    .option("-o, --output <file>", "output JSON file (default: stdout)")
-    .action(
+    .option("-o, --output <file>", "output JSON file (default: stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools tags hero.png --tag idle=0-5 --tag run=6-11",
+      "sprite-tools tags hero.png --tag attack=12-18:24:forward --fps 12",
+      "sprite-tools tags hero.png --tag bounce=0-7:10:pingpong",
+      "# direction may be forward (default), reverse, or pingpong",
+    ],
+    output: [
+      "{ source, frameWidth, frameHeight, grid, frameCount,",
+      "  tags: [{ name, from, to, direction, fps }, ...] }",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: { cols?: number; rows?: number; tag: string[]; fps: number; output?: string },

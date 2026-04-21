@@ -5,6 +5,7 @@ import {
   parseFloatArg,
   parseIntArg,
   loadSheet,
+  addHelpExtras,
 } from "../lib/common";
 import { imageToPngBuffer, stitchSheet } from "../lib/image-io";
 import {
@@ -13,7 +14,7 @@ import {
 } from "../../src/lib/normal-map/normal-map";
 
 export function registerNormalMapCommand(program: Command) {
-  program
+  const cmd = program
     .command("normal-map <input>")
     .description("Generate an OpenGL-style normal map from alpha or luminance.")
     .option("--cols <n>", "sheet columns", (v) => parseIntArg("cols", v))
@@ -23,8 +24,23 @@ export function registerNormalMapCommand(program: Command) {
     .option("--mix <n>", "alpha/luminance blend 0..1 (mixed mode)", (v) => parseFloatArg("mix", v), 0.5)
     .option("--flip-y", "flip Y for DirectX-style normal maps", false)
     .option("--blur <n>", "pre-blur radius in px", (v) => parseIntArg("blur", v), 0)
-    .option("-o, --output <file>", "output PNG file (default: stdout)")
-    .action(
+    .option("-o, --output <file>", "output PNG file (default: stdout)");
+
+  addHelpExtras(cmd, {
+    examples: [
+      "sprite-tools normal-map hero.png -o hero-normal.png",
+      "sprite-tools normal-map hero.png --source mixed --mix 0.3 --strength 2",
+      "sprite-tools normal-map hero.png --flip-y   # DirectX / Unreal",
+    ],
+    output: [
+      "PNG. RGB = encoded tangent-space normal; A preserved from source.",
+      "  alpha     source — puffy, rounded look from distance transform",
+      "  luminance source — uses sprite brightness as height field",
+      "  mixed     source — blends both via --mix",
+    ],
+  });
+
+  cmd.action(
       (
         input: string,
         opts: {
