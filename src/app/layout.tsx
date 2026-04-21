@@ -91,6 +91,15 @@ export default function RootLayout({
                   >
                     Collision
                   </Link>
+                  <Link
+                    href="/pixelate"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/pixelate" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Pixelate
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
