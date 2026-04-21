@@ -238,7 +238,7 @@ function SpritesheetContent() {
     if (url) {
       setVideoUrl(url);
       setSourceTab("video");
-      toast.success("Animation loaded from Step 2!");
+      toast.success("Animation loaded from AI Animation");
     }
   }, [searchParams]);
 
@@ -680,36 +680,11 @@ function SpritesheetContent() {
 
   return (
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
-      {/* Pipeline steps nav */}
-      <div className="flex items-center justify-center mb-12 space-x-4">
-        <Link
-          href="/generate"
-          className="flex items-center text-muted-foreground hover:text-primary transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">1</div>
-          <span className="ml-2 font-medium">Design</span>
-        </Link>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        <Link
-          href="/"
-          className="flex items-center text-muted-foreground hover:text-primary transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">2</div>
-          <span className="ml-2 font-medium">Animate</span>
-        </Link>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        <div className="flex items-center text-primary">
-          <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
-            3
-          </div>
-          <span className="ml-2 font-medium">Extract</span>
-        </div>
-      </div>
 
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Scissors className="w-8 h-8 text-primary" />
-          Advanced Sprite Tools
+          Sheet Builder
         </h1>
         <p className="text-muted-foreground">
           Video, sprite sheets, or individual images — chroma key, crop, stitch, and export.
@@ -1556,7 +1531,7 @@ export default function SpritesheetPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-          <Loader2 className="w-8 h-8 animate-spin mr-2" /> Loading Step 3...
+          <Loader2 className="w-8 h-8 animate-spin mr-2" /> Loading Sheet Builder…
         </div>
       }
     >

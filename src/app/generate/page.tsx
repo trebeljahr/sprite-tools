@@ -43,8 +43,21 @@ import {
   generateImage 
 } from "@/lib/image-gen";
 import { cn } from "@/lib/utils";
+import { AuthWall } from "@/components/auth-wall";
 
 export default function GeneratePage() {
+  return (
+    <AuthWall
+      feature="AI Character"
+      description="Generate character sprite art from a text prompt using AI image generation."
+      costHint="~1 credit per image"
+    >
+      <GeneratePageContent />
+    </AuthWall>
+  );
+}
+
+function GeneratePageContent() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<SpriteTemplateType>("side-scroller");
   const [userPrompt, setUserPrompt] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -114,31 +127,13 @@ export default function GeneratePage() {
 
   return (
     <main className="flex-1 container max-w-6xl mx-auto py-8 px-4">
-      {/* Pipeline Progress */}
-      <div className="flex items-center justify-center mb-12 space-x-4">
-        <div className="flex items-center text-primary">
-          <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">1</div>
-          <span className="ml-2 font-medium">Design</span>
-        </div>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        <div className="flex items-center text-muted-foreground">
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">2</div>
-          <span className="ml-2 font-medium">Animate</span>
-        </div>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        <div className="flex items-center text-muted-foreground">
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold">3</div>
-          <span className="ml-2 font-medium">Extract</span>
-        </div>
-      </div>
-
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Sparkles className="w-8 h-8 text-primary" />
-          Character Designer
+          AI Character
         </h1>
         <p className="text-muted-foreground">
-          Step 1: Generate your character sprites using AI.
+          Generate character sprite art with AI.
         </p>
       </div>
 
@@ -297,7 +292,7 @@ export default function GeneratePage() {
                       Download
                     </Button>
                     <Link 
-                      href={`/?imageUrl=${encodeURIComponent(generatedImageUrl)}`}
+                      href={`/animate?imageUrl=${encodeURIComponent(generatedImageUrl)}`}
                       className={cn(
                         "inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[0.8rem] font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
                       )}

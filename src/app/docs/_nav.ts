@@ -24,7 +24,6 @@ export const DOCS_SECTIONS: DocSection[] = [
   {
     label: "Web app",
     items: [
-      { href: "/docs/web/overview", label: "Overview tab" },
       { href: "/docs/web/collision", label: "Collision" },
       { href: "/docs/web/pivot", label: "Pivot" },
       { href: "/docs/web/tags", label: "Animation tags" },

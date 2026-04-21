@@ -43,10 +43,10 @@ That produces one JSON file with four namespaced sections — **collision** (per
 
 Same result, different workflow:
 
-1. Go to [/overview](/overview) and drop your sheet in.
-2. Tune the **alpha threshold**, **tolerance**, and **pivot preset** — every cell's overlays update live.
-3. Paste a tags JSON in the sidebar to color cells by animation range.
-4. When you're happy with the settings, click through to **Collision** / **Pivot** / **Tags** (the source auto-follows you) and hit **Download JSON** in each, then merge with `jq -s 'add' *.json`.
+1. Go to [Collision](/collision) and drop your sheet in.
+2. Tune the **alpha threshold** and **tolerance** — the polygon updates live.
+3. Click through to **Pivot** and **Tags** — the same source carries over automatically (persisted via IndexedDB), so you never re-upload.
+4. Download JSON from each, then merge with `jq -s 'add' *.json` — or skip the juggling with the CLI's `meta` command in the next section.
 
 ## 4. Stylize if needed
 
@@ -77,4 +77,4 @@ sprite-tools atlas sprites/*.png \
   --padding 2 --pow2
 ```
 
-That's it. From here you'd feed `hero-meta.json` to your engine's sprite importer and ship. Read the [web app](/docs/web/overview) or [CLI reference](/docs/cli/reference) for details on every flag.
+That's it. From here you'd feed `hero-meta.json` to your engine's sprite importer and ship. Read the [web app](/docs/web/collision) or [CLI reference](/docs/cli/reference) for details on every flag.
