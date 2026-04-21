@@ -342,49 +342,82 @@ export async function detectSheetGrid(
     );
   };
 
-  // Scan for rows/cols that are >=95% background — sprites may contain
-  // small interior transparent/bg pixels that shouldn't break a strip.
-  const rowIsBg: boolean[] = new Array(H);
+  // Build per-row / per-column activity signals: fraction of non-bg pixels.
+  // These are continuous (not binary), so autocorrelation can pick up the
+  // periodic structure even when sprites have internal transparent areas
+  // that would confuse simple gap-counting.
+  const rowActivity = new Float32Array(H);
+  const colActivity = new Float32Array(W);
   for (let y = 0; y < H; y++) {
-    let bgCount = 0;
-    let sampled = 0;
-    for (let x = 0; x < W; x += 2) {
-      sampled += 1;
-      if (isBg((y * W + x) * 4)) bgCount += 1;
+    let count = 0;
+    for (let x = 0; x < W; x++) {
+      if (!isBg((y * W + x) * 4)) count++;
     }
-    rowIsBg[y] = sampled > 0 && bgCount / sampled >= 0.95;
+    rowActivity[y] = count / W;
   }
-  const colIsBg: boolean[] = new Array(W);
   for (let x = 0; x < W; x++) {
-    let bgCount = 0;
-    let sampled = 0;
-    for (let y = 0; y < H; y += 2) {
-      sampled += 1;
-      if (isBg((y * W + x) * 4)) bgCount += 1;
+    let count = 0;
+    for (let y = 0; y < H; y++) {
+      if (!isBg((y * W + x) * 4)) count++;
     }
-    colIsBg[x] = sampled > 0 && bgCount / sampled >= 0.95;
+    colActivity[x] = count / H;
   }
 
-  // Count gap runs (stretches of rowIsBg=true that are >= 2px)
-  const countGapGroups = (arr: boolean[]): number => {
-    let groups = 0;
-    let inContent = false;
-    for (let i = 0; i < arr.length; i++) {
-      if (!arr[i] && !inContent) {
-        groups += 1;
-        inContent = true;
-      } else if (arr[i] && inContent) {
-        inContent = false;
+  // Primary detector: autocorrelation. A sheet of K cells has a repeating
+  // pattern with period = dim/K — that's the smallest lag where the signal
+  // strongly correlates with itself.
+  const rowPeriod = detectPeriod(rowActivity);
+  const colPeriod = detectPeriod(colActivity);
+
+  if (rowPeriod.lag > 0 && colPeriod.lag > 0) {
+    const rows = Math.max(1, Math.round(H / rowPeriod.lag));
+    const cols = Math.max(1, Math.round(W / colPeriod.lag));
+    if (rows <= 32 && cols <= 32) {
+      const conf = Math.min(rowPeriod.score, colPeriod.score);
+      return { cols, rows, confidence: 0.5 + conf * 0.4 };
+    }
+  }
+
+  // Fallback: gap-based detection on binary bg flags. Works for tightly-packed
+  // sheets with little internal transparency, where autocorrelation is weak.
+  const rowIsBg: boolean[] = new Array(H);
+  for (let y = 0; y < H; y++) rowIsBg[y] = rowActivity[y] < 0.01;
+  const colIsBg: boolean[] = new Array(W);
+  for (let x = 0; x < W; x++) colIsBg[x] = colActivity[x] < 0.01;
+
+  const countCells = (arr: boolean[]): number => {
+    let start = 0;
+    while (start < arr.length && arr[start]) start++;
+    let end = arr.length - 1;
+    while (end >= start && arr[end]) end--;
+    if (start > end) return 0;
+    const gaps: number[] = [];
+    let gapLen = 0;
+    let inGap = false;
+    for (let i = start; i <= end; i++) {
+      if (arr[i]) {
+        if (!inGap) {
+          inGap = true;
+          gapLen = 1;
+        } else gapLen++;
+      } else {
+        if (inGap) {
+          gaps.push(gapLen);
+          inGap = false;
+        }
       }
     }
-    return groups;
+    if (gaps.length === 0) return 1;
+    const maxGap = Math.max(...gaps);
+    const gutterThreshold = Math.max(1, Math.floor(maxGap * 0.5));
+    return gaps.filter((g) => g >= gutterThreshold).length + 1;
   };
 
-  const rowGroups = countGapGroups(rowIsBg);
-  const colGroups = countGapGroups(colIsBg);
+  const rowGroups = countCells(rowIsBg);
+  const colGroups = countCells(colIsBg);
 
-  if (rowGroups >= 1 && colGroups >= 1) {
-    return { cols: colGroups, rows: rowGroups, confidence: 0.8 };
+  if (rowGroups >= 1 && colGroups >= 1 && rowGroups <= 32 && colGroups <= 32) {
+    return { cols: colGroups, rows: rowGroups, confidence: 0.6 };
   }
 
   // Fallback: equal-cell heuristic — try common cell sizes
@@ -396,4 +429,80 @@ export async function detectSheetGrid(
   }
 
   return { cols: 1, rows: 1, confidence: 0 };
+}
+
+/**
+ * Find the fundamental period of a 1-D signal via autocorrelation.
+ *
+ * A sprite sheet of K equal cells produces a signal that repeats every
+ * `dim / K` samples, so ACF peaks at that lag, 2× that lag, 3× that lag…
+ * We return the *smallest* lag whose correlation is a strong local maximum.
+ * Sub-peaks caused by repeating features inside one cell (e.g. two wings and
+ * a body) are usually weaker than the cell-level peak because they don't
+ * align across the full signal.
+ */
+function detectPeriod(
+  signal: Float32Array,
+): { lag: number; score: number } {
+  const n = signal.length;
+  if (n < 32) return { lag: 0, score: 0 };
+
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += signal[i];
+  mean /= n;
+  let variance = 0;
+  for (let i = 0; i < n; i++) {
+    const d = signal[i] - mean;
+    variance += d * d;
+  }
+  variance /= n;
+  if (variance < 1e-8) return { lag: 0, score: 0 };
+
+  const minLag = 8;
+  const maxLag = Math.floor(n / 2);
+  if (maxLag < minLag) return { lag: 0, score: 0 };
+
+  const acf = new Float32Array(maxLag - minLag + 1);
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let sum = 0;
+    const end = n - lag;
+    for (let i = 0; i < end; i++) {
+      sum += (signal[i] - mean) * (signal[i + lag] - mean);
+    }
+    acf[lag - minLag] = sum / (end * variance);
+  }
+
+  // Walk ACF and collect local maxima with their scores.
+  const peaks: Array<{ lag: number; score: number }> = [];
+  for (let i = 1; i < acf.length - 1; i++) {
+    if (acf[i] > acf[i - 1] && acf[i] >= acf[i + 1] && acf[i] > 0.2) {
+      peaks.push({ lag: i + minLag, score: acf[i] });
+    }
+  }
+  if (peaks.length === 0) return { lag: 0, score: 0 };
+
+  // Find the strongest peak — that's the most likely cell period (or an
+  // integer multiple of it).
+  let best = peaks[0];
+  for (const p of peaks) if (p.score > best.score) best = p;
+
+  // Check smaller divisors of the best lag: if lag/2 or lag/3 etc. also has
+  // strong correlation (>= 0.8 × best), it's probably the true fundamental.
+  for (let div = 2; div <= 8; div++) {
+    const candidate = Math.round(best.lag / div);
+    if (candidate < minLag) break;
+    const idx = candidate - minLag;
+    if (idx < 0 || idx >= acf.length) continue;
+    // Use a small neighborhood to tolerate off-by-one peak locations.
+    let localBest = -Infinity;
+    for (let d = -1; d <= 1; d++) {
+      const j = idx + d;
+      if (j >= 0 && j < acf.length) localBest = Math.max(localBest, acf[j]);
+    }
+    if (localBest >= best.score * 0.8) {
+      best = { lag: candidate, score: localBest };
+    }
+  }
+
+  return best;
 }
