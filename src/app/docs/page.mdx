@@ -1,0 +1,50 @@
+export const metadata = {
+  title: "sprite-tools",
+  description: "A batteries-included toolkit for 2D sprite workflows.",
+};
+
+# sprite-tools
+
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready assets**.
+
+Three surfaces, one shared pipeline:
+
+- **Web app** — 10 interactive tools (collision polygons, pivots, tags, palette swap, normal maps, pixel-art conversion, atlas packer, GIF export, plus the Stitch / Lasso / Animate / Design tools).
+- **CLI (`sprite-tools`)** — 13 composable subcommands for everything the web app does, plus primitives like `slice`, `trim`, `info`. Pipe them together; merge their JSON with `jq`.
+- **MCP server (`sprite-tools-mcp`)** — exposes the same 13 tools over the Model Context Protocol so Claude Desktop (or any MCP client) can drive the pipeline directly.
+
+## Why
+
+Most sprite tooling is either a single huge app (Aseprite, TexturePacker) or a scattered pile of Python scripts. `sprite-tools` aims at a different niche: a **uniform pipeline** where every algorithm has a **pure function**, a **CLI wrapper**, an **MCP tool**, and a **UI page** — all producing the same JSON shapes so you can mix them freely.
+
+Some concrete things it's good at:
+
+- Generating **per-frame collision polygons** for a 2D physics engine, in pixels, with tunable simplification.
+- Computing **pivot anchors** so rotated/scaled sprites keep their feet on the ground.
+- Splitting a sprite sheet into **named animation clips** (idle, run, attack) with per-clip FPS and direction.
+- Making any sprite look **pixel-art** — downscale, quantize, dither, snap to Game Boy / PICO-8 / NES palettes.
+- Producing **normal maps** for 2D dynamic lighting (Godot, Unity 2D, Unreal).
+- **Bin-packing** loose sprites into a single atlas PNG + TexturePacker-style manifest.
+- One-button animated **GIF / WebM** export for sharing.
+
+## Composable output
+
+Every metadata command emits JSON with the same top-level keys — `source`, `frameWidth`, `frameHeight`, `grid`, and a **namespaced** sub-object for its own data (`collision`, `pivots`, `tags`, `palette`). That means:
+
+```bash
+sprite-tools collision hero.png -o c.json
+sprite-tools pivot    hero.png --preset bottom-center -o p.json
+sprite-tools tags     hero.png --tag idle=0-5 --tag run=6-11 -o t.json
+
+jq -s 'add' c.json p.json t.json > hero-meta.json
+```
+
+…gives you a single sprite-metadata file ready for an engine to consume. Or use the one-shot `meta` command and skip the `jq` dance.
+
+## Next steps
+
+- [Install](/docs/install) — three flavors: web, CLI, MCP.
+- [Quickstart](/docs/quickstart) — five-minute tour.
+- [Web app guide](/docs/web/overview) — what each tab does.
+- [CLI reference](/docs/cli/reference) — every command with shapes.
+- [MCP catalog](/docs/mcp/tools) — tool schemas for agents.

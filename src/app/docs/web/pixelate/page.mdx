@@ -1,0 +1,43 @@
+export const metadata = { title: "Pixelate — sprite-tools" };
+
+# Pixelate
+
+The [**Pixelate**](/pixelate) tab turns any sprite (AI-generated, hand-drawn, photograph) into **pixel art**.
+
+## Pipeline
+
+1. **Box-average downscale** by `pixelSize` (premultiplied by alpha so transparent pixels don't muddy edges).
+2. **Color quantization** — median-cut to pick N dominant colors, OR snap to a preset palette.
+3. Optional **Floyd–Steinberg dither** during palette mapping.
+4. Optional **alpha binarization** to kill soft edges.
+5. Optional **nearest-neighbor upscale** back to source size for blocky "big pixels" display.
+
+## Preset palettes
+
+| ID | Colors | Notes |
+|---|---|---|
+| `gameboy` | 4 | DMG green LCD |
+| `gameboy-pocket` | 4 | Neutral grays |
+| `pico8` | 16 | Fantasy-console classic |
+| `cga` | 16 | IBM CGA/EGA |
+| `nes` | 32 | Reduced NES/Famicom |
+| `mono` | 2 | Pure black + white |
+| `none` | — | Skip palette; use median-cut |
+
+## Controls
+
+- **Pixel size** — source-pixels-per-output-pixel (1 = no downscale, 4 = 4×4 block averaged).
+- **Colors** — max palette size when no preset is selected. 0 disables quantization.
+- **Palette** — dropdown of presets.
+- **Dither** — Floyd–Steinberg error diffusion (gives gradient-heavy sprites a retro stippled look).
+- **Alpha cutoff** — above = fully opaque, below = fully transparent. 0 keeps original alpha.
+
+## Output
+
+PNG. When **Upscale** is on (default), the output keeps the source canvas size with visibly-blocky pixels. Turn it off to get a tiny native-res PNG.
+
+## Tips
+
+- For a modern character sprite, `pixelSize: 4`, `palette: gameboy`, `dither: on` is a great stylized look.
+- If the palette snap bakes in weird colors, the character is probably more varied than a 4-color palette can hold. Bump to PICO-8 or NES.
+- Sheet mode: the downscale runs per-cell, then stitches back into a sheet. That way each sprite pixelates independently and you don't get averaging artifacts across cell boundaries.

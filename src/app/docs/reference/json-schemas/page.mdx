@@ -1,0 +1,145 @@
+export const metadata = { title: "JSON schemas — sprite-tools" };
+
+# JSON output schemas
+
+The canonical shapes every tool emits, in one place. All metadata tools share a **header** (source, frame dims, grid) and add a **namespaced** field for their data, so you can merge outputs with `jq -s 'add'` without collisions.
+
+## Common header
+
+```ts
+interface Header {
+  source: string;         // filename (browser) or input path (CLI)
+  frameWidth: number;
+  frameHeight: number;
+  grid: { cols: number; rows: number; detected: boolean };
+}
+```
+
+Every `collision`, `pivot`, `tags`, `palette`, `meta` output starts with this.
+
+## Collision
+
+```ts
+interface CollisionOutput extends Header {
+  options: {
+    alphaThreshold: number;
+    simplifyTolerance: number;
+    convexHull: boolean;
+    chroma?: { similarity; softness; spill; choke } | null;   // web-only
+  };
+  collision: Array<{
+    index: number;
+    cell: { row: number; col: number };
+    pointCount: number;
+    rawContourLength?: number;   // CLI only
+    bounds: { x: number; y: number; width: number; height: number } | null;
+    polygon: Array<[number, number]>;   // [[x,y], ...] in pixels, relative to cell
+  }>;
+}
+```
+
+## Pivot
+
+```ts
+interface PivotOutput extends Header {
+  options: { preset: string; explicit: { x; y } | null };
+  pivots: Array<{
+    index: number;
+    cell: { row: number; col: number };
+    pivot: { x: number; y: number };   // pixels, relative to cell, (0,0) at top-left
+  }>;
+}
+```
+
+## Tags
+
+```ts
+interface TagsOutput extends Header {
+  frameCount: number;
+  tags: Array<{
+    name: string;
+    from: number;   // inclusive
+    to: number;     // inclusive
+    direction: "forward" | "reverse" | "pingpong";
+    fps: number;
+  }>;
+}
+```
+
+## Palette
+
+```ts
+interface PaletteOutput extends Header {
+  options: { colors: number };
+  palette: string[];   // hex colors, e.g. ["#0f380f", "#306230", ...]
+  swaps: Array<{ from: string; to: string }>;   // user-applied swaps (hex)
+}
+```
+
+## Meta (combined)
+
+```ts
+interface MetaOutput extends Header {
+  frameCount: number;
+  collision?: CollisionOutput["collision"];   // present if --collision
+  pivots?:    PivotOutput["pivots"];          // present if --pivot
+  tags?:      TagsOutput["tags"];             // present if --tag was passed
+}
+```
+
+## Atlas manifest
+
+```ts
+interface AtlasManifest {
+  atlas: string;      // PNG filename, e.g. "atlas.png"
+  width: number;
+  height: number;
+  frames: {
+    [spriteName: string]: {
+      frame: { x: number; y: number; w: number; h: number };   // where in the atlas
+      trimmed: boolean;
+      sourceSize: { w: number; h: number };                    // original canvas
+      spriteSourceSize: { x: number; y: number; w: number; h: number };  // trimmed rect within original canvas
+    };
+  };
+}
+```
+
+## Info
+
+```ts
+interface InfoOutput {
+  source: string;
+  width: number;
+  height: number;
+  opaquePixels: number;
+  opaqueFraction: number;
+  contentBounds: { x; y; width; height } | null;
+  grid: { cols; rows; confidence: number };
+}
+```
+
+## Detect
+
+```ts
+interface DetectOutput {
+  source: string;
+  width: number;
+  height: number;
+  grid: { cols: number; rows: number };
+  confidence: number;   // 0..1
+}
+```
+
+## Merging outputs
+
+Because namespaces don't collide:
+
+```bash
+sprite-tools collision hero.png -o c.json
+sprite-tools pivot    hero.png -o p.json
+sprite-tools tags     hero.png --tag idle=0-5 --tag run=6-11 -o t.json
+jq -s 'add' c.json p.json t.json > hero.json
+```
+
+`hero.json` ends up with `source`, `frameWidth`, `frameHeight`, `grid`, `options`, `frameCount`, `collision[]`, `pivots[]`, `tags[]` — a single sprite-metadata file ready for an engine.

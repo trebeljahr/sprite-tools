@@ -1,0 +1,74 @@
+export const metadata = { title: "Contributing — sprite-tools" };
+
+# Contributing
+
+Thanks for wanting to help — sprite-tools is intentionally small and composable, which makes it easy to extend.
+
+## Repository layout
+
+```
+src/lib/            # pure algorithm modules (ImageData in, ImageData/JSON out)
+  collision/
+  pixel-art/
+  palette/
+  normal-map/
+  atlas/
+  pipeline/detect.ts
+cli/                # CLI wrappers (commander + pngjs)
+  commands/
+  lib/
+mcp/                # MCP server (@modelcontextprotocol/sdk + zod)
+  tools.ts
+src/app/            # Next.js app (tool pages + /docs)
+tests/              # vitest suite
+```
+
+The **core invariant** is that every feature has four incarnations that share the same algorithm:
+
+1. A pure function in `src/lib/`.
+2. A CLI subcommand in `cli/commands/`.
+3. An MCP tool in `mcp/tools.ts`.
+4. A React page in `src/app/`.
+
+All four produce the same JSON shape (for metadata tools) or the same PNG (for image tools).
+
+## Add a new tool
+
+Roughly:
+
+1. **Algorithm module** in `src/lib/yourthing/yourthing.ts`. Function signature: `(imageData: ImageData, options: YourOptions) => ImageData | YourResult`. No DOM dependencies — the CLI and MCP server both run this in Node via the `ImageData` shim.
+2. **Test** in `tests/yourthing.test.ts`. Exercise the pure function with small synthetic fixtures from `tests/helpers.ts`.
+3. **CLI command** in `cli/commands/yourthing.ts` following the pattern of the others (commander subcommand, `addHelpExtras` for examples + output shape).
+4. **MCP tool** in `mcp/tools.ts` under `registerAllTools`.
+5. **Web page** in `src/app/yourthing/page.tsx`, using `useSharedProjectSource()` to pick up the shared sheet. Mirror the JSON output shape of the CLI command.
+6. **Docs**: add an entry to `src/app/docs/_nav.ts` and a `page.mdx` under the right section.
+
+## Run it locally
+
+```bash
+npm install
+npm run dev            # Next.js dev server for the web app
+npm run cli:dev -- info some.png    # run CLI via tsx (no build)
+npm run mcp:dev        # run MCP over stdio for local testing
+npm test               # vitest
+npm run cli:build      # compiled CLI at dist/cli/index.js
+npm run mcp:build      # compiled MCP at dist/mcp/index.js
+```
+
+## Code style
+
+- TypeScript strict mode, no `any` unless justified.
+- Pure algorithm functions never reach for browser or Node globals — they take `ImageData` in and return data out.
+- Commander CLI: use `parseIntArg` / `parseFloatArg` helpers for numeric options. Every new command should call `addHelpExtras` with both **Examples** and **Output shape** blocks.
+- MCP tool: use Zod schemas for inputs; let MCP derive the JSON schema. Validate inside the handler only for things Zod can't express.
+- Web pages: the shared `useSharedProjectSource()` hook is the only way to access the upload — don't add new `useState<File>` for source files.
+
+## Tests
+
+Every pure algorithm module has a `tests/*.test.ts`. If you're adding a new one, mirror the pattern — construct tiny `ImageData` fixtures in-memory via `tests/helpers.ts` and assert on the outputs. Run `npm test`.
+
+## Pull requests
+
+- Keep PRs small and focused. If you're adding a tool, one PR per tool is easier to review than one mega-PR.
+- Update the docs in the same PR as the feature.
+- Run `npm test && npm run cli:build && npm run mcp:build` before opening.

@@ -1,0 +1,80 @@
+export const metadata = { title: "Quickstart — sprite-tools" };
+
+# Quickstart
+
+Five minutes to go from sprite sheet to game-ready metadata. We'll use a character with 4 animation frames per row, 4 rows.
+
+## 1. Inspect what you have
+
+```bash
+sprite-tools info hero.png
+```
+
+```json
+{
+  "source": "hero.png",
+  "width": 256,
+  "height": 256,
+  "opaquePixels": 18420,
+  "opaqueFraction": 0.281,
+  "contentBounds": { "x": 12, "y": 9, "width": 232, "height": 238 },
+  "grid": { "cols": 4, "rows": 4, "confidence": 0.91 }
+}
+```
+
+The `grid` field is **auto-detected** via autocorrelation — you don't have to tell `sprite-tools` how the sheet is laid out unless the detection is wrong.
+
+## 2. Generate all the metadata in one shot
+
+```bash
+sprite-tools meta hero.png \
+  --collision --tolerance 4 \
+  --pivot bottom-center \
+  --tag idle=0-3 \
+  --tag run=4-7:12:pingpong \
+  --tag attack=8-11 \
+  --tag die=12-15:8:forward \
+  -o hero-meta.json
+```
+
+That produces one JSON file with four namespaced sections — **collision** (per-frame polygons), **pivots** (per-frame anchor points), **tags** (named frame ranges), and the shared header (source, grid, frame dims). Exactly what a game engine needs.
+
+## 3. Or build that metadata tab by tab in the web app
+
+Same result, different workflow:
+
+1. Go to [/overview](/overview) and drop your sheet in.
+2. Tune the **alpha threshold**, **tolerance**, and **pivot preset** — every cell's overlays update live.
+3. Paste a tags JSON in the sidebar to color cells by animation range.
+4. When you're happy with the settings, click through to **Collision** / **Pivot** / **Tags** (the source auto-follows you) and hit **Download JSON** in each, then merge with `jq -s 'add' *.json`.
+
+## 4. Stylize if needed
+
+Want the sprite as Game Boy pixel art?
+
+```bash
+sprite-tools pixelate hero.png \
+  --pixel-size 4 \
+  --palette gameboy \
+  --dither \
+  -o hero-gb.png
+```
+
+Want a normal map for 2D lighting?
+
+```bash
+sprite-tools normal-map hero.png \
+  --source alpha \
+  --strength 1.5 \
+  -o hero-normal.png
+```
+
+## 5. Pack loose sprites into an atlas
+
+```bash
+sprite-tools atlas sprites/*.png \
+  -o atlas.png --json atlas.json \
+  --padding 2 --pow2
+```
+
+That's it. From here you'd feed `hero-meta.json` to your engine's sprite importer and ship. Read the [web app](/docs/web/overview) or [CLI reference](/docs/cli/reference) for details on every flag.

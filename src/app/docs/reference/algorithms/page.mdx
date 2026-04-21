@@ -1,0 +1,91 @@
+export const metadata = { title: "Algorithms — sprite-tools" };
+
+# Algorithm notes
+
+Short writeups of the non-trivial algorithms, for curious users and would-be contributors.
+
+## Grid auto-detection (`detectGridFromImageData`)
+
+**Problem:** given a sprite sheet image, infer cols and rows.
+
+**Primary:** autocorrelation on the row-/column-activity signal (fraction of non-background pixels per row/col).
+
+- Normalize the signal (subtract mean).
+- Compute ACF at every lag from `minLag=8` to `n/2`.
+- Find all local maxima above a threshold (`acf > 0.2`).
+- Pick the strongest peak. **Sub-harmonics check:** if any divisor `lag/k` also has high correlation (`>= 0.8 × best`), prefer the smaller period — that's the true fundamental.
+
+This handles the failure mode where a sprite has internal transparent areas (a pterodactyl's body between the wings) that would confuse naive gap-counting.
+
+**Fallback 1:** if autocorrelation is weak (uniform sheets, no periodic structure), fall back to counting gaps between fully-transparent rows/columns, filtering to gaps `>= 50%` of the largest gap.
+
+**Fallback 2:** if no gaps either (fully-filled sheets), try common cell sizes that divide both dimensions (`16, 24, 32, 48, ...`).
+
+Confidence is scored: 0.5 + ACF peak score × 0.4 (primary), 0.6 (gap fallback), 0.4 (size fallback), 0 (none).
+
+## Collision outline (`generateOutline`)
+
+**Moore-neighbor contour tracing** on the alpha channel:
+
+1. Scan row-major for the topmost-leftmost opaque pixel — call it `s`.
+2. Virtual "previous pixel" sits to the west of `s` (prevDir = W).
+3. At each step, sweep the 8 neighbors clockwise starting one past the prev direction. The first opaque neighbor is the next boundary pixel; update prevDir to point back at the current pixel.
+4. Terminate when we return to `s` (after at least one step).
+
+Returns the outer boundary of the **first connected region** only — holes and disconnected islands are ignored.
+
+**Ramer–Douglas–Peucker simplification** on the raw contour:
+
+1. Find the farthest point from the line between first and last points.
+2. If the distance > tolerance, split recursively at that point.
+3. Else discard all intermediate points.
+
+Operates on the open sequence (not closed), so the seam between last and first may not be optimally simplified — rarely a practical problem for sprite outlines.
+
+**Andrew's monotone chain convex hull:** sort by `(x, y)`, build lower and upper hulls with cross-product orientation tests, pop when non-left-turn.
+
+## Pixelation
+
+- **Downscale**: box-average, premultiplied by alpha so transparent pixels don't contribute color. `output = sum(srcRGB × srcA) / sum(srcA)`.
+- **Quantization**: median-cut. Iteratively pick the box with the widest channel range, sort on that channel, split at the median, repeat until you have K boxes. Each box's average is a palette color.
+- **Dithering**: Floyd–Steinberg error diffusion (7/16 right, 3/16 down-left, 5/16 down, 1/16 down-right) during palette mapping. Error is carried in a `Float32Array` so it can go negative and > 255 without clamping artifacts.
+
+## Normal map
+
+**Alpha height source**: two-pass Chamfer 3-4 distance transform on the alpha mask. Each opaque pixel's value is its approximate Euclidean distance to the nearest transparent pixel; the interior peaks and edges fall off to 0. Normalized to [0, 1].
+
+**Luminance source**: Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`), premultiplied by alpha.
+
+**Height → normal**: central differences for the gradient `(dx, dy)`, then `n = normalize(-dx, -dy, 1)`. Strength is applied before normalization, so larger values give steeper normals. Encoded to 8-bit RGB with the standard `(n + 1) / 2` mapping.
+
+## Atlas packing
+
+Jake Gordon's growing binary tree:
+
+1. Sort sprites by longest side descending.
+2. Initialize root = first sprite.
+3. For each subsequent sprite, try to `find` a free leaf that fits. If found, `split` it into the placed rect + two leftover rectangles (right + down).
+4. If not found, `grow` the root — wrap it in a new root that extends right or down, then recurse.
+
+Deterministic, O(n²), tight packing for most sprite distributions. Not optimal — for pathological cases a rectpack2D / MaxRects implementation would beat it, but for typical sprite sets the improvement is <5%.
+
+## Palette extraction / swap
+
+- **Extraction** reuses the same median-cut from pixelation, run over the union of pixels across all frames of a sheet so the palette is consistent between frames.
+- **Swap** builds a lookup: for each palette index, the (possibly remapped) target color. For each source pixel, find the nearest palette entry by squared RGB distance, then output the target color at that index.
+
+## GIF encoding
+
+Delegated to [`gifenc`](https://github.com/mattdesl/gifenc):
+
+- For each frame, quantize to 256 colors (`rgba4444` format).
+- Binarize alpha at the threshold (GIF has no partial transparency).
+- Encode with `disposal=2` (clear between frames) and a transparent palette index.
+
+## IndexedDB project source (web)
+
+The upload persisted once is shared across all tool tabs:
+
+- A tiny object-store (`sprite-tools.project.source`) stores `{file: Blob, name, type, savedAt}`.
+- The `useSharedProjectSource` hook reads it on mount, and writes on upload. Uploads also write a timestamp to `localStorage` — other tabs listen for the `storage` event and re-read from IDB.
+- Blob URLs are derived via `useMemo` on the `File` reference; cleanup revokes old URLs in an effect so they don't leak.

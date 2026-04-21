@@ -1,0 +1,104 @@
+export const metadata = { title: "CLI recipes — sprite-tools" };
+
+# CLI recipes
+
+Copy-paste pipelines for common workflows.
+
+## One file with all metadata, merged
+
+```bash
+sprite-tools meta hero.png \
+  --collision --tolerance 4 \
+  --pivot bottom-center \
+  --tag idle=0-3 \
+  --tag run=4-7:12 \
+  --tag attack=8-11:18 \
+  -o hero.json
+```
+
+One pass, one file. No `jq`.
+
+## One file, three commands, merged with jq
+
+If you want per-tool JSON on disk too:
+
+```bash
+sprite-tools collision hero.png -o c.json
+sprite-tools pivot hero.png --preset bottom-center -o p.json
+sprite-tools tags hero.png --tag idle=0-3 --tag run=4-7 -o t.json
+
+jq -s 'add' c.json p.json t.json > hero.json
+```
+
+## Auto-detect grid, pipe into another command
+
+```bash
+GRID=$(sprite-tools detect sheet.png | jq -r '.grid | "--cols \(.cols) --rows \(.rows)"')
+sprite-tools collision sheet.png $GRID --tolerance 4 -o c.json
+```
+
+## Convert a regular sprite to Game Boy style
+
+```bash
+sprite-tools pixelate hero.png \
+  --pixel-size 4 --palette gameboy --dither \
+  -o hero-gb.png
+```
+
+## Trim then feed into collision (pipe chain)
+
+```bash
+cat hero.png \
+  | sprite-tools trim - -o - --padding 1 \
+  | sprite-tools collision - --tolerance 2 \
+  > hero-collision.json
+```
+
+## Pack a folder of sprites into an atlas + manifest
+
+```bash
+sprite-tools atlas sprites/*.png \
+  --padding 2 --pow2 \
+  -o atlas.png --json atlas.json
+```
+
+## Batch: pixelate a whole folder
+
+```bash
+mkdir -p pixelated
+for f in sprites/*.png; do
+  sprite-tools pixelate "$f" --palette pico8 -o "pixelated/$(basename "$f")"
+done
+```
+
+## Extract frames → pack them into a new atlas
+
+Useful when you want a different sheet layout:
+
+```bash
+sprite-tools slice hero.png --out-dir /tmp/hero-frames
+sprite-tools atlas /tmp/hero-frames/*.png \
+  -o hero-atlas.png --json hero-atlas.json
+```
+
+## Generate animated GIF previews for every character in a folder
+
+```bash
+for f in characters/*.png; do
+  name=$(basename "$f" .png)
+  sprite-tools gif "$f" --fps 12 --scale 2 --pingpong -o "previews/${name}.gif"
+done
+```
+
+## Consume the output in Node
+
+```js
+import metadata from "./hero.json" with { type: "json" };
+
+for (const f of metadata.collision) {
+  physicsBody.addPolygon(f.polygon, metadata.pivots[f.index].pivot);
+}
+for (const t of metadata.tags) {
+  animator.clip(t.name, t.from, t.to, t.direction, t.fps);
+}
+```

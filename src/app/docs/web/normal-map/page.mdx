@@ -1,0 +1,48 @@
+export const metadata = { title: "Normal map — sprite-tools" };
+
+# Normal map
+
+The [**Normals**](/normal-map) tab derives a **tangent-space normal map** from your sprite so it can respond to 2D dynamic lighting in Godot, Unity 2D, Unreal's Paper2D, etc.
+
+## Height sources
+
+A normal map encodes the gradient of a height field. sprite-tools supports three height sources:
+
+- **Alpha** — Chamfer-3-4 distance transform on the alpha channel. The interior peaks; edges slope outward. **Great default for a rounded/puffy character look.**
+- **Luminance** — Rec. 709 luma (premultiplied by alpha). Picks up the sprite's own highlights/shadows as if they were relief.
+- **Mixed** — linear blend of both, via a **Mix** slider.
+
+## Encoding
+
+The output PNG is standard **OpenGL-style** normals:
+
+- R = (nx + 1) / 2 · 255
+- G = (ny + 1) / 2 · 255 (flipped when **Flip Y** is on, for DirectX / Unreal)
+- B = nz · 255
+- A = source alpha (preserved)
+
+A flat interior pixel encodes as roughly `(128, 128, 255)`.
+
+## Controls
+
+- **Height source** — alpha / luminance / mixed.
+- **Mix** — blend ratio when mixed.
+- **Strength** — how steep the normals are (gradient × strength before normalization).
+- **Pre-blur** — smooth the height field before the gradient; avoids jagged normals from pixel-perfect alpha.
+- **Flip Y** — toggle for DirectX / Unreal conventions.
+
+## Lit preview
+
+Switch the preview mode from **Normal** to **Lit** to sanity-check your normal map with a movable light:
+
+- **Light angle** — 0–360°.
+- **Light elevation** — how much of the light comes from "above" vs grazing.
+- **Ambient** — floor so back-facing pixels aren't pure black.
+
+The shading is simple Lambert `N·L` — but accurate enough to catch obvious mistakes (e.g. flipped Y axis).
+
+## Tips
+
+- For hand-drawn characters, **alpha** is usually enough; **mixed** at `mix=0.3` gets you the puffy shape plus subtle surface relief.
+- If the normals look "hairy" at the sprite edges, bump **Pre-blur** to 2 or 3.
+- Game engines often want a paired **_n** suffix: save normal maps as `hero_n.png` so the engine auto-pairs them with `hero.png`.

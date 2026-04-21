@@ -1,0 +1,60 @@
+export const metadata = { title: "Collision — sprite-tools" };
+
+# Collision
+
+The [**Collision**](/collision) tab traces a tight polygon around the opaque pixels of each sprite so you can feed it to a 2D physics engine as a collision shape.
+
+## How it works
+
+1. **Moore-neighbor contour tracing** on the alpha channel finds the outer boundary of the first connected region, walking clockwise from the topmost-leftmost opaque pixel.
+2. **Ramer–Douglas–Peucker simplification** with a tunable tolerance reduces the raw contour (potentially hundreds of pixel-perimeter points) to a small polygon.
+3. Optional **convex hull** (Andrew's monotone chain) for engines that want convex-only fixtures (Box2D).
+
+Only the outer boundary of the **first connected region** is traced. Sprites with detached parts (a held sword floating beside the character) get just the main body.
+
+## Controls
+
+| Setting | What it does | Good default |
+|---|---|---|
+| **Alpha threshold** | Pixels with alpha > N count as "inside" | 10 |
+| **Simplify tolerance** | RDP tolerance in pixels; higher = fewer vertices | 10 |
+| **Convex hull** | Reduce to convex fixture | off |
+| **Chroma key** | Remove a colored background before tracing | off |
+
+Drag the tolerance slider live — every frame's polygon recomputes instantly via `useMemo`. No re-slicing happens when you touch collision-only sliders.
+
+## Output
+
+```json
+{
+  "source": "hero.png",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "grid": { "cols": 4, "rows": 4, "detected": true },
+  "options": {
+    "alphaThreshold": 10,
+    "simplifyTolerance": 10,
+    "convexHull": false,
+    "chroma": null
+  },
+  "collision": [
+    {
+      "index": 0,
+      "cell": { "row": 0, "col": 0 },
+      "pointCount": 7,
+      "bounds": { "x": 10, "y": 12, "width": 42, "height": 44 },
+      "polygon": [[10,12], [36,12], [52,34], ... ]
+    },
+    ...
+  ]
+}
+```
+
+Coordinates are in **pixel space, relative to the cell**. `polygon` is a ring; the closing vertex is implicit (don't duplicate the first point when drawing).
+
+## Tips
+
+- **Soft/anti-aliased edges** — raise **alpha threshold** to 30–80 to skip the halo and get cleaner corners.
+- **Too many points on a simple shape** — raise **tolerance**. For a platform tile, 10–15px is usually fine.
+- **Box2D-friendly** — turn on convex hull; combine multiple sprites into one body at engine level if the original was concave.
+- **Chroma bg source** — turn on **Auto Background Removal** to strip a solid color before tracing; the same chroma-key controls as the Stitch tab appear inline.

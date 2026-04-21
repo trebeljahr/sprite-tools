@@ -39,6 +39,7 @@ const PRIMARY = [
   { href: "/spritesheet", label: "Stitch" },
   { href: "/lasso", label: "Lasso" },
   { href: "/overview", label: "Overview" },
+  { href: "/docs", label: "Docs" },
 ];
 
 interface ToolLink {
@@ -103,20 +104,26 @@ export default function RootLayout({
                   SpriteTools
                 </Link>
                 <nav className="flex items-center space-x-6 text-sm font-medium">
-                  {PRIMARY.map((p) => (
-                    <Link
-                      key={p.href}
-                      href={p.href}
-                      className={cn(
-                        "transition-colors hover:text-foreground/80",
-                        pathname === p.href
-                          ? "text-foreground"
-                          : "text-foreground/60",
-                      )}
-                    >
-                      {p.label}
-                    </Link>
-                  ))}
+                  {PRIMARY.map((p) => {
+                    // /docs should highlight on every sub-route; other
+                    // primaries use strict equality.
+                    const active =
+                      p.href === "/docs"
+                        ? pathname === "/docs" || pathname.startsWith("/docs/")
+                        : pathname === p.href;
+                    return (
+                      <Link
+                        key={p.href}
+                        href={p.href}
+                        className={cn(
+                          "transition-colors hover:text-foreground/80",
+                          active ? "text-foreground" : "text-foreground/60",
+                        )}
+                      >
+                        {p.label}
+                      </Link>
+                    );
+                  })}
 
                   <DropdownMenu>
                     <DropdownMenuTrigger

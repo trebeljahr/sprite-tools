@@ -1,0 +1,35 @@
+export const metadata = { title: "GIF export — sprite-tools" };
+
+# GIF export
+
+The [**GIF**](/gif) tab turns a sprite sheet animation into an **animated GIF** (or WebM) for sharing.
+
+## Pipeline
+
+GIF is encoded client-side via [`gifenc`](https://github.com/mattdesl/gifenc) — no server round-trip, and no native dependencies.
+
+1. Slice the sheet into frames (shared source + grid with the rest of the app).
+2. Apply playback modifiers: **reverse** and/or **pingpong**.
+3. **Upscale** each frame with nearest-neighbor (optional; keeps pixel art crisp at larger display sizes).
+4. **Binarize alpha** at the threshold (GIF has no partial transparency).
+5. **Quantize** each frame to a 256-color palette and encode.
+
+## Controls
+
+- **FPS** — playback rate.
+- **Scale** — integer upscale factor (1 = native, 2 = 2×, etc.).
+- **Alpha cutoff** — pixels with alpha above this stay opaque; below become fully transparent.
+- **Reverse** — play frames last-to-first.
+- **Pingpong** — forward then reverse (without duplicating endpoints).
+
+## WebM alternative
+
+The **Download WebM** button uses the browser's `MediaRecorder` + `canvas.captureStream()`. The benefit: WebM preserves full alpha (GIF can't), and WebM files are usually smaller. The downside: it's not universally shareable — GIF embeds nearly anywhere; WebM needs a player that supports it.
+
+Use whichever your target platform prefers.
+
+## Tips
+
+- For a smooth loop, use **pingpong** on an idle animation — no hard snap at the end.
+- If the GIF looks washed out, alpha binarization is probably eating soft edges. Lower **Alpha cutoff** (try 64) to keep more of the anti-aliasing.
+- Scale 2× or 3× for social media; 1× for in-game preview captures.

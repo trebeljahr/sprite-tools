@@ -1,0 +1,43 @@
+export const metadata = { title: "MCP server — sprite-tools" };
+
+# MCP server
+
+`sprite-tools-mcp` exposes all 13 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
+
+## Why use it over the CLI
+
+- **Structured inputs** — every tool has a JSON schema, so Claude's tool-calling knows exactly what flags exist and what types they take. No guessing from `--help`.
+- **Structured outputs** — same JSON schemas the CLI produces, returned as tool results without piping through stdout.
+- **No shell semantics to get wrong** — tool calls are first-class, no quoting issues, no PATH resolution.
+
+## When to use the CLI instead
+
+- Scripting a build pipeline.
+- You want files on disk and can control where.
+- You want to pipe between commands.
+
+In practice: agents → MCP, scripts → CLI, humans → web app. They share the same algorithms, so outputs are consistent across all three.
+
+## Setup
+
+See [Install in Claude Desktop](/docs/mcp/install) for the exact `claude_desktop_config.json` entry.
+
+## Available tools
+
+See the full [tool catalog](/docs/mcp/tools) for every tool's input schema and output shape. At a glance:
+
+| Tool | Purpose |
+|---|---|
+| `sprite_info` | Stats + detected grid + content bounds |
+| `sprite_detect_grid` | Just the grid |
+| `sprite_slice` | Split sheet into per-cell PNGs on disk |
+| `sprite_trim` | Auto-crop transparent padding |
+| `sprite_generate_collision` | Per-frame collision polygons |
+| `sprite_generate_pivot` | Per-frame anchor points |
+| `sprite_generate_tags` | Named animation ranges |
+| `sprite_generate_meta` | collision + pivot + tags in one pass |
+| `sprite_extract_palette` | Dominant colors |
+| `sprite_palette_swap` | Recolor via palette swaps |
+| `sprite_pixelate` | Pixel-art conversion |
+| `sprite_generate_normal_map` | Tangent-space normal map |
+| `sprite_pack_atlas` | Bin-pack multiple sprites + manifest |

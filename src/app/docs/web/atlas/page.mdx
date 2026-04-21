@@ -1,0 +1,52 @@
+export const metadata = { title: "Atlas packer — sprite-tools" };
+
+# Atlas packer
+
+The [**Atlas**](/atlas) tab takes **multiple separate sprite PNGs** and packs them into a single atlas texture + JSON manifest.
+
+## Pipeline
+
+1. **Load** each uploaded PNG.
+2. **Auto-trim** transparent padding (optional) — each sprite shrinks to its opaque bounding box; offsets are recorded so the engine can restore the original canvas.
+3. **Bin-tree pack** — Jake Gordon's growing binary-tree algorithm. Sort sprites by longest side desc; insert each into a free-space partition, growing the root when nothing fits.
+4. **Emit**:
+   - `atlas.png` — the packed texture (optionally rounded up to power-of-2).
+   - `atlas.json` — TexturePacker-style manifest.
+
+## Controls
+
+- **Padding** — gutter between sprites (prevents texture bleeding in filtered sampling).
+- **Power-of-2 size** — round atlas dimensions up to 2ⁿ (required by some GPUs).
+- **Auto-trim transparent** — strip transparent padding before packing. Recommended for most sprites.
+
+## Manifest shape
+
+```json
+{
+  "atlas": "atlas.png",
+  "width": 512,
+  "height": 256,
+  "frames": {
+    "hero_idle_0.png": {
+      "frame": { "x": 2, "y": 2, "w": 21, "h": 28 },
+      "trimmed": true,
+      "sourceSize": { "w": 32, "h": 32 },
+      "spriteSourceSize": { "x": 5, "y": 2, "w": 21, "h": 28 }
+    },
+    ...
+  }
+}
+```
+
+- `frame` — where this sprite sits in the atlas texture.
+- `trimmed` — whether we auto-trimmed.
+- `sourceSize` — the original canvas.
+- `spriteSourceSize` — where the trimmed rect sat within the original canvas.
+
+Most engines (Phaser, PixiJS, Godot with TPatch) import this format natively.
+
+## Tips
+
+- For a walk cycle where every frame is the same size, padding=0 is fine. For mixed-size sprites, padding=2 prevents color bleeding at atlas edges.
+- Power-of-2 only matters for GL ES 2.0 / very old hardware. Modern WebGL / WebGPU accepts any size.
+- The packer is deterministic — same inputs in the same order give the same layout. Useful for reproducible builds.
