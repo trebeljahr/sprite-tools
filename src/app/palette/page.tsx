@@ -41,6 +41,7 @@ import {
   rgbToHex,
 } from "@/lib/palette/extract";
 import type { RGB } from "@/lib/pixel-art/pixelate";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface SourceFrame {
   index: number;
@@ -76,8 +77,7 @@ function imageDataToBlob(data: ImageData): Promise<Blob> {
 }
 
 export default function PalettePage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -110,9 +110,7 @@ export default function PalettePage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       hasAutoFittedRef.current = false;
       try {
@@ -136,7 +134,7 @@ export default function PalettePage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -311,13 +309,24 @@ export default function PalettePage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // Same shape as `sprite-tools palette` CLI output.
   const exportPaletteJson = () => {
     if (!sourceFile || palette.length === 0) return;
+    const f0 = frames[0];
+    const swaps = palette
+      .map((p, i) => ({
+        from: rgbToHex(p),
+        to: swapHex[i] ?? rgbToHex(p),
+      }))
+      .filter((s) => s.from.toLowerCase() !== s.to.toLowerCase());
     const payload = {
       source: sourceFile.name,
-      colorCount,
+      frameWidth: f0?.width ?? 0,
+      frameHeight: f0?.height ?? 0,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
+      options: { colors: colorCount },
       palette: palette.map(rgbToHex),
-      swap: swapHex,
+      swaps,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",

@@ -45,6 +45,7 @@ import {
   generateOutline,
   type OutlineResult,
 } from "@/lib/collision/outline";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface RawFrame {
   index: number;
@@ -96,9 +97,8 @@ async function frameToImageData(frame: Frame): Promise<{ imageData: ImageData; u
 }
 
 export default function CollisionPage() {
-  // --- Source ---
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  // --- Source (persisted in IndexedDB, shared across all tool tabs) ---
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -154,10 +154,7 @@ export default function CollisionPage() {
       toast.error("Please upload an image file.");
       return;
     }
-    setSourceFile(file);
-    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-    const url = URL.createObjectURL(file);
-    setSourceUrl(url);
+    await setSharedSource(file);
     setCurrentIndex(0);
     hasAutoFittedRef.current = false;
 
@@ -182,7 +179,7 @@ export default function CollisionPage() {
       setSheetRows(1);
       setDetectedGrid(null);
     }
-  }, [sourceUrl]);
+  }, [setSharedSource]);
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -331,7 +328,7 @@ export default function CollisionPage() {
   useEffect(() => {
     return () => {
       for (const f of rawFrames) URL.revokeObjectURL(f.previewUrl);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+      // sourceUrl lifecycle is owned by useSharedProjectSource now.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -429,15 +426,16 @@ export default function CollisionPage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // JSON shape mirrors `sprite-tools collision` CLI output so files produced
+  // in the browser can be consumed by the same tooling (and merged with jq).
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const anyFrame = frames[0];
     return {
       source: sourceFile.name,
-      mode: sourceMode,
-      grid: sourceMode === "sheet" ? { cols: sheetCols, rows: sheetRows } : null,
       frameWidth: anyFrame.width,
       frameHeight: anyFrame.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       options: {
         alphaThreshold,
         simplifyTolerance,
@@ -452,12 +450,12 @@ export default function CollisionPage() {
               }
             : null,
       },
-      frames: frames.map((f) => ({
+      collision: frames.map((f) => ({
         index: f.index,
         cell:
           f.cellRow != null && f.cellCol != null
             ? { row: f.cellRow, col: f.cellCol }
-            : null,
+            : { row: Math.floor(f.index / sheetCols), col: f.index % sheetCols },
         pointCount: f.outline.polygon.length,
         bounds: f.outline.bounds,
         polygon: f.outline.polygon.map((p) => [p.x, p.y] as const),

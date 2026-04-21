@@ -49,6 +49,7 @@ import {
   type RGB,
 } from "@/lib/pixel-art/pixelate";
 import { PALETTES, paletteById } from "@/lib/pixel-art/palettes";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface RawFrame {
   index: number;
@@ -84,8 +85,7 @@ function imageDataToBlob(data: ImageData): Promise<Blob> {
 }
 
 export default function PixelatePage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -123,9 +123,7 @@ export default function PixelatePage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       hasAutoFittedRef.current = false;
 
@@ -150,7 +148,7 @@ export default function PixelatePage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

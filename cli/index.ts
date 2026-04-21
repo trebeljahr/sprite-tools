@@ -22,6 +22,10 @@ import { registerPivotCommand } from "./commands/pivot";
 import { registerTagsCommand } from "./commands/tags";
 import { registerGifCommand } from "./commands/gif";
 import { registerDetectCommand } from "./commands/detect";
+import { registerSliceCommand } from "./commands/slice";
+import { registerTrimCommand } from "./commands/trim";
+import { registerInfoCommand } from "./commands/info";
+import { registerMetaCommand } from "./commands/meta";
 
 const program = new Command();
 
@@ -34,45 +38,58 @@ program.addHelpText(
   "after",
   [
     "",
-    "Commands that emit JSON (default: stdout):",
-    "  detect     grid auto-detection             { grid:{cols,rows}, confidence }",
-    "  collision  per-frame collision polygons    { collision: [...] }",
-    "  pivot      anchor / origin metadata        { pivots: [...] }",
-    "  tags       named animation ranges          { tags: [...] }",
-    "  palette    dominant colors + swaps         { palette: [...], swaps: [...] }",
-    "  atlas      packed-atlas manifest           { atlas, width, height, frames:{...} }  (plus PNG)",
+    "Inspect / slice:",
+    "  info       image stats + detected grid + content bounds          (JSON)",
+    "  detect     just the detected grid                                (JSON)",
+    "  slice      split a sheet into per-cell PNGs on disk              (files)",
+    "  trim       auto-crop transparent padding                         (PNG)",
     "",
-    "Commands that emit PNG/GIF (default: stdout, use -o <file>):",
-    "  pixelate   downscale + quantize + dither",
-    "  normal-map alpha/luminance → tangent-space normals",
-    "  gif        animated GIF from sheet",
+    "Metadata (all share top-level {source, frameWidth, frameHeight, grid}):",
+    "  collision  per-frame collision polygons                          (JSON)",
+    "  pivot      anchor / origin metadata                              (JSON)",
+    "  tags       named animation ranges                                (JSON)",
+    "  meta       collision + pivot + tags in one pass (merged JSON)    (JSON)",
+    "  palette    dominant colors + swaps                               (JSON)",
+    "  atlas      packed-atlas manifest                                 (JSON + PNG)",
     "",
-    "Composing: the JSON commands share top-level {source, frameWidth, frameHeight, grid}",
-    "so you can merge them with jq:",
+    "Image transforms (default: stdout, use -o <file>):",
+    "  pixelate   downscale + quantize + dither + palette-snap           (PNG)",
+    "  normal-map alpha/luminance → tangent-space normals               (PNG)",
+    "  gif        animated GIF from sheet                               (GIF)",
+    "",
+    "Any <input> may be '-' to read PNG bytes from stdin. Any -o target may be '-'",
+    "for stdout. So you can pipe:",
+    "",
+    "  cat hero.png | sprite-tools trim - -o - | sprite-tools collision -",
+    "",
+    "Or compose metadata in one call:",
+    "",
+    "  sprite-tools meta hero.png --collision --pivot bottom-center \\",
+    "    --tag idle=0-5 --tag run=6-11 > hero.json",
+    "",
+    "Or the old jq way:",
     "",
     "  sprite-tools collision hero.png -o c.json",
     "  sprite-tools pivot    hero.png -o p.json",
-    "  sprite-tools tags     hero.png --tag idle=0-5 --tag run=6-11 -o t.json",
-    "  jq -s 'add' c.json p.json t.json > hero-meta.json",
-    "",
-    "Auto-detect a grid and feed it to another command:",
-    "",
-    "  G=$(sprite-tools detect sheet.png | jq -r '.grid | \"--cols \\(.cols) --rows \\(.rows)\"')",
-    "  sprite-tools collision sheet.png $G --tolerance 4",
+    "  jq -s 'add' c.json p.json > hero.json",
     "",
     "Run `sprite-tools <command> --help` for the full shape of each output.",
     "",
   ].join("\n"),
 );
 
+registerInfoCommand(program);
 registerDetectCommand(program);
+registerSliceCommand(program);
+registerTrimCommand(program);
 registerCollisionCommand(program);
-registerPixelateCommand(program);
-registerNormalMapCommand(program);
-registerPaletteCommand(program);
-registerAtlasCommand(program);
 registerPivotCommand(program);
 registerTagsCommand(program);
+registerMetaCommand(program);
+registerPaletteCommand(program);
+registerPixelateCommand(program);
+registerNormalMapCommand(program);
+registerAtlasCommand(program);
 registerGifCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {

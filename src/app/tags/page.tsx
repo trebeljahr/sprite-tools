@@ -37,6 +37,7 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
+import { useSharedProjectSource } from "@/lib/project/store";
 
 interface TagFrame {
   index: number;
@@ -75,8 +76,7 @@ function newTagId(): string {
 }
 
 export default function TagsPage() {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("sheet");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
@@ -111,9 +111,7 @@ export default function TagsPage() {
         toast.error("Please upload an image.");
         return;
       }
-      setSourceFile(file);
-      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-      setSourceUrl(URL.createObjectURL(file));
+      await setSharedSource(file);
       setCurrentIndex(0);
       setTags([]);
       hasAutoFittedRef.current = false;
@@ -139,7 +137,7 @@ export default function TagsPage() {
         setDetectedGrid(null);
       }
     },
-    [sourceUrl],
+    [setSharedSource],
   );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -348,15 +346,15 @@ export default function TagsPage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  // Same shape as `sprite-tools tags` CLI output.
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const f0 = frames[0];
     return {
       source: sourceFile.name,
-      mode: sourceMode,
-      grid: sourceMode === "sheet" ? { cols: sheetCols, rows: sheetRows } : null,
       frameWidth: f0.width,
       frameHeight: f0.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       frameCount: frames.length,
       tags: tags.map((t) => ({
         name: t.name,
@@ -365,17 +363,8 @@ export default function TagsPage() {
         direction: t.direction,
         fps: t.fps,
       })),
-      // Also emit a frames[] so engines that prefer frame-list JSON have it
-      frames: frames.map((f) => ({
-        index: f.index,
-        cell:
-          f.cellRow != null && f.cellCol != null
-            ? { row: f.cellRow, col: f.cellCol }
-            : null,
-        duration: Math.round(1000 / Math.max(1, globalFps)),
-      })),
     };
-  }, [frames, tags, sourceFile, sourceMode, sheetCols, sheetRows, globalFps]);
+  }, [frames, tags, sourceFile, sourceMode, sheetCols, sheetRows]);
 
   const downloadJson = () => {
     if (!jsonPayload || !sourceFile) return;

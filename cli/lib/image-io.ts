@@ -4,14 +4,24 @@
 import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { PNG } from "pngjs";
 
+/**
+ * Load a PNG from a file path, or from stdin when `path === "-"`.
+ * Using stdin means an agent can pipe an image through multiple commands
+ * without disk round-trips.
+ */
 export function loadPng(path: string): ImageData {
-  if (!statSync(path).isFile()) {
-    throw new Error(`Not a file: ${path}`);
+  let buf: Buffer;
+  if (path === "-") {
+    // fd 0 is stdin. readFileSync(0) blocks until EOF.
+    buf = readFileSync(0);
+    if (buf.length === 0) throw new Error("no bytes on stdin");
+  } else {
+    if (!statSync(path).isFile()) {
+      throw new Error(`Not a file: ${path}`);
+    }
+    buf = readFileSync(path);
   }
-  const buf = readFileSync(path);
   const png = PNG.sync.read(buf);
-  // pngjs gives a Buffer (RGBA) — copy into a Uint8ClampedArray so downstream
-  // ImageData-based code sees the exact shape it expects.
   const out = new Uint8ClampedArray(png.data.length);
   out.set(png.data);
   return new ImageData(out, png.width, png.height);
