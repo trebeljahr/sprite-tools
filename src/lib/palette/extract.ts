@@ -4,7 +4,7 @@
 // behavior is consistent across the app. Swap remaps any pixel belonging to
 // a source palette bucket to a new color, with a tolerance threshold.
 
-import { medianCut, type RGB, hexToRgb } from "@/lib/pixel-art/pixelate";
+import { medianCut, type RGB, hexToRgb } from "../pixel-art/pixelate";
 
 export interface SwapEntry {
   from: RGB;
