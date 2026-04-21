@@ -118,6 +118,15 @@ export default function RootLayout({
                   >
                     Tags
                   </Link>
+                  <Link
+                    href="/normal-map"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/normal-map" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Normals
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
