@@ -145,6 +145,15 @@ export default function RootLayout({
                   >
                     Atlas
                   </Link>
+                  <Link
+                    href="/gif"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/gif" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    GIF
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
