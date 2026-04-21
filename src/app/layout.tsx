@@ -91,6 +91,69 @@ export default function RootLayout({
                   >
                     Collision
                   </Link>
+                  <Link
+                    href="/pixelate"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/pixelate" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Pixelate
+                  </Link>
+                  <Link
+                    href="/pivot"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/pivot" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Pivot
+                  </Link>
+                  <Link
+                    href="/tags"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/tags" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Tags
+                  </Link>
+                  <Link
+                    href="/normal-map"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/normal-map" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Normals
+                  </Link>
+                  <Link
+                    href="/palette"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/palette" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Palette
+                  </Link>
+                  <Link
+                    href="/atlas"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/atlas" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    Atlas
+                  </Link>
+                  <Link
+                    href="/gif"
+                    className={cn(
+                      "transition-colors hover:text-foreground/80",
+                      pathname === "/gif" ? "text-foreground" : "text-foreground/60"
+                    )}
+                  >
+                    GIF
+                  </Link>
                 </nav>
               </div>
               <div className="flex flex-1 items-center justify-end">
