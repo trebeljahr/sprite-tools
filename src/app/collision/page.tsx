@@ -696,7 +696,7 @@ export default function CollisionPage() {
                 <Slider
                   value={[simplifyTolerance]}
                   min={0}
-                  max={10}
+                  max={20}
                   step={0.1}
                   onValueChange={(v) =>
                     setSimplifyTolerance(Array.isArray(v) ? v[0] : v)
