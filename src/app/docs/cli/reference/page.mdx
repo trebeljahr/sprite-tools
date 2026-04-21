@@ -1,0 +1,188 @@
+export const metadata = { title: "CLI reference — sprite-tools" };
+
+# CLI command reference
+
+Full option list for each subcommand. Always run `sprite-tools <command> --help` for the authoritative, up-to-date version.
+
+## `info`
+
+```
+sprite-tools info <input> [-o file]
+```
+
+Stats + detected grid + content bounds.
+
+```json
+{ "source", "width", "height", "opaquePixels", "opaqueFraction",
+  "contentBounds": {x,y,width,height}|null,
+  "grid": {cols,rows,confidence} }
+```
+
+## `detect`
+
+```
+sprite-tools detect <input> [-o file]
+```
+
+Just the grid:
+
+```json
+{ "source", "width", "height",
+  "grid": {cols,rows},
+  "confidence": 0..1 }
+```
+
+Confidence >= 0.5 is usually reliable. Below that the algorithm fell back to the cell-size heuristic.
+
+## `slice`
+
+```
+sprite-tools slice <input>
+  [--cols N] [--rows N]            # auto-detected if omitted
+  [--out-dir DIR]                  # default: ./frames
+  [--name PATTERN]                 # default: frame_%02d.png
+  [--json FILE]                    # optional index JSON
+```
+
+Writes one PNG per cell. `--json` emits `{source, frameWidth, frameHeight, grid, frames: [{index, cell, path}, ...]}`.
+
+## `trim`
+
+```
+sprite-tools trim <input>
+  [--padding N]                    # pixels of transparent border to keep
+  [--json FILE]                    # optional trim metadata
+  [-o FILE]                        # output PNG (default: stdout)
+```
+
+Auto-crops transparent padding. JSON shape:
+
+```json
+{ "source", "sourceWidth", "sourceHeight",
+  "trim": {x,y,width,height}, "paddingKept" }
+```
+
+## `collision`
+
+```
+sprite-tools collision <input>
+  [--cols N] [--rows N]
+  [--alpha N]                      # threshold 0-255, default 10
+  [--tolerance N]                  # RDP simplification, default 10
+  [--convex-hull]                  # reduce to convex fixture
+  [-o FILE]
+```
+
+See the [Collision page](/docs/web/collision) for algorithm notes. Output JSON has a `collision` array with `{index, cell, pointCount, bounds, polygon}` per frame.
+
+## `pivot`
+
+```
+sprite-tools pivot <input>
+  [--cols N] [--rows N]
+  [--preset ID]                    # default: bottom-center
+  [--x N] [--y N]                  # explicit override
+  [-o FILE]
+```
+
+Presets: `center`, `top-center`, `top-left`, `top-right`, `bottom-center`, `bottom-left`, `bottom-right`.
+
+## `tags`
+
+```
+sprite-tools tags <input>
+  [--cols N] [--rows N]
+  [--tag "name=from-to[:fps[:direction]]"]  # repeatable
+  [--fps N]                        # default FPS
+  [-o FILE]
+```
+
+Direction is `forward` (default), `reverse`, or `pingpong`. Example:
+
+```
+--tag idle=0-5
+--tag run=6-11:12:pingpong
+--tag attack=12-18:24
+```
+
+## `meta`
+
+```
+sprite-tools meta <input>
+  [--cols N] [--rows N]
+  [--collision] [--alpha N] [--tolerance N] [--convex-hull]
+  [--pivot PRESET] [--pivot-x N] [--pivot-y N]
+  [--tag SPEC ...] [--fps N]
+  [-o FILE]
+```
+
+One-shot: emits a single JSON with whichever sections (`collision`, `pivots`, `tags`) you opted into.
+
+## `palette`
+
+```
+sprite-tools palette <input>
+  [--cols N] [--rows N]
+  [--colors N]                     # default 8
+  [--swap "#RRGGBB=#RRGGBB"]       # repeatable
+  [--image FILE]                   # also write recolored PNG
+  [-o FILE]                        # JSON
+```
+
+## `pixelate`
+
+```
+sprite-tools pixelate <input>
+  [--cols N] [--rows N] [--auto-grid]
+  [--pixel-size N]                 # source pixels per output pixel, default 4
+  [--colors N]                     # quantization, default 16
+  [--palette ID]                   # none|gameboy|gameboy-pocket|mono|pico8|cga|nes
+  [--dither]                       # Floyd-Steinberg
+  [--alpha-threshold N]
+  [--no-upscale]                   # keep native low-res output
+  [-o FILE]                        # PNG (default: stdout)
+```
+
+## `normal-map`
+
+```
+sprite-tools normal-map <input>
+  [--cols N] [--rows N]
+  [--source alpha|luminance|mixed]
+  [--strength N]
+  [--mix N]                        # 0..1, for mixed mode
+  [--flip-y]                       # DirectX-style
+  [--blur N]                       # pre-blur the height field
+  [-o FILE]                        # PNG
+```
+
+## `atlas`
+
+```
+sprite-tools atlas <input ...>
+  [--padding N]                    # gutter, default 2
+  [--pow2]
+  [--no-trim]                      # skip auto-trim
+  [-o FILE]                        # atlas.png
+  [--json FILE]                    # atlas.json manifest
+```
+
+## `gif`
+
+```
+sprite-tools gif <input>
+  [--cols N] [--rows N]
+  [--fps N]
+  [--scale N]                      # integer nearest-neighbor upscale
+  [--alpha-threshold N]
+  [--reverse] [--pingpong]
+  [-o FILE]                        # GIF
+```
+
+## Stdin / stdout
+
+Any `<input>` accepts `-` to read PNG bytes from stdin. Any `-o` accepts `-` to write to stdout. Chain:
+
+```bash
+cat hero.png | sprite-tools trim - -o - | sprite-tools collision -
+```

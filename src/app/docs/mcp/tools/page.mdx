@@ -1,0 +1,208 @@
+export const metadata = { title: "MCP tool catalog — sprite-tools" };
+
+# MCP tool catalog
+
+Full input/output schema for each of the 13 MCP tools.
+
+## `sprite_info`
+
+Inputs: `{ input_path: string }`
+
+Returns JSON:
+
+```json
+{ "source", "width", "height", "opaquePixels", "opaqueFraction",
+  "contentBounds": {x,y,width,height}|null,
+  "grid": {cols,rows,confidence} }
+```
+
+## `sprite_detect_grid`
+
+Inputs: `{ input_path: string }`
+
+Returns JSON:
+
+```json
+{ "source", "width", "height",
+  "grid": {cols,rows}, "confidence": 0..1 }
+```
+
+## `sprite_slice`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  out_dir: string,
+  cols?: number,
+  rows?: number,
+  name_pattern?: string   // printf-style, default "frame_%02d.png"
+}
+```
+
+Writes one PNG per cell. Returns `{ source, frameWidth, frameHeight, grid, frameCount, paths: string[] }`.
+
+## `sprite_trim`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  padding?: number   // default 0
+}
+```
+
+Returns `{ source, output_path, sourceWidth, sourceHeight, trim: {x,y,width,height}, paddingKept }`.
+
+## `sprite_generate_collision`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number,
+  rows?: number,
+  alpha_threshold?: number,   // 0..254, default 10
+  simplify_tolerance?: number, // default 10
+  convex_hull?: boolean        // default false
+}
+```
+
+Returns JSON with a `collision` array — same shape as the CLI `collision` command.
+
+## `sprite_generate_pivot`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,
+  preset?: "center" | "top-center" | "top-left" | "top-right"
+         | "bottom-center" | "bottom-left" | "bottom-right",  // default "bottom-center"
+  x?: number, y?: number   // explicit override
+}
+```
+
+Returns JSON with `pivots` array.
+
+## `sprite_generate_tags`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,
+  tags: Array<{
+    name: string,
+    from: number,
+    to: number,
+    direction?: "forward" | "reverse" | "pingpong",   // default "forward"
+    fps?: number   // default 10
+  }>
+}
+```
+
+Returns JSON with the tags array echoed.
+
+## `sprite_generate_meta`
+
+One-shot: combines collision + pivot + tags. Each sub-section is optional; omitted sections are skipped in the output.
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,
+  collision?: { alpha_threshold?, simplify_tolerance?, convex_hull? },
+  pivot?: { preset?, x?, y? },
+  tags?: Array<{name, from, to, direction?, fps?}>
+}
+```
+
+## `sprite_extract_palette`
+
+Inputs: `{ input_path, cols?, rows?, colors?: number /* 1..256, default 8 */ }`
+
+Returns `{ source, frameWidth, frameHeight, grid, options, palette: string[] /* hex */ }`.
+
+## `sprite_palette_swap`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,
+  colors?: number,   // palette size to extract
+  swaps: Array<{ from: "#rrggbb", to: "#rrggbb" }>   // at least 1
+}
+```
+
+Writes recolored PNG. Returns `{ source, output_path, grid, palette, swaps }`.
+
+## `sprite_pixelate`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,
+  pixel_size?: number,   // 1..64, default 4
+  colors?: number,       // 0..256, default 16
+  palette?: "none" | "gameboy" | "gameboy-pocket" | "mono" | "pico8" | "cga" | "nes",
+  dither?: boolean,
+  upscale?: boolean      // default true
+}
+```
+
+Writes PNG. Returns `{ source, output_path, grid, options }`.
+
+## `sprite_generate_normal_map`
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,
+  source?: "alpha" | "luminance" | "mixed",   // default "alpha"
+  strength?: number,
+  mix?: number,          // 0..1
+  flip_y?: boolean,
+  blur?: number          // 0..16
+}
+```
+
+Writes PNG.
+
+## `sprite_pack_atlas`
+
+Inputs:
+
+```ts
+{
+  input_paths: string[],   // 1+ sprite PNGs
+  output_path: string,     // atlas.png
+  json_path: string,       // atlas.json manifest
+  padding?: number,        // default 2
+  power_of_two?: boolean,  // default false
+  trim?: boolean           // default true
+}
+```
+
+Writes atlas PNG + manifest JSON. Returns the manifest inline.
+
+## Common notes
+
+- All paths are **absolute** by convention — MCP doesn't inherit a working directory from the chat.
+- Metadata returns are JSON strings (one content block). Parse with `JSON.parse()` on the client side.
+- Image-producing tools write to `output_path` and return metadata about the write (so the agent knows where the file is).

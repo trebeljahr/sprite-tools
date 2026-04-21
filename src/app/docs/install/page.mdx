@@ -1,0 +1,75 @@
+export const metadata = { title: "Install — sprite-tools" };
+
+# Install
+
+Three ways to use sprite-tools. Pick what you need — they share the same algorithms under the hood.
+
+## Web app
+
+The tools at [/overview](/overview) and under the **Tools** menu run entirely in the browser. No install, nothing uploaded to a server — everything is client-side.
+
+If you want to run the web app locally:
+
+```bash
+git clone https://github.com/yourname/sprite-tools.git
+cd sprite-tools
+npm install
+npm run dev
+```
+
+Opens on `http://localhost:3000`.
+
+## CLI
+
+```bash
+git clone https://github.com/yourname/sprite-tools.git
+cd sprite-tools
+npm install
+npm run cli:build
+npm link   # installs `sprite-tools` on your PATH
+```
+
+Check it works:
+
+```bash
+sprite-tools --help
+sprite-tools info some-sheet.png
+```
+
+During development you can also run without building:
+
+```bash
+npm run cli:dev -- detect my-sheet.png
+```
+
+## MCP server
+
+For Claude Desktop or any [MCP](https://modelcontextprotocol.io) client:
+
+```bash
+git clone https://github.com/yourname/sprite-tools.git
+cd sprite-tools
+npm install
+npm run mcp:build
+npm link   # installs `sprite-tools-mcp` on your PATH
+```
+
+Then add it to your Claude Desktop config (typically `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "sprite-tools-mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. All 13 tools will appear under the MCP menu. See the [tool catalog](/docs/mcp/tools) for the full input/output schemas.
+
+## Requirements
+
+- Node 20 or newer (for both CLI and MCP).
+- A browser (Chrome/Firefox/Safari current) for the web app.
+- No native dependencies — PNG I/O uses `pngjs` (pure JS). That means the install is portable; no `node-gyp` / image-library build step.

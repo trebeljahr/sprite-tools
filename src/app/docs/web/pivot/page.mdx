@@ -1,0 +1,52 @@
+export const metadata = { title: "Pivot — sprite-tools" };
+
+# Pivot
+
+The [**Pivot**](/pivot) tab picks the **anchor point** of each sprite — where the engine considers (0, 0) for rotation and scaling.
+
+## What pivots are for
+
+If your engine rotates a character sprite around its center but the character's feet are at the bottom of the cell, the feet orbit the center when you rotate — looks wrong. Set pivot to bottom-center and the feet stay put.
+
+Common conventions:
+
+- **Feet-anchored character** → bottom-center. Rotation keeps feet on the ground.
+- **Projectile / effect** → center. Spins symmetrically.
+- **UI element** → top-left. Matches CSS anchor.
+- **Muzzle flash / particle emitter** → explicit `(x, y)` where the flash should attach to the gun.
+
+## Controls
+
+- **Click the preview canvas** — sets the pivot of the current frame to the click position.
+- **Arrow keys** — nudge by 1px (Shift = 10px).
+- **Preset buttons** — apply a preset to the current frame OR to all frames.
+- **Lock to all** toggle — every click/nudge applies to every frame at once. Useful for walk cycles where the pivot should be uniform.
+- **Fine-tune sliders** — X / Y, bounded by the frame dimensions.
+
+## Output
+
+```json
+{
+  "source": "hero.png",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "grid": { "cols": 4, "rows": 4, "detected": true },
+  "options": { "preset": "bottom-center", "explicit": null },
+  "pivots": [
+    {
+      "index": 0,
+      "cell": { "row": 0, "col": 0 },
+      "pivot": { "x": 32, "y": 63 }
+    },
+    ...
+  ]
+}
+```
+
+Coordinates are in **pixel space, relative to the cell**, with (0, 0) at top-left — the standard convention for most 2D engines.
+
+## Tips
+
+- **Walk cycles** with bouncing: enable **Lock to all** and set bottom-center. Then fine-tune just one frame; cycle keeps consistent grounding.
+- **Irregular pivots** (attack animation where the hand leaves the body) — click individually on each frame; the JSON records each separately.
+- **No preset fits?** Click anywhere on the canvas — the pivot ends up exactly at that pixel.

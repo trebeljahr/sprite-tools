@@ -1,0 +1,52 @@
+export const metadata = { title: "Palette — sprite-tools" };
+
+# Palette
+
+The [**Palette**](/palette) tab **extracts** the dominant colors from a sprite and lets you **swap any of them** to recolor the whole thing — the classic palette-swap technique for cheap character variants.
+
+## Extraction
+
+Uses the same **median-cut** quantizer as the Pixelate tab, run over the **union of all frames** in a sheet so the palette is consistent across the animation. N is tunable (2–32 colors).
+
+## Swapping
+
+Click any extracted swatch → native OS color picker opens → pick a replacement. The preview updates live; every pixel that snapped to that palette entry is remapped to the new color.
+
+**Hue shift shortcuts** let you rotate the whole palette at once:
+
+- **Hue −30°** / **+30°** — subtle warm/cool drift.
+- **Invert hue** — complementary-color palette (green → red, blue → orange).
+
+## Output
+
+Two options:
+
+```bash
+# Palette JSON (list of hex colors + any swaps)
+Download > "Palette JSON"
+
+# Recolored PNG (single frame or stitched sheet)
+Download > "Recolored frame (PNG)"
+Download > "Recolored sheet (PNG)"
+```
+
+The JSON shape mirrors the CLI:
+
+```json
+{
+  "source": "hero.png",
+  "frameWidth": 64, "frameHeight": 64,
+  "grid": { "cols": 4, "rows": 4, "detected": true },
+  "options": { "colors": 12 },
+  "palette": ["#0f380f", "#306230", "#8bac0f", "#9bbc0f", "#af4d4d", ...],
+  "swaps": [
+    { "from": "#af4d4d", "to": "#4d7faf" }
+  ]
+}
+```
+
+## Tips
+
+- For **character variants** (same hero, different outfit), extract 12–16 colors then swap only the clothing ones. You get a new skin with zero art rework.
+- **Invert hue** is a cheap "evil twin" effect.
+- Palettes exported here are valid input to other tools — paste the colors into a pixel-art editor, or feed them to the `pixelate` tool via `--palette custom` (once that's added to the CLI).

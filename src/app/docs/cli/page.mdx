@@ -1,0 +1,51 @@
+export const metadata = { title: "CLI — sprite-tools" };
+
+# CLI
+
+`sprite-tools` is a composable CLI around the same algorithms the web app uses. Everything is file-in, JSON-or-file-out. Everything reads stdin on `-`. JSON outputs share a namespace scheme so they merge cleanly with `jq`.
+
+## Quickstart
+
+```bash
+sprite-tools info sheet.png             # quick stats + detected grid
+sprite-tools detect sheet.png           # just the grid
+sprite-tools slice sheet.png --out-dir frames   # one PNG per cell
+sprite-tools trim sprite.png -o tight.png       # remove transparent padding
+sprite-tools collision sheet.png -o collision.json
+sprite-tools pivot sheet.png --preset bottom-center -o pivot.json
+sprite-tools tags sheet.png --tag idle=0-5 --tag run=6-11 -o tags.json
+sprite-tools meta sheet.png --collision --pivot center --tag idle=0-5 -o meta.json
+sprite-tools pixelate sheet.png --pixel-size 4 --palette gameboy -o pixel.png
+sprite-tools normal-map sheet.png -o normal.png
+sprite-tools palette sheet.png --colors 12 -o palette.json
+sprite-tools atlas sprites/*.png -o atlas.png --json atlas.json
+sprite-tools gif sheet.png --fps 12 -o anim.gif
+```
+
+## Principles
+
+- **Every command has `--help`** with examples and output shape inline.
+- **Stdin / stdout pipes work everywhere.** Input path `-` reads PNG from stdin; output path `-` writes to stdout.
+- **Grid auto-detection.** If you don't pass `--cols` / `--rows`, the algorithm infers them via autocorrelation. Override anytime.
+- **JSON composability.** Every metadata command shares `{source, frameWidth, frameHeight, grid}` at the top level and adds its own namespaced field (`collision`, `pivots`, `tags`, `palette`). Merge three outputs with `jq -s 'add'`.
+- **No native dependencies.** Install on any machine with Node 20+; no `node-gyp` required.
+
+## Full list
+
+| Command | What it emits |
+|---|---|
+| `info`       | JSON: dimensions, opaque pixel count, content bounds, detected grid |
+| `detect`     | JSON: just grid + confidence |
+| `slice`      | files: one PNG per cell (plus optional JSON index) |
+| `trim`       | PNG: opaque-bounded crop (plus optional trim-metadata JSON) |
+| `collision`  | JSON: per-frame polygons |
+| `pivot`      | JSON: per-frame anchor points |
+| `tags`       | JSON: named frame ranges |
+| `meta`       | JSON: collision + pivot + tags in one pass |
+| `palette`    | JSON + optional PNG: dominant colors + swap recolor |
+| `pixelate`   | PNG: downscale + quantize + dither |
+| `normal-map` | PNG: tangent-space normal map |
+| `atlas`      | PNG + JSON: packed atlas + TexturePacker manifest |
+| `gif`        | GIF: animated export |
+
+See [the full reference](/docs/cli/reference) for every flag, or [recipes](/docs/cli/recipes) for useful pipelines.

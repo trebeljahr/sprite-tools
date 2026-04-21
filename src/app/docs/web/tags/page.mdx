@@ -1,0 +1,48 @@
+export const metadata = { title: "Animation tags — sprite-tools" };
+
+# Animation tags
+
+The [**Tags**](/tags) tab splits a flat sprite sheet into **named animation clips** — "idle", "run", "attack" — and exports them in an Aseprite-compatible JSON format.
+
+## Creating tags
+
+1. Click **Add tag** to create one at the current frame.
+2. Edit:
+   - **Name** — free-form string, used as the tag key in output JSON.
+   - **From** / **To** — frame indices (0-based). Click `@N` to snap from/to to the currently-previewed frame.
+   - **Direction** — forward (→), reverse (←), or pingpong (↔).
+   - **FPS** — per-tag playback rate.
+3. Hit the ▶ button to preview the clip in the canvas.
+
+Multiple tags can overlap (e.g. "full-cycle" from 0-11 containing "idle" 0-3 and "run" 4-11) — the JSON records them as-is.
+
+## Playback
+
+- **Play all frames** on the global toolbar previews the whole sheet top-to-bottom at the global FPS.
+- **Per-tag play** previews just that clip with its own direction + FPS.
+
+## Output
+
+```json
+{
+  "source": "hero.png",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "grid": { "cols": 4, "rows": 4, "detected": true },
+  "frameCount": 16,
+  "tags": [
+    { "name": "idle",   "from": 0,  "to": 3,  "direction": "forward",  "fps": 10 },
+    { "name": "run",    "from": 4,  "to": 7,  "direction": "forward",  "fps": 12 },
+    { "name": "attack", "from": 8,  "to": 11, "direction": "forward",  "fps": 18 },
+    { "name": "idle2",  "from": 0,  "to": 3,  "direction": "pingpong", "fps": 6  }
+  ]
+}
+```
+
+Aseprite uses `frameTags`; many engines accept either. The shape here is intentionally close to Aseprite's for easy interop.
+
+## Tips
+
+- Paste this JSON into the [Overview tab](/overview)'s **Tags JSON** sidebar to see each cell colored by tag.
+- Use **pingpong** for idle animations where you want a soft back-and-forth without a hard reset.
+- Per-tag FPS matters when animation speed differs — an attack is usually faster than idle.

@@ -1,0 +1,70 @@
+export const metadata = { title: "Install MCP in Claude Desktop — sprite-tools" };
+
+# Install MCP in Claude Desktop
+
+## 1. Build + link the server
+
+```bash
+git clone https://github.com/yourname/sprite-tools.git
+cd sprite-tools
+npm install
+npm run mcp:build
+npm link
+```
+
+This puts `sprite-tools-mcp` on your PATH. Verify:
+
+```bash
+which sprite-tools-mcp
+sprite-tools-mcp --help       # no-op — MCP servers don't respond to --help, they speak JSON-RPC
+```
+
+## 2. Add to Claude Desktop config
+
+Open your Claude Desktop config file:
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add an entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "sprite-tools-mcp"
+    }
+  }
+}
+```
+
+If `npm link` didn't put `sprite-tools-mcp` on Claude's PATH, use the absolute path:
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "node",
+      "args": ["/absolute/path/to/sprite-tools/dist/mcp/index.js"]
+    }
+  }
+}
+```
+
+## 3. Restart Claude Desktop
+
+Fully quit and reopen. You should see `sprite-tools` in the MCP servers list; click it and the 13 tools appear.
+
+## 4. Try it
+
+Ask Claude something like:
+
+> I have a sprite sheet at `/Users/me/hero.png`. Can you auto-detect its grid, generate collision polygons with tolerance 4, and save them to `/tmp/hero-collision.json`?
+
+Claude will call `sprite_detect_grid`, then `sprite_generate_collision`, and write the output. No scripts, no piping.
+
+## Troubleshooting
+
+- **"command not found"** when starting — MCP servers run with a minimal PATH. Use the absolute `node` + `args` form in your config.
+- **Tools don't appear** — quit Claude Desktop fully (⌘Q / Alt+F4 + confirm). Restart. Check the MCP server logs in Claude's UI.
+- **"No bytes on stdin" / path errors** — MCP tools take file paths, not stdin. Make sure the paths you pass to the model are absolute.
