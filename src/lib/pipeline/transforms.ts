@@ -25,57 +25,95 @@ function yieldToMain(): Promise<void> {
 // -----------------------------------------------------------------
 // Chroma-key worker pool
 // -----------------------------------------------------------------
-// One shared worker does all the heavy per-pixel work off the main
-// thread. Each request carries an id so responses can be routed back
-// to the right caller.
+// A small pool of workers so we can process several frames in parallel
+// while still keeping the main thread free. Each request carries an id
+// so responses can be routed back to the right caller.
 
-let _chromaWorker: Worker | null = null;
-let _chromaReqId = 0;
-const _chromaPending = new Map<number, (r: ChromaWorkerResponse) => void>();
+const POOL_SIZE = (() => {
+  if (typeof navigator === "undefined") return 2;
+  return Math.min(4, Math.max(2, (navigator.hardwareConcurrency || 4) - 1));
+})();
 
-function getChromaWorker(): Worker {
-  if (_chromaWorker) return _chromaWorker;
-  const w = new Worker(new URL("./chroma.worker.ts", import.meta.url), {
-    type: "module",
-  });
-  w.onmessage = (e: MessageEvent<ChromaWorkerResponse>) => {
-    const cb = _chromaPending.get(e.data.id);
-    if (cb) {
-      _chromaPending.delete(e.data.id);
-      cb(e.data);
-    }
-  };
-  _chromaWorker = w;
-  return w;
+interface PoolWorker {
+  worker: Worker;
+  busy: boolean;
 }
 
-async function runChromaInWorker(
+interface QueuedTask {
+  req: ChromaWorkerRequest;
+  resolve: (b: ImageBitmap) => void;
+  reject: (e: Error) => void;
+}
+
+let _pool: PoolWorker[] | null = null;
+let _chromaReqId = 0;
+const _chromaPending = new Map<
+  number,
+  { resolve: (b: ImageBitmap) => void; reject: (e: Error) => void; workerIdx: number }
+>();
+const _chromaQueue: QueuedTask[] = [];
+
+function ensurePool(): PoolWorker[] {
+  if (_pool) return _pool;
+  _pool = [];
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const worker = new Worker(new URL("./chroma.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    const idx = i;
+    worker.onmessage = (e: MessageEvent<ChromaWorkerResponse>) => {
+      const entry = _chromaPending.get(e.data.id);
+      if (entry) {
+        _chromaPending.delete(e.data.id);
+        if (e.data.ok) entry.resolve(e.data.bitmap);
+        else entry.reject(new Error(e.data.error));
+      }
+      _pool![idx].busy = false;
+      // Kick the next queued task onto this worker.
+      const next = _chromaQueue.shift();
+      if (next) dispatchTo(idx, next);
+    };
+    _pool.push({ worker, busy: false });
+  }
+  return _pool;
+}
+
+function dispatchTo(idx: number, task: QueuedTask): void {
+  const pool = _pool!;
+  pool[idx].busy = true;
+  _chromaPending.set(task.req.id, {
+    resolve: task.resolve,
+    reject: task.reject,
+    workerIdx: idx,
+  });
+  pool[idx].worker.postMessage(task.req, [task.req.bitmap]);
+}
+
+function runChromaInWorker(
   bitmap: ImageBitmap,
   config: ChromaKeyConfig,
 ): Promise<ImageBitmap> {
-  const worker = getChromaWorker();
+  const pool = ensurePool();
   const id = ++_chromaReqId;
+  const req: ChromaWorkerRequest = {
+    id,
+    bitmap,
+    config: {
+      mode:
+        config.mode === "chroma-solid" ? "chroma-solid" : "chroma-transparent",
+      similarity: config.similarity,
+      softness: config.softness,
+      spill: config.spill,
+      choke: config.choke,
+      solidColor: config.solidColor,
+      autoDetermineFillColor: config.autoDetermineFillColor,
+    },
+  };
   return new Promise<ImageBitmap>((resolve, reject) => {
-    _chromaPending.set(id, (resp) => {
-      if (resp.ok) resolve(resp.bitmap);
-      else reject(new Error(resp.error));
-    });
-    const req: ChromaWorkerRequest = {
-      id,
-      bitmap,
-      config: {
-        mode:
-          config.mode === "chroma-solid" ? "chroma-solid" : "chroma-transparent",
-        similarity: config.similarity,
-        softness: config.softness,
-        spill: config.spill,
-        choke: config.choke,
-        solidColor: config.solidColor,
-        autoDetermineFillColor: config.autoDetermineFillColor,
-      },
-    };
-    // Transfer the bitmap to the worker — it's consumed there.
-    worker.postMessage(req, [bitmap]);
+    const task: QueuedTask = { req, resolve, reject };
+    const idleIdx = pool.findIndex((w) => !w.busy);
+    if (idleIdx >= 0) dispatchTo(idleIdx, task);
+    else _chromaQueue.push(task);
   });
 }
 
@@ -104,32 +142,42 @@ export async function* chromaKey(
   cfg: ChromaKeyConfig,
 ): AsyncGenerator<Progress, Frames> {
   if (cfg.mode === "none" || cfg.mode === "transparent-cutout") {
-    // Passthrough — frames remain as-is. Yield a single progress tick so
-    // consumers relying on the generator pump still see completion.
     yield { step: "chroma-key", current: frames.frames.length, total: frames.frames.length };
     return { frames: frames.frames, stats: frames.stats };
   }
 
-  const out: Frame[] = [];
   const total = frames.frames.length;
+  const out: Frame[] = new Array(total);
 
-  for (let i = 0; i < total; i++) {
-    const src = frames.frames[i];
-    // Clone the bitmap so the worker can consume (transfer-kill) its copy
-    // without invalidating the upstream cache's original.
+  // Kick every frame off to the worker pool simultaneously. The pool caps
+  // concurrency; anything over that queues. `createImageBitmap` is itself
+  // async on a background thread, so cloning overlaps with worker work.
+  let completed = 0;
+  const tasks = frames.frames.map(async (src, i) => {
     const clone = await createImageBitmap(src.bitmap);
     const processed = await runChromaInWorker(clone, cfg);
-    out.push({
+    out[i] = {
       ...src,
       id: nextFrameId(),
       bitmap: processed,
       width: processed.width,
       height: processed.height,
-    });
-    yield { step: "chroma-key", current: i + 1, total };
-    // Brief yield so the event loop can paint between frames.
-    await yieldToMain();
+    };
+    completed += 1;
+  });
+
+  // Race progress polling against the aggregate promise so if any task
+  // rejects we surface the error instead of spinning forever.
+  const allDone = Promise.all(tasks);
+  yield { step: "chroma-key", current: 0, total };
+  while (completed < total) {
+    await Promise.race([
+      new Promise<void>((r) => setTimeout(r, 60)),
+      allDone.then(() => {}).catch(() => {}),
+    ]);
+    yield { step: "chroma-key", current: completed, total };
   }
+  await allDone;
 
   return { frames: out, stats: computeStats(out) };
 }
