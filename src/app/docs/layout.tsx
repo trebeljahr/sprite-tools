@@ -16,7 +16,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="container max-w-6xl mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
-        <aside className="md:sticky md:top-20 md:self-start md:max-h-[calc(100vh-6rem)] md:overflow-y-auto">
+        <aside className="md:sticky md:top-16 md:self-start md:max-h-[calc(100vh-5rem)] md:overflow-y-auto">
           <nav className="text-sm space-y-6 pr-2">
             {DOCS_SECTIONS.map((section) => (
               <div key={section.label}>
