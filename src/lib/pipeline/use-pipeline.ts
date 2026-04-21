@@ -207,27 +207,84 @@ export function buildImportFilesStep(count: number, sourceName?: string): Pipeli
 }
 
 // -----------------------------------------------------------------
+// Step-level cache
+// -----------------------------------------------------------------
+// Each step's output is cached by (configKey, inputRef). On re-run, if
+// both match we reuse the cached bitmap instead of re-running the step.
+// This is the whole reason passthrough transforms clone their input —
+// every cache entry's bitmaps are unique, so disposing one entry on
+// replacement never takes out another entry's frames.
+
+interface CacheEntry {
+  configKey: string;
+  inputRef: unknown;
+  output: Frames;
+}
+
+function isImportStep(kind: PipelineStep["kind"]): boolean {
+  return (
+    kind === "import-video" || kind === "import-sheet" || kind === "import-files"
+  );
+}
+
+// -----------------------------------------------------------------
 // The hook itself
 // -----------------------------------------------------------------
 
 export function usePipeline() {
   const [state, dispatch] = React.useReducer(reducer, initial);
-  const lastOutputRef = React.useRef<Frames | null>(null);
   const runTokenRef = React.useRef(0);
+  const cacheRef = React.useRef<Map<string, CacheEntry>>(new Map());
+  const cachedSourceRef = React.useRef<PipelineState["source"]>(null);
 
   // Run the pipeline whenever source or steps change.
   React.useEffect(() => {
     const token = ++runTokenRef.current;
+    // If the source itself changed, drop the whole cache — any cached
+    // import output depended on the old source and will never match again.
+    if (state.source !== cachedSourceRef.current) {
+      for (const entry of cacheRef.current.values()) disposeFrames(entry.output);
+      cacheRef.current.clear();
+      cachedSourceRef.current = state.source;
+    }
     (async () => {
       if (!state.source) {
         dispatch({ type: "set-output", output: null });
         return;
       }
+      if (state.steps.length === 0) {
+        dispatch({ type: "set-output", output: null });
+        return;
+      }
       dispatch({ type: "set-running", running: true });
       dispatch({ type: "set-error", error: null });
+
+      // Outputs we'll dispose after React has rendered with the new state.
+      // Doing it inline risks flashing broken <img> tags during the
+      // microtask window before the next render commits.
+      const toDispose: Frames[] = [];
+
       try {
         let current: Frames | null = null;
+        const visited = new Set<string>();
+
         for (const step of state.steps) {
+          visited.add(step.id);
+          const configKey = JSON.stringify(step.config);
+          const inputRef: unknown = isImportStep(step.kind)
+            ? state.source
+            : current;
+          const cached = cacheRef.current.get(step.id);
+          if (
+            cached &&
+            cached.configKey === configKey &&
+            cached.inputRef === inputRef
+          ) {
+            current = cached.output;
+            continue;
+          }
+
+          let produced: Frames;
           switch (step.kind) {
             case "import-video": {
               const src = state.source.file ?? state.source.url!;
@@ -238,12 +295,13 @@ export function usePipeline() {
                 dispatch({ type: "set-progress", progress: result.value });
                 result = await gen.next();
               }
-              current = result.value;
+              produced = result.value;
               break;
             }
             case "import-sheet": {
-              if (!state.source.file && !state.source.url) throw new Error("No sheet source");
-              current = await importFromSpriteSheet(
+              if (!state.source.file && !state.source.url)
+                throw new Error("No sheet source");
+              produced = await importFromSpriteSheet(
                 state.source.file ?? state.source.url!,
                 step.config,
               );
@@ -251,7 +309,7 @@ export function usePipeline() {
             }
             case "import-files": {
               if (!state.source.images) throw new Error("No images source");
-              current = await importFromFiles(state.source.images);
+              produced = await importFromFiles(state.source.images);
               break;
             }
             case "chroma-key": {
@@ -263,34 +321,64 @@ export function usePipeline() {
                 dispatch({ type: "set-progress", progress: r.value });
                 r = await gen.next();
               }
-              current = r.value;
+              produced = r.value;
               break;
             }
             case "auto-crop": {
               if (!current) throw new Error("Auto-crop needs import step first");
-              current = await runAutoCrop(current, step.config);
+              produced = await runAutoCrop(current, step.config);
               break;
             }
             case "manual-crop": {
               if (!current) throw new Error("Manual crop needs import step first");
-              current = await runManualCrop(current, step.config.crop);
+              produced = await runManualCrop(current, step.config.crop);
               break;
             }
             case "select": {
               if (!current) throw new Error("Select needs import step first");
-              current = selectFrames(current, step.config.indices);
+              produced = selectFrames(current, step.config.indices);
               break;
             }
           }
+
+          if (runTokenRef.current !== token) {
+            // Superseded by a newer run. The bitmaps we just produced
+            // aren't cached yet, so dispose them here.
+            toDispose.push(produced);
+            return;
+          }
+
+          if (cached) toDispose.push(cached.output);
+          cacheRef.current.set(step.id, {
+            configKey,
+            inputRef,
+            output: produced,
+          });
+          current = produced;
         }
+
+        // Drop cache entries for steps that are no longer in the pipeline.
+        for (const [id, entry] of Array.from(cacheRef.current.entries())) {
+          if (!visited.has(id)) {
+            toDispose.push(entry.output);
+            cacheRef.current.delete(id);
+          }
+        }
+
         if (runTokenRef.current !== token) return;
-        // Dispose previous output's bitmaps since we're replacing them.
-        if (lastOutputRef.current) disposeFrames(lastOutputRef.current);
-        lastOutputRef.current = current;
         dispatch({ type: "set-output", output: current });
+
+        // Defer disposal so React has a chance to commit the new output
+        // before the old bitmaps get revoked.
+        if (toDispose.length > 0) {
+          setTimeout(() => {
+            for (const f of toDispose) disposeFrames(f);
+          }, 60);
+        }
       } catch (e) {
         if (runTokenRef.current !== token) return;
         dispatch({ type: "set-error", error: e instanceof Error ? e.message : String(e) });
+        for (const f of toDispose) disposeFrames(f);
       } finally {
         if (runTokenRef.current === token) {
           dispatch({ type: "set-running", running: false });
@@ -301,10 +389,12 @@ export function usePipeline() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.source, state.steps]);
 
-  // Cleanup on unmount.
+  // Cleanup on unmount: dispose everything we're holding onto.
   React.useEffect(() => {
+    const cache = cacheRef.current;
     return () => {
-      if (lastOutputRef.current) disposeFrames(lastOutputRef.current);
+      for (const entry of cache.values()) disposeFrames(entry.output);
+      cache.clear();
     };
   }, []);
 

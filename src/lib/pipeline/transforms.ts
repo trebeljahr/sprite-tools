@@ -22,6 +22,21 @@ function yieldToMain(): Promise<void> {
   });
 }
 
+// Clone every frame's bitmap. Used by "passthrough" transforms so that
+// the step still produces fresh bitmaps owned by this step's cache entry
+// — otherwise disposing one cache entry would take out another step's
+// bitmaps too.
+async function cloneFrames(frames: Frames): Promise<Frames> {
+  const out = await Promise.all(
+    frames.frames.map(async (f) => ({
+      ...f,
+      id: nextFrameId(),
+      bitmap: await createImageBitmap(f.bitmap),
+    })),
+  );
+  return { frames: out, stats: frames.stats };
+}
+
 // -----------------------------------------------------------------
 // Chroma-key worker pool
 // -----------------------------------------------------------------
@@ -142,8 +157,9 @@ export async function* chromaKey(
   cfg: ChromaKeyConfig,
 ): AsyncGenerator<Progress, Frames> {
   if (cfg.mode === "none" || cfg.mode === "transparent-cutout") {
+    const cloned = await cloneFrames(frames);
     yield { step: "chroma-key", current: frames.frames.length, total: frames.frames.length };
-    return { frames: frames.frames, stats: frames.stats };
+    return cloned;
   }
 
   const total = frames.frames.length;
@@ -190,7 +206,7 @@ export async function autoCrop(
   frames: Frames,
   cfg: AutoCropConfig,
 ): Promise<Frames> {
-  if (!cfg.enabled || frames.frames.length === 0) return frames;
+  if (!cfg.enabled || frames.frames.length === 0) return await cloneFrames(frames);
 
   // Per-frame scan for content bounds (non-transparent pixels).
   let minX = Infinity,
@@ -237,7 +253,7 @@ export async function autoCrop(
     }
     if (fi % 4 === 3) await yieldToMain();
   }
-  if (!anyContent) return frames;
+  if (!anyContent) return await cloneFrames(frames);
 
   const padding = cfg.padding;
   const fw = frames.stats.width;
@@ -274,7 +290,7 @@ export async function manualCrop(
   frames: Frames,
   crop: FrameCrop,
 ): Promise<Frames> {
-  if (isCropEmpty(crop) || frames.frames.length === 0) return frames;
+  if (isCropEmpty(crop) || frames.frames.length === 0) return await cloneFrames(frames);
   const fw = frames.stats.width;
   const fh = frames.stats.height;
   const cx = fw * crop.left;
