@@ -42,6 +42,10 @@ import {
 } from "@/lib/palette/extract";
 import type { RGB } from "@/lib/pixel-art/pixelate";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
+import { JsonPreview } from "@/components/json-preview";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface SourceFrame {
   index: number;
@@ -309,9 +313,10 @@ export default function PalettePage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
-  // Same shape as `sprite-tools palette` CLI output.
-  const exportPaletteJson = () => {
-    if (!sourceFile || palette.length === 0) return;
+  // Same shape as `sprite-tools palette` CLI output. Built via useMemo so the
+  // JSON preview panel can render it live without duplicating assembly.
+  const jsonPayload = useMemo(() => {
+    if (!sourceFile || palette.length === 0 || frames.length === 0) return null;
     const f0 = frames[0];
     const swaps = palette
       .map((p, i) => ({
@@ -319,16 +324,20 @@ export default function PalettePage() {
         to: swapHex[i] ?? rgbToHex(p),
       }))
       .filter((s) => s.from.toLowerCase() !== s.to.toLowerCase());
-    const payload = {
+    return {
       source: sourceFile.name,
-      frameWidth: f0?.width ?? 0,
-      frameHeight: f0?.height ?? 0,
+      frameWidth: f0.width,
+      frameHeight: f0.height,
       grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       options: { colors: colorCount },
       palette: palette.map(rgbToHex),
       swaps,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+  }, [sourceFile, palette, swapHex, frames, sheetCols, sheetRows, sourceMode, colorCount]);
+
+  const exportPaletteJson = () => {
+    if (!jsonPayload || !sourceFile) return;
+    const blob = new Blob([JSON.stringify(jsonPayload, null, 2)], {
       type: "application/json",
     });
     const a = document.createElement("a");
@@ -409,15 +418,14 @@ export default function PalettePage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <PaletteIcon className="w-8 h-8 text-primary" />
-          Palette
-        </h1>
-        <p className="text-muted-foreground">
-          Extract the dominant colors — then swap any of them to recolor the whole sprite.
-        </p>
-      </div>
+      <ToolHeader
+        title="Palette"
+        description="Extract the dominant colors — then swap any of them to recolor the whole sprite."
+        icon={PaletteIcon}
+        category="transform"
+        docs="palette"
+      />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
@@ -465,6 +473,8 @@ export default function PalettePage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
@@ -617,6 +627,7 @@ export default function PalettePage() {
                 <Button onClick={copyPalette} variant="ghost" className="w-full">
                   <Copy className="w-4 h-4 mr-2" /> Copy hex list
                 </Button>
+                <JsonPreview data={jsonPayload} className="mt-2" />
               </CardContent>
             </Card>
           )}

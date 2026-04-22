@@ -50,6 +50,9 @@ import {
 } from "@/lib/pixel-art/pixelate";
 import { PALETTES, paletteById } from "@/lib/pixel-art/palettes";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface RawFrame {
   index: number;
@@ -378,15 +381,14 @@ export default function PixelatePage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Sparkles className="w-8 h-8 text-primary" />
-          Pixelate
-        </h1>
-        <p className="text-muted-foreground">
-          Turn any sprite into pixel art — downsample, quantize, dither, snap to a palette.
-        </p>
-      </div>
+      <ToolHeader
+        title="Pixelate"
+        description="Turn any sprite into pixel art — downsample, quantize, dither, snap to a palette."
+        icon={Sparkles}
+        category="transform"
+        docs="pixelate"
+      />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
@@ -437,6 +439,8 @@ export default function PixelatePage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
 
               {sourceUrl && (
                 <>

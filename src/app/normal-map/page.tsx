@@ -47,6 +47,9 @@ import {
   type NormalSource,
 } from "@/lib/normal-map/normal-map";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface SourceFrame {
   index: number;
@@ -399,15 +402,14 @@ export default function NormalMapPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Compass className="w-8 h-8 text-primary" />
-          Normal Map
-        </h1>
-        <p className="text-muted-foreground">
-          Fake surface normals from your sprite&rsquo;s alpha or luminance — drop-in for 2D dynamic lighting.
-        </p>
-      </div>
+      <ToolHeader
+        title="Normals"
+        description="Fake surface normals from your sprite's alpha or luminance — drop-in for 2D dynamic lighting."
+        icon={Compass}
+        category="transform"
+        docs="normal-map"
+      />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
@@ -458,6 +460,8 @@ export default function NormalMapPage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
 
               {sourceUrl && (
                 <>

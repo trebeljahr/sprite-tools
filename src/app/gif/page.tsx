@@ -36,6 +36,9 @@ import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls"
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface SourceFrame {
   index: number;
@@ -417,15 +420,14 @@ export default function GifPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Film className="w-8 h-8 text-primary" />
-          GIF Export
-        </h1>
-        <p className="text-muted-foreground">
-          Turn a sprite sheet into an animated GIF or WebM for previews and sharing.
-        </p>
-      </div>
+      <ToolHeader
+        title="GIF"
+        description="Turn a sprite sheet into an animated GIF or WebM for previews and sharing."
+        icon={Film}
+        category="export"
+        docs="gif"
+      />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
@@ -473,6 +475,8 @@ export default function GifPage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">

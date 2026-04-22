@@ -4,6 +4,7 @@ import * as React from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { SiteFooter } from "@/components/site-footer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Lock } from "lucide-react";
+import { ChevronDown, Lock, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const geistSans = Geist({
@@ -109,11 +110,64 @@ export default function RootLayout({
         >
           <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container flex h-14 items-center max-w-5xl mx-auto px-4">
-              <div className="mr-4 flex">
+              <div className="mr-4 flex items-center">
                 <Link className="mr-6 flex items-center space-x-2 font-bold" href="/">
                   SpriteTools
                 </Link>
-                <nav className="flex items-center space-x-6 text-sm font-medium">
+
+                {/* Mobile nav: hamburger → dropdown. Hides the full nav below md. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="md:hidden inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent/40 hover:text-foreground transition-colors"
+                    aria-label="Open navigation"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-64">
+                    <DropdownMenuGroup>
+                      {PRIMARY.map((p) => (
+                        <DropdownMenuItem
+                          key={p.href}
+                          render={<Link href={p.href} />}
+                        >
+                          <span className="font-medium">{p.label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                    {TOOL_GROUPS.map((group) => (
+                      <React.Fragment key={group.label}>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                          {group.items.map((item) => (
+                            <DropdownMenuItem
+                              key={item.href}
+                              render={
+                                <Link
+                                  href={item.href}
+                                  className={cn(
+                                    "flex items-center justify-between gap-4",
+                                    pathname === item.href && "bg-accent/50",
+                                  )}
+                                />
+                              }
+                            >
+                              <span className="font-medium flex items-center gap-1.5">
+                                {item.label}
+                                {item.paid && (
+                                  <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                                )}
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
+                      </React.Fragment>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Desktop nav: inline links + Tools dropdown. */}
+                <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
                   {PRIMARY.map((p) => {
                     // /docs should highlight on every sub-route; other
                     // primaries use strict equality.
@@ -186,8 +240,9 @@ export default function RootLayout({
               </div>
             </div>
           </header>
-          {children}
-          <Toaster position="top-center" />
+          <div className="flex-1 flex flex-col">{children}</div>
+          <SiteFooter />
+          <Toaster position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>

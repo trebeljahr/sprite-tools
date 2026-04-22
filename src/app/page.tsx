@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CollisionDemo } from "@/components/collision-demo";
 import {
   Card,
   CardContent,
@@ -39,31 +40,41 @@ const TOOLS = [
 export default function HomePage() {
   return (
     <main className="container mx-auto px-4 py-16 max-w-5xl">
-      <section className="text-center mb-16">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-muted/40 text-xs text-muted-foreground mb-4">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          Game-ready 2D sprite toolkit
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center mb-20">
+        <div className="text-center md:text-left">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-muted/40 text-xs text-muted-foreground mb-4">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            Game-ready 2D sprite toolkit
+          </div>
+          <h1 className="text-5xl font-bold tracking-tight mb-4">sprite-tools</h1>
+          <p className="text-lg text-muted-foreground max-w-xl">
+            A batteries-included toolkit for turning AI-generated or hand-drawn
+            sprites into <strong className="text-foreground">game-ready assets</strong> —
+            collision polygons, pivots, animation tags, pixel-art conversion,
+            normal maps, palette swap, atlas packing, GIF export.
+          </p>
+          <p className="text-sm text-muted-foreground mt-3 max-w-xl">
+            Web app, CLI, and MCP server — all sharing the same algorithms and JSON contracts.
+          </p>
+          <div className="flex items-center justify-center md:justify-start gap-3 mt-8">
+            <Link
+              href="/docs/quickstart"
+              className={cn(buttonVariants({ size: "lg" }))}
+            >
+              Quickstart <ArrowRight className="w-4 h-4 ml-2" />
+            </Link>
+            <Link
+              href="/docs"
+              className={cn(buttonVariants({ size: "lg", variant: "outline" }))}
+            >
+              <BookOpen className="w-4 h-4 mr-2" /> Docs
+            </Link>
+          </div>
         </div>
-        <h1 className="text-5xl font-bold tracking-tight mb-4">sprite-tools</h1>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          A batteries-included toolkit for turning AI-generated or hand-drawn sprites
-          into game-ready assets. Web app, CLI, and MCP server — all sharing the same
-          algorithms and JSON contracts.
-        </p>
-        <div className="flex items-center justify-center gap-3 mt-8">
-          <Link
-            href="/docs/quickstart"
-            className={cn(buttonVariants({ size: "lg" }))}
-          >
-            Quickstart <ArrowRight className="w-4 h-4 ml-2" />
-          </Link>
-          <Link
-            href="/docs"
-            className={cn(buttonVariants({ size: "lg", variant: "outline" }))}
-          >
-            <BookOpen className="w-4 h-4 mr-2" /> Docs
-          </Link>
-        </div>
+
+        {/* Live algorithm demo — the real generateOutline code path,
+            not a screenshot or a recording. */}
+        <CollisionDemo />
       </section>
 
       <section className="mb-16">
