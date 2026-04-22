@@ -38,6 +38,7 @@ import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls"
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
 
 interface TagFrame {
   index: number;
@@ -392,15 +393,13 @@ export default function TagsPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <TagsIcon className="w-8 h-8 text-primary" />
-          Animation Tags
-        </h1>
-        <p className="text-muted-foreground">
-          Split a sheet into named clips — idle, run, jump — and export Aseprite-style JSON.
-        </p>
-      </div>
+      <ToolHeader
+        title="Tags"
+        description="Split a sheet into named clips — idle, run, jump — and export Aseprite-style JSON."
+        icon={TagsIcon}
+        category="metadata"
+        docs="tags"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

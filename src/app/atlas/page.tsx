@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { ToolHeader } from "@/components/tool-header";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import {
@@ -314,15 +315,13 @@ export default function AtlasPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Boxes className="w-8 h-8 text-primary" />
-          Atlas Packer
-        </h1>
-        <p className="text-muted-foreground">
-          Upload multiple sprites — trim, bin-pack, export PNG + JSON manifest.
-        </p>
-      </div>
+      <ToolHeader
+        title="Atlas"
+        description="Upload multiple sprites — trim, bin-pack, export PNG + JSON manifest."
+        icon={Boxes}
+        category="export"
+        docs="atlas"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

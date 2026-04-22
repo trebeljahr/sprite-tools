@@ -46,6 +46,7 @@ import {
   type OutlineResult,
 } from "@/lib/collision/outline";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
 
 interface RawFrame {
   index: number;
@@ -507,15 +508,13 @@ export default function CollisionPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Hexagon className="w-8 h-8 text-primary" />
-          Collision Polygon Generator
-        </h1>
-        <p className="text-muted-foreground">
-          Trace tight collision outlines from a sprite or sheet — tune, preview, export JSON.
-        </p>
-      </div>
+      <ToolHeader
+        title="Collision"
+        description="Trace tight collision outlines from a sprite or sheet — tune, preview, export JSON."
+        icon={Hexagon}
+        category="metadata"
+        docs="collision"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left column: Source + Settings + Export */}

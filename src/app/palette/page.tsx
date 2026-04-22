@@ -42,6 +42,7 @@ import {
 } from "@/lib/palette/extract";
 import type { RGB } from "@/lib/pixel-art/pixelate";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
 
 interface SourceFrame {
   index: number;
@@ -409,15 +410,13 @@ export default function PalettePage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <PaletteIcon className="w-8 h-8 text-primary" />
-          Palette
-        </h1>
-        <p className="text-muted-foreground">
-          Extract the dominant colors — then swap any of them to recolor the whole sprite.
-        </p>
-      </div>
+      <ToolHeader
+        title="Palette"
+        description="Extract the dominant colors — then swap any of them to recolor the whole sprite."
+        icon={PaletteIcon}
+        category="transform"
+        docs="palette"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

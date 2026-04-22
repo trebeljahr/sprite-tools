@@ -35,6 +35,7 @@ import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls"
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { ToolHeader } from "@/components/tool-header";
 
 interface PivotFrame {
   index: number;
@@ -420,15 +421,13 @@ export default function PivotPage() {
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Crosshair className="w-8 h-8 text-primary" />
-          Pivot
-        </h1>
-        <p className="text-muted-foreground">
-          Click to set the anchor point for each frame — export as JSON for rotation and scaling origins.
-        </p>
-      </div>
+      <ToolHeader
+        title="Pivot"
+        description="Click to set the anchor point for each frame — export as JSON for rotation and scaling origins."
+        icon={Crosshair}
+        category="metadata"
+        docs="pivot"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

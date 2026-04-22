@@ -4,6 +4,7 @@ import * as React from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { SiteFooter } from "@/components/site-footer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -186,8 +187,9 @@ export default function RootLayout({
               </div>
             </div>
           </header>
-          {children}
-          <Toaster position="top-center" />
+          <div className="flex-1 flex flex-col">{children}</div>
+          <SiteFooter />
+          <Toaster position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>
