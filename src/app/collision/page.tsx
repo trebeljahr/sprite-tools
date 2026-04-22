@@ -48,6 +48,7 @@ import {
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
+import { JsonPreview } from "@/components/json-preview";
 
 interface RawFrame {
   index: number;
@@ -756,6 +757,7 @@ export default function CollisionPage() {
                 <Button onClick={copyJson} variant="outline" className="w-full">
                   <Copy className="w-4 h-4 mr-2" /> Copy to Clipboard
                 </Button>
+                <JsonPreview data={jsonPayload} className="mt-2" />
               </CardContent>
             </Card>
           )}

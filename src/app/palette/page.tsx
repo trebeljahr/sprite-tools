@@ -44,6 +44,7 @@ import type { RGB } from "@/lib/pixel-art/pixelate";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
+import { JsonPreview } from "@/components/json-preview";
 
 interface SourceFrame {
   index: number;
@@ -311,9 +312,10 @@ export default function PalettePage() {
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
-  // Same shape as `sprite-tools palette` CLI output.
-  const exportPaletteJson = () => {
-    if (!sourceFile || palette.length === 0) return;
+  // Same shape as `sprite-tools palette` CLI output. Built via useMemo so the
+  // JSON preview panel can render it live without duplicating assembly.
+  const jsonPayload = useMemo(() => {
+    if (!sourceFile || palette.length === 0 || frames.length === 0) return null;
     const f0 = frames[0];
     const swaps = palette
       .map((p, i) => ({
@@ -321,16 +323,20 @@ export default function PalettePage() {
         to: swapHex[i] ?? rgbToHex(p),
       }))
       .filter((s) => s.from.toLowerCase() !== s.to.toLowerCase());
-    const payload = {
+    return {
       source: sourceFile.name,
-      frameWidth: f0?.width ?? 0,
-      frameHeight: f0?.height ?? 0,
+      frameWidth: f0.width,
+      frameHeight: f0.height,
       grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       options: { colors: colorCount },
       palette: palette.map(rgbToHex),
       swaps,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+  }, [sourceFile, palette, swapHex, frames, sheetCols, sheetRows, sourceMode, colorCount]);
+
+  const exportPaletteJson = () => {
+    if (!jsonPayload || !sourceFile) return;
+    const blob = new Blob([JSON.stringify(jsonPayload, null, 2)], {
       type: "application/json",
     });
     const a = document.createElement("a");
@@ -618,6 +624,7 @@ export default function PalettePage() {
                 <Button onClick={copyPalette} variant="ghost" className="w-full">
                   <Copy className="w-4 h-4 mr-2" /> Copy hex list
                 </Button>
+                <JsonPreview data={jsonPayload} className="mt-2" />
               </CardContent>
             </Card>
           )}
