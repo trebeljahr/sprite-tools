@@ -49,6 +49,7 @@ import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface RawFrame {
   index: number;
@@ -569,6 +570,8 @@ export default function CollisionPage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
 
               {sourceUrl && (
                 <>

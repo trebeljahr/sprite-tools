@@ -49,6 +49,7 @@ import {
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
+import { SampleSprites } from "@/components/sample-sprites";
 
 interface SourceFrame {
   index: number;
@@ -459,6 +460,8 @@ export default function NormalMapPage() {
                   onChange={onFileInputChange}
                 />
               </div>
+
+              <SampleSprites />
 
               {sourceUrl && (
                 <>
