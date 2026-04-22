@@ -48,6 +48,7 @@ import {
 } from "@/lib/normal-map/normal-map";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
 
 interface SourceFrame {
   index: number;
@@ -407,6 +408,7 @@ export default function NormalMapPage() {
         category="transform"
         docs="normal-map"
       />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

@@ -47,6 +47,7 @@ import {
 } from "@/lib/collision/outline";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
 
 interface RawFrame {
   index: number;
@@ -515,6 +516,7 @@ export default function CollisionPage() {
         category="metadata"
         docs="collision"
       />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left column: Source + Settings + Export */}

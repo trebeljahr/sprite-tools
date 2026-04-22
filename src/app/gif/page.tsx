@@ -37,6 +37,7 @@ import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
 
 interface SourceFrame {
   index: number;
@@ -425,6 +426,7 @@ export default function GifPage() {
         category="export"
         docs="gif"
       />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">

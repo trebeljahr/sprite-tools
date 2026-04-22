@@ -51,6 +51,7 @@ import {
 import { PALETTES, paletteById } from "@/lib/pixel-art/palettes";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
+import { SourceBanner } from "@/components/source-banner";
 
 interface RawFrame {
   index: number;
@@ -386,6 +387,7 @@ export default function PixelatePage() {
         category="transform"
         docs="pixelate"
       />
+      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
