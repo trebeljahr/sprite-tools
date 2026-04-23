@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -84,21 +83,24 @@ function FrameImg({
 }: {
   frame: Frame;
 } & React.ImgHTMLAttributes<HTMLImageElement>) {
-  const [url, setUrl] = useState<string | null>(frame.previewUrl ?? null);
+  // Prefer the synchronous previewUrl when the frame already has one;
+  // only fall back to the async ensurePreviewUrl when it doesn't. Splitting
+  // out the sync path as derived state avoids setState-in-effect.
+  const syncUrl = frame.previewUrl ?? null;
+  const [asyncUrl, setAsyncUrl] = useState<string | null>(null);
   useEffect(() => {
+    if (syncUrl) return; // nothing to fetch
     let active = true;
-    if (frame.previewUrl) {
-      setUrl(frame.previewUrl);
-      return;
-    }
     ensurePreviewUrl(frame).then((u) => {
-      if (active) setUrl(u);
+      if (active) setAsyncUrl(u);
     });
     return () => {
       active = false;
     };
-  }, [frame]);
+  }, [frame, syncUrl]);
+  const url = syncUrl ?? asyncUrl;
   if (!url) return null;
+  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
   return <img src={url} {...rest} />;
 }
 
@@ -225,6 +227,7 @@ function SpritesheetContent() {
 
   // ------- Misc UI state -------
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
@@ -780,31 +783,55 @@ function SpritesheetContent() {
             </CardContent>
           </Card>
 
+          {/* Advanced settings collapsed by default — most first-run users
+              just want to upload + extract without tuning chroma. */}
           <Card>
-            <CardHeader>
-              <CardTitle>Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <BackgroundRemovalSettings state={brState} setState={setBrState} mode="chroma-only" />
-
-              {showResults && (
-                <div className="space-y-4 border-t border-dashed pt-4">
-                  <Button
-                    onClick={redoBgRemoval}
-                    disabled={pipeline.state.running || allFrames.length === 0}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    {pipeline.state.running ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4 text-primary" />
-                    )}
-                    Re-do Background Removal
-                  </Button>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-accent/20 transition-colors rounded-t-lg"
+              aria-expanded={showAdvanced}
+            >
+              <div>
+                <div className="text-sm font-semibold">Advanced settings</div>
+                <div className="text-xs text-muted-foreground">
+                  Background removal (chroma key), auto-crop, aspect ratio
                 </div>
-              )}
-            </CardContent>
+              </div>
+              <ChevronRight
+                className={cn(
+                  "w-4 h-4 text-muted-foreground transition-transform",
+                  showAdvanced && "rotate-90",
+                )}
+              />
+            </button>
+            {showAdvanced && (
+              <CardContent className="space-y-6 pt-0">
+                <BackgroundRemovalSettings
+                  state={brState}
+                  setState={setBrState}
+                  mode="chroma-only"
+                />
+
+                {showResults && (
+                  <div className="space-y-4 border-t border-dashed pt-4">
+                    <Button
+                      onClick={redoBgRemoval}
+                      disabled={pipeline.state.running || allFrames.length === 0}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {pipeline.state.running ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                      )}
+                      Re-do Background Removal
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            )}
           </Card>
 
           {showResults && (

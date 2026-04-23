@@ -7,12 +7,11 @@ import {
   Settings2, 
   Palette, 
   MessageSquare, 
-  Download, 
+  Download,
   ArrowRight,
   RefreshCw,
   Edit3,
   Check,
-  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -22,7 +21,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -44,16 +42,22 @@ import {
 } from "@/lib/image-gen";
 import { cn } from "@/lib/utils";
 import { AuthWall } from "@/components/auth-wall";
+import { AiGate } from "@/components/ai-gate";
 
 export default function GeneratePage() {
   return (
-    <AuthWall
+    <AiGate
       feature="AI Character"
       description="Generate character sprite art from a text prompt using AI image generation."
-      costHint="~1 credit per image"
     >
-      <GeneratePageContent />
-    </AuthWall>
+      <AuthWall
+        feature="AI Character"
+        description="Generate character sprite art from a text prompt using AI image generation."
+        costHint="~1 credit per image"
+      >
+        <GeneratePageContent />
+      </AuthWall>
+    </AiGate>
   );
 }
 
@@ -120,7 +124,7 @@ function GeneratePageContent() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch {
       toast.error("Failed to download image.");
     }
   };

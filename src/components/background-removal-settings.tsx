@@ -4,7 +4,6 @@ import * as React from "react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { ChevronDown } from "lucide-react";
 import { cn, type ChromaKeySettings } from "@/lib/utils";
 
 import {

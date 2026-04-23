@@ -11,7 +11,7 @@ import {
   ZoomIndicator,
 } from "@/components/viewport-controls";
 import { useViewport } from "@/hooks/use-viewport";
-import { cn, applyChromaKey, applySolidFillChroma, hexToRgb, sampleBackground } from "@/lib/utils";
+import { cn, applyChromaKey, applySolidFillChroma, sampleBackground } from "@/lib/utils";
 
 import confetti from "canvas-confetti";
 import {
@@ -464,7 +464,16 @@ export default function LassoPage() {
       ctx.restore();
     }
     ctx.restore();
-  }, [image, points, view, canvasContainerRef, mousePos, isClosed]);
+  }, [
+    image,
+    points,
+    view,
+    canvasContainerRef,
+    mousePos,
+    isClosed,
+    draggedPointIndex,
+    hoveredPointIndex,
+  ]);
 
   useEffect(() => {
     draw();
