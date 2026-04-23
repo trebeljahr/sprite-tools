@@ -29,6 +29,7 @@ import {
 
 import { generateVideoAction, checkStatusAction } from "../actions";
 import { AuthWall } from "@/components/auth-wall";
+import { AiGate } from "@/components/ai-gate";
 import Link from "next/link";
 
 function HomeContent() {
@@ -399,14 +400,19 @@ function HomeContent() {
 
 export default function AnimatePage() {
   return (
-    <AuthWall
+    <AiGate
       feature="AI Animation"
       description="Turn a character image into a short animation using xAI Grok Imagine video generation."
-      costHint="~1 credit per animation"
     >
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading…</div>}>
-        <HomeContent />
-      </Suspense>
-    </AuthWall>
+      <AuthWall
+        feature="AI Animation"
+        description="Turn a character image into a short animation using xAI Grok Imagine video generation."
+        costHint="~1 credit per animation"
+      >
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading…</div>}>
+          <HomeContent />
+        </Suspense>
+      </AuthWall>
+    </AiGate>
   );
 }

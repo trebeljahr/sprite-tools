@@ -46,7 +46,9 @@ interface ToolLink {
   paid?: boolean;
 }
 
-const TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
+import { AI_ENABLED } from "@/lib/features";
+
+const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   {
     label: "AI (sign-in required)",
     items: [
@@ -84,6 +86,12 @@ const TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
     ],
   },
 ];
+
+// AI group is hidden in prod until auth + billing ship. Flip NEXT_PUBLIC_ENABLE_AI
+// in .env.local to preview it locally.
+const TOOL_GROUPS = AI_ENABLED
+  ? ALL_TOOL_GROUPS
+  : ALL_TOOL_GROUPS.filter((g) => !g.label.startsWith("AI"));
 
 export default function RootLayout({
   children,

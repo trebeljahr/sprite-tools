@@ -44,16 +44,22 @@ import {
 } from "@/lib/image-gen";
 import { cn } from "@/lib/utils";
 import { AuthWall } from "@/components/auth-wall";
+import { AiGate } from "@/components/ai-gate";
 
 export default function GeneratePage() {
   return (
-    <AuthWall
+    <AiGate
       feature="AI Character"
       description="Generate character sprite art from a text prompt using AI image generation."
-      costHint="~1 credit per image"
     >
-      <GeneratePageContent />
-    </AuthWall>
+      <AuthWall
+        feature="AI Character"
+        description="Generate character sprite art from a text prompt using AI image generation."
+        costHint="~1 credit per image"
+      >
+        <GeneratePageContent />
+      </AuthWall>
+    </AiGate>
   );
 }
 
