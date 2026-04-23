@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -84,21 +83,24 @@ function FrameImg({
 }: {
   frame: Frame;
 } & React.ImgHTMLAttributes<HTMLImageElement>) {
-  const [url, setUrl] = useState<string | null>(frame.previewUrl ?? null);
+  // Prefer the synchronous previewUrl when the frame already has one;
+  // only fall back to the async ensurePreviewUrl when it doesn't. Splitting
+  // out the sync path as derived state avoids setState-in-effect.
+  const syncUrl = frame.previewUrl ?? null;
+  const [asyncUrl, setAsyncUrl] = useState<string | null>(null);
   useEffect(() => {
+    if (syncUrl) return; // nothing to fetch
     let active = true;
-    if (frame.previewUrl) {
-      setUrl(frame.previewUrl);
-      return;
-    }
     ensurePreviewUrl(frame).then((u) => {
-      if (active) setUrl(u);
+      if (active) setAsyncUrl(u);
     });
     return () => {
       active = false;
     };
-  }, [frame]);
+  }, [frame, syncUrl]);
+  const url = syncUrl ?? asyncUrl;
   if (!url) return null;
+  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
   return <img src={url} {...rest} />;
 }
 

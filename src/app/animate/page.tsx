@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, Video, Loader2, Play, RefreshCw, ChevronRight, Scissors } from "lucide-react";
+import { Upload, Video, Loader2, Play, RefreshCw, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 
@@ -42,7 +42,8 @@ function HomeContent() {
   const [aspectRatio, setAspectRatio] = useState<string | null>("16:9");
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [requestId, setRequestId] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_requestId, setRequestId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 

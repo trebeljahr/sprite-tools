@@ -7,12 +7,11 @@ import {
   Settings2, 
   Palette, 
   MessageSquare, 
-  Download, 
+  Download,
   ArrowRight,
   RefreshCw,
   Edit3,
   Check,
-  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -22,7 +21,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -126,7 +124,7 @@ function GeneratePageContent() {
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch {
       toast.error("Failed to download image.");
     }
   };

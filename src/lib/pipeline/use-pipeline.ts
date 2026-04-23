@@ -282,7 +282,6 @@ export function usePipeline() {
         }
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.source, state.steps]);
 
   // Cleanup on unmount.

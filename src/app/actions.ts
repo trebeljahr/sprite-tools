@@ -32,9 +32,9 @@ export async function generateVideoAction(formData: FormData) {
     console.log("Video generation successful:", videoObject);
 
     return { success: true, id: videoObject.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Generation Error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -44,8 +44,8 @@ export async function checkStatusAction(id: string) {
     console.log({ status });
 
     return { success: true, data: status };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Polling Error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
