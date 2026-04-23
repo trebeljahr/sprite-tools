@@ -227,6 +227,7 @@ function SpritesheetContent() {
 
   // ------- Misc UI state -------
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
@@ -782,31 +783,55 @@ function SpritesheetContent() {
             </CardContent>
           </Card>
 
+          {/* Advanced settings collapsed by default — most first-run users
+              just want to upload + extract without tuning chroma. */}
           <Card>
-            <CardHeader>
-              <CardTitle>Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <BackgroundRemovalSettings state={brState} setState={setBrState} mode="chroma-only" />
-
-              {showResults && (
-                <div className="space-y-4 border-t border-dashed pt-4">
-                  <Button
-                    onClick={redoBgRemoval}
-                    disabled={pipeline.state.running || allFrames.length === 0}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    {pipeline.state.running ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4 text-primary" />
-                    )}
-                    Re-do Background Removal
-                  </Button>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-accent/20 transition-colors rounded-t-lg"
+              aria-expanded={showAdvanced}
+            >
+              <div>
+                <div className="text-sm font-semibold">Advanced settings</div>
+                <div className="text-xs text-muted-foreground">
+                  Background removal (chroma key), auto-crop, aspect ratio
                 </div>
-              )}
-            </CardContent>
+              </div>
+              <ChevronRight
+                className={cn(
+                  "w-4 h-4 text-muted-foreground transition-transform",
+                  showAdvanced && "rotate-90",
+                )}
+              />
+            </button>
+            {showAdvanced && (
+              <CardContent className="space-y-6 pt-0">
+                <BackgroundRemovalSettings
+                  state={brState}
+                  setState={setBrState}
+                  mode="chroma-only"
+                />
+
+                {showResults && (
+                  <div className="space-y-4 border-t border-dashed pt-4">
+                    <Button
+                      onClick={redoBgRemoval}
+                      disabled={pipeline.state.running || allFrames.length === 0}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {pipeline.state.running ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                      )}
+                      Re-do Background Removal
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            )}
           </Card>
 
           {showResults && (
