@@ -43,13 +43,7 @@ const DOC_ROUTES = [
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
-  const routes = [
-    "/",
-    ...TOOL_ROUTES,
-    ...(AI_ENABLED ? AI_ROUTES : []),
-    ...DOC_ROUTES,
-    "/privacy",
-  ];
+  const routes = ["/", ...TOOL_ROUTES, ...(AI_ENABLED ? AI_ROUTES : []), ...DOC_ROUTES, "/privacy"];
 
   return routes.map((path) => ({
     url: `${SITE}${path}`,

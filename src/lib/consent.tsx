@@ -8,18 +8,8 @@
 // whether to render; settings pages call `grant()` / `revoke()` to let
 // the user change their mind later.
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import {
-  analyticsConfigured,
-  disableAnalytics,
-  enableAnalytics,
-} from "@/lib/analytics";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { analyticsConfigured, disableAnalytics, enableAnalytics } from "@/lib/analytics";
 
 export type ConsentStatus = "pending" | "granted" | "denied";
 

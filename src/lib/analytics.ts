@@ -9,8 +9,7 @@
 //   NEXT_PUBLIC_OPENPANEL_ENABLE_IN_DEV — "true" to also track in `next dev`
 
 const clientId = process.env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID;
-const apiUrl =
-  process.env.NEXT_PUBLIC_OPENPANEL_API_URL ?? "https://api.openpanel.dev";
+const apiUrl = process.env.NEXT_PUBLIC_OPENPANEL_API_URL ?? "https://api.openpanel.dev";
 const enableInDev = process.env.NEXT_PUBLIC_OPENPANEL_ENABLE_IN_DEV === "true";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -62,10 +61,7 @@ export function disableAnalytics(): void {
   instance = null;
 }
 
-export function track(
-  name: string,
-  properties?: Record<string, unknown>,
-): void {
+export function track(name: string, properties?: Record<string, unknown>): void {
   if (!consentGranted) return;
   void ensureInstance().then((inst) => inst?.track(name, properties));
 }

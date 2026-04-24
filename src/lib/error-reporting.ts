@@ -44,10 +44,7 @@ async function ensureInit(): Promise<SentryModule | null> {
   return mod;
 }
 
-export function captureException(
-  error: unknown,
-  context?: Record<string, unknown>,
-): void {
+export function captureException(error: unknown, context?: Record<string, unknown>): void {
   void ensureInit().then((mod) => {
     if (!mod) return;
     if (context) {

@@ -85,6 +85,7 @@ export function useUrlSettings(settings: Settings) {
 
   // Hydrate from the hash once on mount. Closes over first-render
   // settings, which is enough — setters are stable across renders.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — mount-only hydration
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
@@ -105,6 +106,7 @@ export function useUrlSettings(settings: Settings) {
     Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v[0]])),
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on value changes only, not object-identity churn
   useEffect(() => {
     if (!hydratedRef.current) return;
     const patch: Record<string, unknown> = {};

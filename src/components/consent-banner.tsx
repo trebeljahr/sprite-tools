@@ -28,8 +28,8 @@ export function ConsentBanner() {
     >
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <p className="text-sm text-foreground flex-1">
-          We use lightweight, privacy-friendly analytics (no third-party
-          tracking, no ads) to see which tools get used. See our{" "}
+          We use lightweight, privacy-friendly analytics (no third-party tracking, no ads) to see
+          which tools get used. See our{" "}
           <Link
             href="/privacy"
             className="underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground"
