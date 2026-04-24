@@ -40,7 +40,7 @@ cat hero.png | sprite-tools trim - -o - | sprite-tools collision -
 Requires Node 20+. No native dependencies.
 
 ```bash
-git clone https://github.com/yourname/sprite-tools.git
+git clone https://github.com/trebeljahr/sprite-tools.git
 cd sprite-tools
 npm install
 

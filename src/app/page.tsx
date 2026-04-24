@@ -158,7 +158,7 @@ export default function HomePage() {
       <footer className="text-center text-xs text-muted-foreground pb-8">
         Open-source under the{" "}
         <Link
-          href="https://github.com/yourname/sprite-tools/blob/main/LICENSE"
+          href="https://github.com/trebeljahr/sprite-tools/blob/main/LICENSE"
           className="underline hover:text-foreground"
         >
           MIT license

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Github, Heart } from "lucide-react";
 
 // Repo URL lives in one place. Swap when the repo moves.
-export const REPO_URL = "https://github.com/yourname/sprite-tools";
+export const REPO_URL = "https://github.com/trebeljahr/sprite-tools";
 const VERSION = "0.1.0";
 
 export function SiteFooter() {
