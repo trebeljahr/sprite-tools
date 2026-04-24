@@ -7,9 +7,9 @@
     "sprite-tools-mcp": "./dist/mcp/index.js"
   },
   "scripts": {
-    "dev": "next dev -p 3471",
-    "build": "next build",
-    "start": "next start -p 3471",
+    "dev": "dotenvx run -f .env.development.local -f .env --ignore=MISSING_ENV_FILE -- next dev -p 3471",
+    "build": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next build",
+    "start": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next start -p 3471",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
@@ -32,6 +32,8 @@
     "@mdx-js/react": "^3.1.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@next/mdx": "^16.2.4",
+    "@openpanel/web": "^1.3.0",
+    "@sentry/browser": "^10.50.0",
     "@types/mdx": "^2.0.13",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
@@ -56,6 +58,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
+    "@dotenvx/dotenvx": "^1.62.0",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",

@@ -1,0 +1,49 @@
+export const metadata = { title: "Privacy" };
+
+# Privacy
+
+sprite-tools runs almost entirely in your browser. Sprite images you
+upload never leave your machine unless you explicitly opt into the AI
+tools (which send prompts + generated images to xAI).
+
+## What we collect
+
+### Always
+
+- **Error reports** — anonymous crash reports via a self-hosted
+  [GlitchTip](https://glitchtip.com) instance, so we can fix bugs we
+  couldn't reproduce locally. These include stack traces and the URL of
+  the page that crashed. No sprite data, no IP logging beyond what the
+  origin server naturally sees.
+
+### Only if you accept the banner
+
+- **Anonymous usage analytics** — aggregate pageviews and a handful of
+  named events ("exported GIF", "detected grid", etc.) via a self-hosted
+  [OpenPanel](https://openpanel.dev) instance. No cross-site tracking,
+  no ad networks, no cookies. A single `localStorage` key records your
+  consent choice.
+
+### Never
+
+- Sprite images, frames, or generated assets.
+- The contents of your clipboard.
+- Any personally identifying information, unless you sign in for AI
+  tools — in which case we store the minimum identifier required to
+  bill usage.
+
+## Changing your mind
+
+The consent banner only appears until you make a choice. To change it
+later, open your browser's site settings and clear `localStorage` for
+this origin; the banner will return on your next visit.
+
+## Source of truth
+
+Analytics and error reporting are off by default in local development
+and only activate in production. Both require env vars
+(`NEXT_PUBLIC_OPENPANEL_CLIENT_ID`, `NEXT_PUBLIC_GLITCHTIP_DSN`) — if
+you self-host sprite-tools without setting them, neither endpoint is
+contacted.
+
+Repo: [github.com/trebeljahr/sprite-tools](https://github.com/trebeljahr/sprite-tools).

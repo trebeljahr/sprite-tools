@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SiteFooter } from "@/components/site-footer";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ClientProviders } from "@/components/client-providers";
 import { SiteNav } from "./site-nav";
 
 const geistSans = Geist({
@@ -81,10 +82,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SiteNav />
-          <div className="flex-1 flex flex-col">{children}</div>
-          <SiteFooter />
-          <Toaster position="bottom-right" />
+          <ClientProviders>
+            <SiteNav />
+            <div className="flex-1 flex flex-col">{children}</div>
+            <SiteFooter />
+            <Toaster position="bottom-right" />
+          </ClientProviders>
         </ThemeProvider>
       </body>
     </html>

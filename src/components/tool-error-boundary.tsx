@@ -11,9 +11,17 @@
 // The signature matches what Next passes in: an `Error` plus a `reset`
 // callback that re-renders the route.
 
+import { useEffect } from "react";
 import { AlertTriangle, RotateCw } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { captureException } from "@/lib/error-reporting";
 
 interface Props {
   error: Error & { digest?: string };
@@ -21,6 +29,12 @@ interface Props {
 }
 
 export function ToolErrorBoundaryPage({ error, reset }: Props) {
+  // Forward to GlitchTip on mount (once per thrown error). Safe when
+  // reporting is disabled — captureException short-circuits.
+  useEffect(() => {
+    captureException(error, { digest: error.digest });
+  }, [error]);
+
   return (
     <main className="container mx-auto py-12 px-4 max-w-xl">
       <Card className="ring-1 ring-destructive/20">

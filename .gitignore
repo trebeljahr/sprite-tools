@@ -31,8 +31,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — we use dotenvx, so encrypted .env.production /
+# .env.development can safely be committed. Local overrides and the
+# decryption keys stay out of git.
+.env
+.env.local
+.env.*.local
+.env.keys
+.env.vault
 .next
 
 # vercel
