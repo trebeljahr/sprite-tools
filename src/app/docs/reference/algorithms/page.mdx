@@ -67,7 +67,7 @@ Jake Gordon's growing binary tree:
 3. For each subsequent sprite, try to `find` a free leaf that fits. If found, `split` it into the placed rect + two leftover rectangles (right + down).
 4. If not found, `grow` the root — wrap it in a new root that extends right or down, then recurse.
 
-Deterministic, O(n²), tight packing for most sprite distributions. Not optimal — for pathological cases a rectpack2D / MaxRects implementation would beat it, but for typical sprite sets the improvement is <5%.
+Deterministic, O(n²), tight packing for most sprite distributions. Not optimal — for pathological cases a rectpack2D / MaxRects implementation would beat it, but for typical sprite sets the improvement is &lt;5%.
 
 ## Palette extraction / swap
 

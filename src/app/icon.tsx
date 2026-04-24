@@ -1,9 +1,5 @@
 import { ImageResponse } from "next/og";
 
-// Favicon. Auto-generated on each build so the mark stays in sync with
-// the rest of the app's identity — swap the SVG / colors and every
-// platform's favicon updates.
-
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
@@ -21,14 +17,24 @@ export default function Icon() {
           borderRadius: 6,
         }}
       >
-        {/* 6-sided polygon — the same "Hexagon" icon Collision uses. */}
+        {/* 3x3 grid — matches the "Sheet Builder" / spritesheet mark. */}
         <svg width="22" height="22" viewBox="0 0 24 24">
-          <path
-            d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"
-            fill="#22c55e"
+          <rect
+            x="3"
+            y="3"
+            width="18"
+            height="18"
+            rx="2"
+            fill="none"
             stroke="#22c55e"
-            strokeWidth="1.5"
+            strokeWidth="1.8"
             strokeLinejoin="round"
+          />
+          <path
+            d="M3 9 H21 M3 15 H21 M9 3 V21 M15 3 V21"
+            stroke="#22c55e"
+            strokeWidth="1.8"
+            strokeLinecap="round"
           />
         </svg>
       </div>

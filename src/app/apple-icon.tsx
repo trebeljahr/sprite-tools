@@ -1,8 +1,5 @@
 import { ImageResponse } from "next/og";
 
-// iOS home-screen icon — larger variant of the favicon with a bit more
-// polish since it's displayed at device resolution.
-
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
@@ -21,24 +18,23 @@ export default function AppleIcon() {
         }}
       >
         <svg width="120" height="120" viewBox="0 0 24 24">
-          <path
-            d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"
-            fill="none"
+          <rect
+            x="3"
+            y="3"
+            width="18"
+            height="18"
+            rx="2"
+            fill="rgba(34, 197, 94, 0.12)"
             stroke="#22c55e"
-            strokeWidth="1.5"
+            strokeWidth="1.6"
             strokeLinejoin="round"
           />
           <path
-            d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"
-            fill="rgba(34, 197, 94, 0.15)"
+            d="M3 9 H21 M3 15 H21 M9 3 V21 M15 3 V21"
+            stroke="#22c55e"
+            strokeWidth="1.6"
+            strokeLinecap="round"
           />
-          {/* vertex dots */}
-          <circle cx="12" cy="2" r="0.9" fill="#22c55e" />
-          <circle cx="21" cy="7" r="0.9" fill="#22c55e" />
-          <circle cx="21" cy="17" r="0.9" fill="#22c55e" />
-          <circle cx="12" cy="22" r="0.9" fill="#22c55e" />
-          <circle cx="3" cy="17" r="0.9" fill="#22c55e" />
-          <circle cx="3" cy="7" r="0.9" fill="#22c55e" />
         </svg>
       </div>
     ),
