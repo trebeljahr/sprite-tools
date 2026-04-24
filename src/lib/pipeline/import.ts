@@ -1,8 +1,8 @@
 import {
   computeStats,
-  Frames,
+  type Frames,
   nextFrameId,
-  SheetSliceConfig,
+  type SheetSliceConfig,
   type Frame,
   type Progress,
   type VideoImportConfig,
@@ -60,8 +60,7 @@ export async function* importFromVideo(
   source: File | string,
   cfg: VideoImportConfig,
 ): AsyncGenerator<Progress, Frames> {
-  const url =
-    typeof source === "string" ? source : URL.createObjectURL(source);
+  const url = typeof source === "string" ? source : URL.createObjectURL(source);
 
   // One element to read metadata + frame dimensions.
   const meta = await loadVideoMeta(url);
@@ -167,13 +166,7 @@ export async function importFromSpriteSheet(
   let idx = 0;
   for (let r = 0; r < cfg.rows; r++) {
     for (let c = 0; c < cfg.cols; c++) {
-      const cell = await createImageBitmap(
-        bitmap,
-        c * cellW,
-        r * cellH,
-        cellW,
-        cellH,
-      );
+      const cell = await createImageBitmap(bitmap, c * cellW, r * cellH, cellW, cellH);
       if (isCellEmpty(cell, bg)) {
         cell.close?.();
         continue;
@@ -209,7 +202,10 @@ function sampleCornerBg(ctx: CanvasRenderingContext2D, W: number, H: number): Bg
     [0, H - 1],
     [W - 1, H - 1],
   ];
-  let r = 0, g = 0, b = 0, a = 0;
+  let r = 0,
+    g = 0,
+    b = 0,
+    a = 0;
   for (const [x, y] of corners) {
     const i = (y * W + x) * 4;
     r += d[i];
@@ -217,7 +213,10 @@ function sampleCornerBg(ctx: CanvasRenderingContext2D, W: number, H: number): Bg
     b += d[i + 2];
     a += d[i + 3];
   }
-  r /= 4; g /= 4; b /= 4; a /= 4;
+  r /= 4;
+  g /= 4;
+  b /= 4;
+  a /= 4;
   return { r, g, b, a, transparent: a < 128 };
 }
 
@@ -279,10 +278,7 @@ export async function importFromFiles(files: File[]): Promise<Frames> {
 // Auto-detect sprite sheet grid
 // -----------------------------------------------------------------
 
-import {
-  detectGridFromImageData,
-  type SheetDetection as SheetDetectionType,
-} from "./detect";
+import { detectGridFromImageData, type SheetDetection as SheetDetectionType } from "./detect";
 
 export type SheetDetection = SheetDetectionType;
 

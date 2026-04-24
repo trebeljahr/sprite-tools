@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,10 @@ export function ViewportControls({
   onReset,
   className,
   size = "icon",
-  variant = "ghost"
+  variant = "ghost",
 }: ViewportControlsProps) {
   const btnClass = cn(size === "icon" ? "h-8 w-8" : "h-8 px-3");
-  
+
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <Button
@@ -44,22 +44,29 @@ export function ViewportControls({
       >
         <Maximize className="h-4 w-4" />
       </Button>
-      <Button
-        size={size}
-        variant={variant}
-        className={btnClass}
-        onClick={onZoomIn}
-        title="Zoom In"
-      >
+      <Button size={size} variant={variant} className={btnClass} onClick={onZoomIn} title="Zoom In">
         <ZoomIn className="h-4 w-4" />
       </Button>
     </div>
   );
 }
 
-export function ZoomIndicator({ zoom, baseZoom = 1, className }: { zoom: number; baseZoom?: number; className?: string }) {
+export function ZoomIndicator({
+  zoom,
+  baseZoom = 1,
+  className,
+}: {
+  zoom: number;
+  baseZoom?: number;
+  className?: string;
+}) {
   return (
-    <div className={cn("bg-black/60 text-white text-[10px] px-2 py-1 rounded-full font-mono pointer-events-none whitespace-nowrap", className)}>
+    <div
+      className={cn(
+        "bg-black/60 text-white text-[10px] px-2 py-1 rounded-full font-mono pointer-events-none whitespace-nowrap",
+        className,
+      )}
+    >
       {Math.round((zoom / baseZoom) * 100)}%
     </div>
   );

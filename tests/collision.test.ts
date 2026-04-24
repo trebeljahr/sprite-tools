@@ -140,8 +140,16 @@ describe("generateOutline end-to-end", () => {
         img.data[i + 3] = 255;
       }
     }
-    const concave = generateOutline(img, { simplifyTolerance: 1, alphaThreshold: 10, convexHull: false });
-    const convex = generateOutline(img, { simplifyTolerance: 1, alphaThreshold: 10, convexHull: true });
+    const concave = generateOutline(img, {
+      simplifyTolerance: 1,
+      alphaThreshold: 10,
+      convexHull: false,
+    });
+    const convex = generateOutline(img, {
+      simplifyTolerance: 1,
+      alphaThreshold: 10,
+      convexHull: true,
+    });
     expect(convex.polygon.length).toBeLessThan(concave.polygon.length);
     expect(convex.polygon.length).toBeLessThanOrEqual(5); // rect + optional seam
   });

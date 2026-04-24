@@ -31,7 +31,9 @@ const program = new Command();
 
 program
   .name("sprite-tools")
-  .description("CLI for sprite-sheet processing. Run any subcommand with --help for full options, examples, and output shape.")
+  .description(
+    "CLI for sprite-sheet processing. Run any subcommand with --help for full options, examples, and output shape.",
+  )
   .version("0.1.0");
 
 program.addHelpText(

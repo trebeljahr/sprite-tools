@@ -54,10 +54,7 @@ export function sliceSheet(img: ImageData, cols: number, rows: number): ImageDat
         const srcRowOffset = ((r * cellH + y) * img.width + c * cellW) * 4;
         const dstRowOffset = y * cellW * 4;
         // Row-wise copy: much faster than per-pixel.
-        sub.data.set(
-          img.data.subarray(srcRowOffset, srcRowOffset + cellW * 4),
-          dstRowOffset,
-        );
+        sub.data.set(img.data.subarray(srcRowOffset, srcRowOffset + cellW * 4), dstRowOffset);
       }
       frames.push(sub);
     }
@@ -66,11 +63,7 @@ export function sliceSheet(img: ImageData, cols: number, rows: number): ImageDat
 }
 
 /** Place frames back into a cols×rows grid image. */
-export function stitchSheet(
-  frames: ImageData[],
-  cols: number,
-  rows: number,
-): ImageData {
+export function stitchSheet(frames: ImageData[], cols: number, rows: number): ImageData {
   if (frames.length === 0) return new ImageData(1, 1);
   const cellW = frames[0].width;
   const cellH = frames[0].height;
@@ -82,10 +75,7 @@ export function stitchSheet(
     for (let y = 0; y < cellH; y++) {
       const srcRowOffset = y * cellW * 4;
       const dstRowOffset = ((r * cellH + y) * out.width + c * cellW) * 4;
-      out.data.set(
-        f.data.subarray(srcRowOffset, srcRowOffset + cellW * 4),
-        dstRowOffset,
-      );
+      out.data.set(f.data.subarray(srcRowOffset, srcRowOffset + cellW * 4), dstRowOffset);
     }
   }
   return out;

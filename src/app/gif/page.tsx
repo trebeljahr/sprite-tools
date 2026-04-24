@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
@@ -20,12 +20,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -233,9 +228,12 @@ export default function GifPage() {
       }
       return;
     }
-    playbackRef.current = window.setInterval(() => {
-      setCurrentIndex((i) => (i + 1) % sequence.length);
-    }, Math.max(16, Math.round(1000 / Math.max(1, fps))));
+    playbackRef.current = window.setInterval(
+      () => {
+        setCurrentIndex((i) => (i + 1) % sequence.length);
+      },
+      Math.max(16, Math.round(1000 / Math.max(1, fps))),
+    );
     return () => {
       if (playbackRef.current) {
         window.clearInterval(playbackRef.current);
@@ -282,16 +280,10 @@ export default function GifPage() {
       // Drip progress based on frame processing.
       let processed = 0;
       const total = orderedFrames.length;
-      const bytes = await encodeGifWithProgress(
-        orderedFrames,
-        fps,
-        scale,
-        alphaThreshold,
-        () => {
-          processed += 1;
-          setEncodeProgress((processed / total) * 100);
-        },
-      );
+      const bytes = await encodeGifWithProgress(orderedFrames, fps, scale, alphaThreshold, () => {
+        processed += 1;
+        setEncodeProgress((processed / total) * 100);
+      });
 
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/gif" });
       const a = document.createElement("a");
@@ -462,9 +454,7 @@ export default function GifPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -480,12 +470,10 @@ export default function GifPage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -590,9 +578,7 @@ export default function GifPage() {
                   min={1}
                   max={254}
                   step={1}
-                  onValueChange={(v) =>
-                    setAlphaThreshold(Array.isArray(v) ? v[0] : v)
-                  }
+                  onValueChange={(v) => setAlphaThreshold(Array.isArray(v) ? v[0] : v)}
                 />
                 <p className="text-[10px] text-muted-foreground">
                   GIF can&rsquo;t do partial transparency — pixels above this are fully opaque.
@@ -635,11 +621,7 @@ export default function GifPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button
-                  onClick={exportGif}
-                  disabled={isEncoding}
-                  className="w-full"
-                >
+                <Button onClick={exportGif} disabled={isEncoding} className="w-full">
                   {isEncoding ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Encoding…
@@ -660,8 +642,7 @@ export default function GifPage() {
                   <Film className="w-4 h-4 mr-2" /> Download WebM
                 </Button>
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  {sequence.length} frames • {fps} FPS •{" "}
-                  {(sequence.length / fps).toFixed(2)}s
+                  {sequence.length} frames • {fps} FPS • {(sequence.length / fps).toFixed(2)}s
                 </p>
               </CardContent>
             </Card>
@@ -673,9 +654,7 @@ export default function GifPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"

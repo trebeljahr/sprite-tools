@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import { writeJsonOutput, fail, addHelpExtras } from "../lib/common";
 import { loadPng } from "../lib/image-io";
 import { detectGridFromImageData } from "../../src/lib/pipeline/detect";
@@ -7,7 +7,9 @@ import { computeTrimRect } from "../../src/lib/atlas/pack";
 export function registerInfoCommand(program: Command) {
   const cmd = program
     .command("info <input>")
-    .description("Print image + sprite-sheet info as JSON (opaque pixel count, detected grid, content bounds).")
+    .description(
+      "Print image + sprite-sheet info as JSON (opaque pixel count, detected grid, content bounds).",
+    )
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
   addHelpExtras(cmd, {

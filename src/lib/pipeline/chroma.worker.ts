@@ -44,8 +44,12 @@ function applyChromaKey(
   const { r: tR, g: tG, b: tB } = target;
 
   for (let j = 0; j < data.length; j += 4) {
-    const r = data[j], g = data[j + 1], b = data[j + 2];
-    const dr = r - tR, dg = g - tG, db = b - tB;
+    const r = data[j],
+      g = data[j + 1],
+      b = data[j + 2];
+    const dr = r - tR,
+      dg = g - tG,
+      db = b - tB;
     const dist = Math.sqrt(dr * dr + dg * dg + db * db);
 
     let alpha = 1.0;
@@ -73,7 +77,8 @@ function applyChromaKey(
         let minAlpha = data[idx + 3];
         for (let dy = -choke; dy <= choke; dy++) {
           for (let dx = -choke; dx <= choke; dx++) {
-            const ny = y + dy, nx = x + dx;
+            const ny = y + dy,
+              nx = x + dx;
             if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
               const nAlpha = originalAlphas[ny * width + nx];
               if (nAlpha < minAlpha) minAlpha = nAlpha;
@@ -95,7 +100,8 @@ function applySolidFill(
 ) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
-  const W = width, H = height;
+  const W = width,
+    H = height;
   const d = data;
 
   // Sample corner bg
@@ -120,7 +126,9 @@ function applySolidFill(
   const { similarity, softness } = cfg;
   const mask = new Uint8Array(W * H);
   for (let j = 0, k = 0; j < data.length; j += 4, k++) {
-    const dr = data[j] - srcR, dg = data[j + 1] - srcG, db = data[j + 2] - srcB;
+    const dr = data[j] - srcR,
+      dg = data[j + 1] - srcG,
+      db = data[j + 2] - srcB;
     const dist = Math.sqrt(dr * dr + dg * dg + db * db);
     let m = 255;
     if (dist < similarity) m = 0;

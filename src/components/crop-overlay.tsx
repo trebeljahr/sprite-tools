@@ -16,16 +16,7 @@ export function isCropEmpty(c: FrameCrop): boolean {
   return c.top === 0 && c.right === 0 && c.bottom === 0 && c.left === 0;
 }
 
-type HandleKind =
-  | "move"
-  | "n"
-  | "s"
-  | "e"
-  | "w"
-  | "ne"
-  | "nw"
-  | "se"
-  | "sw";
+type HandleKind = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 interface CropOverlayProps {
   crop: FrameCrop;
@@ -70,8 +61,8 @@ export function CropOverlay({
     const root = rootRef.current;
     if (!root) return;
     const rect = root.getBoundingClientRect();
-    const cellPxW = (rect.width * cellWFrac) || 1;
-    const cellPxH = (rect.height * cellHFrac) || 1;
+    const cellPxW = rect.width * cellWFrac || 1;
+    const cellPxH = rect.height * cellHFrac || 1;
     const startX = e.clientX;
     const startY = e.clientY;
     const startCrop = { ...crop };
@@ -84,16 +75,28 @@ export function CropOverlay({
       const next = { ...startCrop };
 
       const applyN = (delta: number) => {
-        next.top = Math.max(0, Math.min(1 - startCrop.bottom - MIN_REMAINING, startCrop.top + delta));
+        next.top = Math.max(
+          0,
+          Math.min(1 - startCrop.bottom - MIN_REMAINING, startCrop.top + delta),
+        );
       };
       const applyS = (delta: number) => {
-        next.bottom = Math.max(0, Math.min(1 - startCrop.top - MIN_REMAINING, startCrop.bottom - delta));
+        next.bottom = Math.max(
+          0,
+          Math.min(1 - startCrop.top - MIN_REMAINING, startCrop.bottom - delta),
+        );
       };
       const applyW = (delta: number) => {
-        next.left = Math.max(0, Math.min(1 - startCrop.right - MIN_REMAINING, startCrop.left + delta));
+        next.left = Math.max(
+          0,
+          Math.min(1 - startCrop.right - MIN_REMAINING, startCrop.left + delta),
+        );
       };
       const applyE = (delta: number) => {
-        next.right = Math.max(0, Math.min(1 - startCrop.left - MIN_REMAINING, startCrop.right - delta));
+        next.right = Math.max(
+          0,
+          Math.min(1 - startCrop.left - MIN_REMAINING, startCrop.right - delta),
+        );
       };
 
       if (kind === "move") {
@@ -231,14 +234,58 @@ export function CropOverlay({
                   />
                   {(
                     [
-                      ["n", { left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`, top: `${crop.top * 100}%` }, "cursor-ns-resize"],
-                      ["s", { left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`, bottom: `${crop.bottom * 100}%` }, "cursor-ns-resize"],
-                      ["w", { left: `${crop.left * 100}%`, top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)` }, "cursor-ew-resize"],
-                      ["e", { right: `${crop.right * 100}%`, top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)` }, "cursor-ew-resize"],
-                      ["nw", { left: `${crop.left * 100}%`, top: `${crop.top * 100}%` }, "cursor-nwse-resize"],
-                      ["ne", { right: `${crop.right * 100}%`, top: `${crop.top * 100}%` }, "cursor-nesw-resize"],
-                      ["sw", { left: `${crop.left * 100}%`, bottom: `${crop.bottom * 100}%` }, "cursor-nesw-resize"],
-                      ["se", { right: `${crop.right * 100}%`, bottom: `${crop.bottom * 100}%` }, "cursor-nwse-resize"],
+                      [
+                        "n",
+                        {
+                          left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`,
+                          top: `${crop.top * 100}%`,
+                        },
+                        "cursor-ns-resize",
+                      ],
+                      [
+                        "s",
+                        {
+                          left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`,
+                          bottom: `${crop.bottom * 100}%`,
+                        },
+                        "cursor-ns-resize",
+                      ],
+                      [
+                        "w",
+                        {
+                          left: `${crop.left * 100}%`,
+                          top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)`,
+                        },
+                        "cursor-ew-resize",
+                      ],
+                      [
+                        "e",
+                        {
+                          right: `${crop.right * 100}%`,
+                          top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)`,
+                        },
+                        "cursor-ew-resize",
+                      ],
+                      [
+                        "nw",
+                        { left: `${crop.left * 100}%`, top: `${crop.top * 100}%` },
+                        "cursor-nwse-resize",
+                      ],
+                      [
+                        "ne",
+                        { right: `${crop.right * 100}%`, top: `${crop.top * 100}%` },
+                        "cursor-nesw-resize",
+                      ],
+                      [
+                        "sw",
+                        { left: `${crop.left * 100}%`, bottom: `${crop.bottom * 100}%` },
+                        "cursor-nesw-resize",
+                      ],
+                      [
+                        "se",
+                        { right: `${crop.right * 100}%`, bottom: `${crop.bottom * 100}%` },
+                        "cursor-nwse-resize",
+                      ],
                     ] as const
                   ).map(([kind, pos, cur]) => (
                     <Handle
@@ -293,10 +340,7 @@ function Handle({
   // Hit zone (larger, invisible, clickable) with a visible dot centered.
   return (
     <div
-      className={cn(
-        "absolute pointer-events-auto flex items-center justify-center",
-        className,
-      )}
+      className={cn("absolute pointer-events-auto flex items-center justify-center", className)}
       style={{
         ...style,
         width: hitSize,

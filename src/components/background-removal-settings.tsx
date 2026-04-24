@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type BackgroundMode } from "@/lib/utils";
+import type { BackgroundMode } from "@/lib/utils";
 
 export type AspectRatio = "free" | "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
 
@@ -26,9 +26,7 @@ export interface BackgroundRemovalState extends ChromaKeySettings {
 interface BackgroundRemovalSettingsProps {
   state: BackgroundRemovalState;
   setState: (
-    state:
-      | BackgroundRemovalState
-      | ((prev: BackgroundRemovalState) => BackgroundRemovalState),
+    state: BackgroundRemovalState | ((prev: BackgroundRemovalState) => BackgroundRemovalState),
   ) => void;
   compact?: boolean;
   mode?: "full" | "chroma-only";
@@ -48,7 +46,7 @@ export function BackgroundRemovalSettings({
 
   if (mode === "chroma-only") {
     const isEnabled = state.backgroundMode === "chroma-transparent";
-    
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/5">
@@ -60,13 +58,15 @@ export function BackgroundRemovalSettings({
           </div>
           <Switch
             checked={isEnabled}
-            onCheckedChange={(v) => updateField("backgroundMode", v ? "chroma-transparent" : "transparent-cutout")}
+            onCheckedChange={(v) =>
+              updateField("backgroundMode", v ? "chroma-transparent" : "transparent-cutout")
+            }
           />
         </div>
 
         {isEnabled && (
           <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-             <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between px-1">
               <Label className="text-xs font-medium">Auto-Crop Content</Label>
               <Switch
                 checked={state.autoCrop}
@@ -77,14 +77,21 @@ export function BackgroundRemovalSettings({
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 bg-muted/20 p-3 rounded-lg border border-dashed">
               {[
-                { label: "Similarity", val: state.similarity, field: "similarity" as const, max: 150 },
+                {
+                  label: "Similarity",
+                  val: state.similarity,
+                  field: "similarity" as const,
+                  max: 150,
+                },
                 { label: "Softness", val: state.softness, field: "softness" as const, max: 50 },
                 { label: "Color Spill", val: state.spill, field: "spill" as const, max: 100 },
                 { label: "Mask Choke", val: state.choke, field: "choke" as const, max: 5 },
               ].map((s) => (
                 <div key={s.label} className="space-y-1.5">
                   <div className="flex justify-between">
-                    <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{s.label}</Label>
+                    <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+                      {s.label}
+                    </Label>
                     <span className="text-[10px] font-mono">{s.val}</span>
                   </div>
                   <Slider
@@ -101,9 +108,7 @@ export function BackgroundRemovalSettings({
         )}
 
         {renderFooter && (
-          <div className="pt-4 border-t border-dashed flex justify-end">
-            {renderFooter()}
-          </div>
+          <div className="pt-4 border-t border-dashed flex justify-end">{renderFooter()}</div>
         )}
       </div>
     );
@@ -112,7 +117,13 @@ export function BackgroundRemovalSettings({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className={cn(compact ? "text-[10px]" : "text-xs font-medium uppercase tracking-wider text-muted-foreground/70")}>
+        <Label
+          className={cn(
+            compact
+              ? "text-[10px]"
+              : "text-xs font-medium uppercase tracking-wider text-muted-foreground/70",
+          )}
+        >
           Background Mode
         </Label>
         <div className="grid grid-cols-1 gap-3">
@@ -120,9 +131,9 @@ export function BackgroundRemovalSettings({
           <div
             className={cn(
               "flex flex-col rounded-lg border-2 transition-all overflow-hidden",
-              state.backgroundMode === "chroma-transparent" 
-                ? "border-primary bg-primary/5 shadow-sm" 
-                : "border-border hover:border-muted-foreground/20"
+              state.backgroundMode === "chroma-transparent"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/20",
             )}
           >
             <button
@@ -150,17 +161,24 @@ export function BackgroundRemovalSettings({
                     className="scale-75 origin-right"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                   {[
-                    { label: "Similarity", val: state.similarity, field: "similarity" as const, max: 150 },
+                    {
+                      label: "Similarity",
+                      val: state.similarity,
+                      field: "similarity" as const,
+                      max: 150,
+                    },
                     { label: "Softness", val: state.softness, field: "softness" as const, max: 50 },
                     { label: "Color Spill", val: state.spill, field: "spill" as const, max: 100 },
                     { label: "Mask Choke", val: state.choke, field: "choke" as const, max: 5 },
                   ].map((s) => (
                     <div key={s.label} className="space-y-1.5">
                       <div className="flex justify-between">
-                        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{s.label}</Label>
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+                          {s.label}
+                        </Label>
                         <span className="text-[10px] font-mono">{s.val}</span>
                       </div>
                       <Slider
@@ -181,9 +199,9 @@ export function BackgroundRemovalSettings({
           <div
             className={cn(
               "flex flex-col rounded-lg border-2 transition-all overflow-hidden",
-              state.backgroundMode === "chroma-solid" 
-                ? "border-primary bg-primary/5 shadow-sm" 
-                : "border-border hover:border-muted-foreground/20"
+              state.backgroundMode === "chroma-solid"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/20",
             )}
           >
             <button
@@ -206,7 +224,9 @@ export function BackgroundRemovalSettings({
                 <div className="space-y-3 pt-3">
                   <div className="space-y-1.5">
                     <div className="flex justify-between">
-                      <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Edge Softness (Feather)</Label>
+                      <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
+                        Edge Softness (Feather)
+                      </Label>
                       <span className="text-[10px] font-mono">{state.softness}px</span>
                     </div>
                     <Slider
@@ -226,9 +246,9 @@ export function BackgroundRemovalSettings({
           <div
             className={cn(
               "flex flex-col rounded-lg border-2 transition-all overflow-hidden",
-              state.backgroundMode === "transparent-cutout" 
-                ? "border-primary bg-primary/5 shadow-sm" 
-                : "border-border hover:border-muted-foreground/20"
+              state.backgroundMode === "transparent-cutout"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/20",
             )}
           >
             <button
@@ -252,14 +272,26 @@ export function BackgroundRemovalSettings({
       <div className="pt-8 border-t border-dashed flex justify-end">
         <div className="flex items-end gap-0.5">
           <div className="space-y-1 flex-1 min-w-[110px]">
-            <Label className={cn("px-1", compact ? "text-[8px]" : "text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80")}>
+            <Label
+              className={cn(
+                "px-1",
+                compact
+                  ? "text-[8px]"
+                  : "text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80",
+              )}
+            >
               Aspect Ratio
             </Label>
-            <Select 
-              value={state.aspectRatio || "free"} 
+            <Select
+              value={state.aspectRatio || "free"}
               onValueChange={(v) => updateField("aspectRatio", v as AspectRatio)}
             >
-              <SelectTrigger className={cn("bg-background shadow-none border-border/50", compact ? "h-8 text-[10px]" : "h-9 text-xs")}>
+              <SelectTrigger
+                className={cn(
+                  "bg-background shadow-none border-border/50",
+                  compact ? "h-8 text-[10px]" : "h-9 text-xs",
+                )}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -272,11 +304,7 @@ export function BackgroundRemovalSettings({
               </SelectContent>
             </Select>
           </div>
-          {renderFooter && (
-            <div className="flex-shrink-0">
-              {renderFooter()}
-            </div>
-          )}
+          {renderFooter && <div className="flex-shrink-0">{renderFooter()}</div>}
         </div>
       </div>
     </div>

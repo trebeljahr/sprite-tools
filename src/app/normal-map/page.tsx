@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -17,13 +17,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -354,9 +348,7 @@ export default function NormalMapPage() {
     a.href = URL.createObjectURL(blob);
     const base = sourceFile.name.replace(/\.[^.]+$/, "");
     a.download =
-      sourceMode === "sheet"
-        ? `${base}-normal-${currentIndex}.png`
-        : `${base}-normal.png`;
+      sourceMode === "sheet" ? `${base}-normal-${currentIndex}.png` : `${base}-normal.png`;
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Normal map downloaded");
@@ -447,9 +439,7 @@ export default function NormalMapPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -466,12 +456,10 @@ export default function NormalMapPage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -543,10 +531,7 @@ export default function NormalMapPage() {
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Height source</Label>
-                <Select
-                  value={source}
-                  onValueChange={(v) => v && setSource(v as NormalSource)}
-                >
+                <Select value={source} onValueChange={(v) => v && setSource(v as NormalSource)}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -626,13 +611,11 @@ export default function NormalMapPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/30 border">
-                {(
-                  [
-                    { id: "normal" as const, label: "Normal" },
-                    { id: "source" as const, label: "Source" },
-                    { id: "lit" as const, label: "Lit" },
-                  ]
-                ).map(({ id, label }) => (
+                {[
+                  { id: "normal" as const, label: "Normal" },
+                  { id: "source" as const, label: "Source" },
+                  { id: "lit" as const, label: "Lit" },
+                ].map(({ id, label }) => (
                   <button
                     key={id}
                     onClick={() => setPreviewMode(id)}
@@ -673,9 +656,7 @@ export default function NormalMapPage() {
                       min={0}
                       max={200}
                       step={1}
-                      onValueChange={(v) =>
-                        setLightHeight((Array.isArray(v) ? v[0] : v) / 100)
-                      }
+                      onValueChange={(v) => setLightHeight((Array.isArray(v) ? v[0] : v) / 100)}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -722,9 +703,7 @@ export default function NormalMapPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"

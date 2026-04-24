@@ -36,19 +36,16 @@ export function AiGate({ feature, description, children }: AiGateProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-md border bg-muted/20 text-xs text-muted-foreground">
-            This feature depends on paid third-party AI providers and isn&rsquo;t turned on
-            yet. The rest of sprite-tools — collision polygons, pivots, tags, pixelation,
-            normal maps, palette swap, atlas packing, GIF export — all work today, for free,
-            entirely in your browser or via the CLI.
+            This feature depends on paid third-party AI providers and isn&rsquo;t turned on yet. The
+            rest of sprite-tools — collision polygons, pivots, tags, pixelation, normal maps,
+            palette swap, atlas packing, GIF export — all work today, for free, entirely in your
+            browser or via the CLI.
           </div>
           <div className="flex justify-center gap-3">
             <Link href="/docs/quickstart" className={cn(buttonVariants({ size: "sm" }))}>
               Try what ships today
             </Link>
-            <Link
-              href="/"
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-            >
+            <Link href="/" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
               Back to home
             </Link>
           </div>

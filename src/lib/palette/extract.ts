@@ -29,11 +29,7 @@ export function extractPalette(src: ImageData, count: number): RGB[] {
  * Unmapped palette entries pass through unchanged. Works well when the
  * extracted palette is stable across frames of the same sheet.
  */
-export function applyPaletteSwap(
-  src: ImageData,
-  palette: RGB[],
-  swaps: SwapEntry[],
-): ImageData {
+export function applyPaletteSwap(src: ImageData, palette: RGB[], swaps: SwapEntry[]): ImageData {
   if (palette.length === 0 || swaps.length === 0) {
     const out = new ImageData(src.width, src.height);
     out.data.set(src.data);
@@ -42,9 +38,7 @@ export function applyPaletteSwap(
 
   // Build a lookup: for each palette index, the (possibly new) target color.
   const target: RGB[] = palette.map((p) => {
-    const swap = swaps.find(
-      (s) => s.from.r === p.r && s.from.g === p.g && s.from.b === p.b,
-    );
+    const swap = swaps.find((s) => s.from.r === p.r && s.from.g === p.g && s.from.b === p.b);
     return swap ? swap.to : p;
   });
 

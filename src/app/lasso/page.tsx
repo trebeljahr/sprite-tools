@@ -6,10 +6,7 @@ import {
 } from "@/components/background-removal-settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ViewportControls,
-  ZoomIndicator,
-} from "@/components/viewport-controls";
+import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { useViewport } from "@/hooks/use-viewport";
 import { cn, applyChromaKey, applySolidFillChroma, sampleBackground } from "@/lib/utils";
 
@@ -24,7 +21,8 @@ import {
   Undo,
   Upload,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface Point {
@@ -251,7 +249,10 @@ export default function LassoPage() {
     if (brState.backgroundMode === "chroma-transparent" && brState.autoCrop) {
       const imageData = ctx.getImageData(0, 0, outWidth, outHeight);
       const data = imageData.data;
-      let gMinX = outWidth, gMinY = outHeight, gMaxX = 0, gMaxY = 0;
+      let gMinX = outWidth,
+        gMinY = outHeight,
+        gMaxX = 0,
+        gMaxY = 0;
       let found = false;
 
       for (let y = 0; y < outHeight; y++) {
@@ -291,7 +292,8 @@ export default function LassoPage() {
       const currentH = finalCanvas.height;
       const currentRatio = currentW / currentH;
 
-      let targetW = currentW, targetH = currentH;
+      let targetW = currentW,
+        targetH = currentH;
       if (currentRatio > targetRatio) {
         targetH = currentW / targetRatio;
       } else {
@@ -386,8 +388,7 @@ export default function LassoPage() {
       ctx.beginPath();
       ctx.rect(0, 0, image.width, image.height);
       ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++)
-        ctx.lineTo(points[i].x, points[i].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
       if (isClosed) ctx.closePath();
       else if (mousePos) ctx.lineTo(mousePos.x, mousePos.y);
       ctx.clip("evenodd");
@@ -431,10 +432,9 @@ export default function LassoPage() {
       screenPoints.forEach((p, i) => {
         const isHovered = i === hoveredPointIndex;
         const isDragged = i === draggedPointIndex;
-        
-        ctx.fillStyle =
-          i === 0 ? (isClosed ? "#00ff00" : "#ffff00") : "#ff0000";
-        
+
+        ctx.fillStyle = i === 0 ? (isClosed ? "#00ff00" : "#ffff00") : "#ff0000";
+
         if (isHovered || isDragged) {
           ctx.strokeStyle = "white";
           ctx.lineWidth = 2;
@@ -449,9 +449,7 @@ export default function LassoPage() {
         }
 
         if (i === 0 && screenMouse && !isClosed && points.length > 2) {
-          const dist = Math.sqrt(
-            Math.pow(screenMouse.x - p.x, 2) + Math.pow(screenMouse.y - p.y, 2),
-          );
+          const dist = Math.sqrt((screenMouse.x - p.x) ** 2 + (screenMouse.y - p.y) ** 2);
           if (dist < 20) {
             ctx.strokeStyle = "#00ff00";
             ctx.lineWidth = 1.5;
@@ -479,9 +477,7 @@ export default function LassoPage() {
     draw();
   }, [draw]);
 
-  const getCanvasPoint = (
-    e: React.MouseEvent | React.WheelEvent | WheelEvent,
-  ): Point => {
+  const getCanvasPoint = (e: React.MouseEvent | React.WheelEvent | WheelEvent): Point => {
     const canvas = localCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -517,9 +513,7 @@ export default function LassoPage() {
     if (isClosed) {
       const threshold = 10 / zoom; // 10 screen pixels
       const index = points.findIndex(
-        (pt) =>
-          Math.sqrt(Math.pow(pt.x - p.x, 2) + Math.pow(pt.y - p.y, 2)) <
-          threshold,
+        (pt) => Math.sqrt((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2) < threshold,
       );
       if (index !== -1) {
         setDraggedPointIndex(index);
@@ -550,9 +544,7 @@ export default function LassoPage() {
       const { zoom } = view;
       const threshold = 10 / zoom;
       const index = points.findIndex(
-        (pt) =>
-          Math.sqrt(Math.pow(pt.x - p.x, 2) + Math.pow(pt.y - p.y, 2)) <
-          threshold,
+        (pt) => Math.sqrt((pt.x - p.x) ** 2 + (pt.y - p.y) ** 2) < threshold,
       );
       setHoveredPointIndex(index !== -1 ? index : null);
     } else {
@@ -561,8 +553,7 @@ export default function LassoPage() {
 
     if (dragStartPos.current) {
       const dist = Math.sqrt(
-        Math.pow(e.clientX - dragStartPos.current.x, 2) +
-          Math.pow(e.clientY - dragStartPos.current.y, 2),
+        (e.clientX - dragStartPos.current.x) ** 2 + (e.clientY - dragStartPos.current.y) ** 2,
       );
       if (dist > 5) hasDragged.current = true;
     }
@@ -617,8 +608,7 @@ export default function LassoPage() {
             y: e.clientY - rect.top,
           };
           const dist = Math.sqrt(
-            Math.pow(screenClick.x - screenFirst.x, 2) +
-              Math.pow(screenClick.y - screenFirst.y, 2),
+            (screenClick.x - screenFirst.x) ** 2 + (screenClick.y - screenFirst.y) ** 2,
           );
           if (dist < 20) {
             setIsClosed(true);
@@ -711,10 +701,7 @@ export default function LassoPage() {
 
   const handleResetPreview = () => {
     if (previewDimensions.current.w > 0) {
-      previewViewport.fitToView(
-        previewDimensions.current.w,
-        previewDimensions.current.h,
-      );
+      previewViewport.fitToView(previewDimensions.current.w, previewDimensions.current.h);
     } else {
       previewViewport.resetView();
     }
@@ -747,17 +734,11 @@ export default function LassoPage() {
                   Ctrl+Z / Right-Click
                 </span>
                 <span>Clear:</span>{" "}
-                <span className="font-mono bg-muted px-1 rounded text-[10px]">
-                  Space / Esc
-                </span>
+                <span className="font-mono bg-muted px-1 rounded text-[10px]">Space / Esc</span>
                 <span>Move:</span>{" "}
-                <span className="font-mono bg-muted px-1 rounded text-[10px]">
-                  Click & Drag
-                </span>
+                <span className="font-mono bg-muted px-1 rounded text-[10px]">Click & Drag</span>
                 <span>Zoom:</span>{" "}
-                <span className="font-mono bg-muted px-1 rounded text-[10px]">
-                  Scroll Wheel
-                </span>
+                <span className="font-mono bg-muted px-1 rounded text-[10px]">Scroll Wheel</span>
               </div>
             </div>
           </Card>
@@ -791,26 +772,18 @@ export default function LassoPage() {
                   variant="ghost"
                   className="h-8 w-8"
                   title="Toggle Grid Color"
-                  onClick={() =>
-                    setGridTheme((prev) =>
-                      prev === "light" ? "dark" : "light",
-                    )
-                  }
+                  onClick={() => setGridTheme((prev) => (prev === "light" ? "dark" : "light"))}
                 >
                   <Palette
                     className={cn(
                       "h-4 w-4",
-                      gridTheme === "dark"
-                        ? "text-primary"
-                        : "text-muted-foreground",
+                      gridTheme === "dark" ? "text-primary" : "text-muted-foreground",
                     )}
                   />
                 </Button>
                 <ViewportControls
                   onZoomIn={() => image && setZoomIn(image.width, image.height)}
-                  onZoomOut={() =>
-                    image && setZoomOut(image.width, image.height)
-                  }
+                  onZoomOut={() => image && setZoomOut(image.width, image.height)}
                   onReset={handleResetCanvas}
                 />
               </div>
@@ -857,12 +830,8 @@ export default function LassoPage() {
                   <div className="w-20 h-20 rounded-full bg-primary/5 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-300">
                     <Upload className="h-10 w-10 text-primary/40 group-hover:text-primary transition-colors" />
                   </div>
-                  <p className="font-medium text-lg text-foreground/60">
-                    Upload an image to start
-                  </p>
-                  <p className="text-sm opacity-60">
-                    or click the button in the toolbar
-                  </p>
+                  <p className="font-medium text-lg text-foreground/60">Upload an image to start</p>
+                  <p className="text-sm opacity-60">or click the button in the toolbar</p>
                 </div>
               ) : (
                 <canvas
@@ -873,8 +842,11 @@ export default function LassoPage() {
                   onMouseLeave={handleMouseLeave}
                   className={cn(
                     "absolute top-0 left-0 w-full h-full",
-                    draggedPointIndex !== null ? "cursor-grabbing" :
-                      hoveredPointIndex !== null ? "cursor-grab" : "cursor-crosshair",
+                    draggedPointIndex !== null
+                      ? "cursor-grabbing"
+                      : hoveredPointIndex !== null
+                        ? "cursor-grab"
+                        : "cursor-crosshair",
                     isPanning && "cursor-grabbing",
                   )}
                 />
@@ -934,18 +906,12 @@ export default function LassoPage() {
                       variant="ghost"
                       className="h-7 w-7"
                       title="Toggle Grid"
-                      onClick={() =>
-                        setGridTheme((prev) =>
-                          prev === "light" ? "dark" : "light",
-                        )
-                      }
+                      onClick={() => setGridTheme((prev) => (prev === "light" ? "dark" : "light"))}
                     >
                       <Palette
                         className={cn(
                           "h-4 w-4",
-                          gridTheme === "dark"
-                            ? "text-primary"
-                            : "text-muted-foreground",
+                          gridTheme === "dark" ? "text-primary" : "text-muted-foreground",
                         )}
                       />
                     </Button>
@@ -954,26 +920,16 @@ export default function LassoPage() {
                     <ViewportControls
                       onZoomIn={() =>
                         previewDimensions.current.w > 0 &&
-                        pSetZoomIn(
-                          previewDimensions.current.w,
-                          previewDimensions.current.h,
-                        )
+                        pSetZoomIn(previewDimensions.current.w, previewDimensions.current.h)
                       }
                       onZoomOut={() =>
                         previewDimensions.current.w > 0 &&
-                        pSetZoomOut(
-                          previewDimensions.current.w,
-                          previewDimensions.current.h,
-                        )
+                        pSetZoomOut(previewDimensions.current.w, previewDimensions.current.h)
                       }
                       onReset={handleResetPreview}
                     />
                     <div className="w-px h-4 bg-border mx-1" />
-                    <Button
-                      onClick={exportClippedImage}
-                      size="sm"
-                      className="h-8 gap-2"
-                    >
+                    <Button onClick={exportClippedImage} size="sm" className="h-8 gap-2">
                       <Download className="h-4 w-4" /> Export
                     </Button>
                   </div>
@@ -983,9 +939,7 @@ export default function LassoPage() {
                     ref={previewContainerRef}
                     className={cn(
                       "aspect-square min-h-100 overflow-hidden relative cursor-move touch-none bg-muted/5",
-                      gridTheme === "light"
-                        ? "checkerboard-light"
-                        : "checkerboard-dark",
+                      gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
                     )}
                     onMouseDown={previewViewport.startPanning}
                     onMouseMove={previewViewport.updatePanning}

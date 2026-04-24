@@ -41,9 +41,7 @@ export async function generateVideo(
       model: options.model || "grok-imagine-video",
       prompt,
       image: {
-        url: image64.startsWith("data:")
-          ? image64
-          : `data:image/jpeg;base64,${image64}`,
+        url: image64.startsWith("data:") ? image64 : `data:image/jpeg;base64,${image64}`,
       },
       duration: options.duration || 1,
       resolution: options.resolution || "720p",

@@ -27,9 +27,7 @@ if (typeof globalThis.ImageData === "undefined") {
         this.data = dataOrWidth;
         this.width = widthOrHeight;
         this.height =
-          typeof heightOrOpts === "number"
-            ? heightOrOpts
-            : dataOrWidth.length / 4 / widthOrHeight;
+          typeof heightOrOpts === "number" ? heightOrOpts : dataOrWidth.length / 4 / widthOrHeight;
       }
     }
   }

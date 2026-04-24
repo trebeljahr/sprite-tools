@@ -92,9 +92,7 @@ export interface ProjectSource {
  * - `clearSource()` resets.
  */
 export function useProjectSource() {
-  const [source, setSourceState] = useState<ProjectSource | null | undefined>(
-    undefined,
-  );
+  const [source, setSourceState] = useState<ProjectSource | null | undefined>(undefined);
 
   // Initial load + cross-tab sync.
   useEffect(() => {
@@ -111,9 +109,11 @@ export function useProjectSource() {
 
     const onStorage = (e: StorageEvent) => {
       if (e.key !== "sprite-tools:source-rev") return;
-      getSource().then((s) => {
-        if (active) setSourceState(storedToProject(s));
-      }).catch(() => {});
+      getSource()
+        .then((s) => {
+          if (active) setSourceState(storedToProject(s));
+        })
+        .catch(() => {});
     };
     window.addEventListener("storage", onStorage);
 

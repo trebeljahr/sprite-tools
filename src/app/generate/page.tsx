@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Sparkles, 
-  Image as ImageIcon, 
-  Settings2, 
-  Palette, 
-  MessageSquare, 
+import {
+  Sparkles,
+  Image as ImageIcon,
+  Settings2,
+  Palette,
+  MessageSquare,
   Download,
   ArrowRight,
   RefreshCw,
@@ -17,13 +17,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,11 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  SPRITE_TEMPLATES, 
-  POLLINATIONS_MODELS, 
-  SpriteTemplateType, 
-  generateImage 
+import {
+  SPRITE_TEMPLATES,
+  POLLINATIONS_MODELS,
+  type SpriteTemplateType,
+  generateImage,
 } from "@/lib/image-gen";
 import { cn } from "@/lib/utils";
 import { AuthWall } from "@/components/auth-wall";
@@ -72,7 +66,7 @@ function GeneratePageContent() {
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [customTemplate, setCustomTemplate] = useState("");
 
-  const selectedTemplate = SPRITE_TEMPLATES.find(t => t.id === selectedTemplateId)!;
+  const selectedTemplate = SPRITE_TEMPLATES.find((t) => t.id === selectedTemplateId)!;
 
   useEffect(() => {
     setCustomTemplate(selectedTemplate.basePrompt);
@@ -105,9 +99,9 @@ function GeneratePageContent() {
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput) return;
-    
+
     // Simple refinement: append to prompt
-    setUserPrompt(prev => prev ? `${prev}, ${chatInput}` : chatInput);
+    setUserPrompt((prev) => (prev ? `${prev}, ${chatInput}` : chatInput));
     setChatInput("");
     toast.success("Prompt refined!");
   };
@@ -136,9 +130,7 @@ function GeneratePageContent() {
           <Sparkles className="w-8 h-8 text-primary" />
           AI Character
         </h1>
-        <p className="text-muted-foreground">
-          Generate character sprite art with AI.
-        </p>
+        <p className="text-muted-foreground">Generate character sprite art with AI.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -154,16 +146,18 @@ function GeneratePageContent() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Template Type</Label>
-                <Select 
-                  value={selectedTemplateId} 
+                <Select
+                  value={selectedTemplateId}
                   onValueChange={(v) => setSelectedTemplateId(v as SpriteTemplateType)}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SPRITE_TEMPLATES.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    {SPRITE_TEMPLATES.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -173,18 +167,22 @@ function GeneratePageContent() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Template Text</Label>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="h-7 text-xs"
                     onClick={() => setIsEditingTemplate(!isEditingTemplate)}
                   >
-                    {isEditingTemplate ? <Check className="w-3 h-3 mr-1" /> : <Edit3 className="w-3 h-3 mr-1" />}
+                    {isEditingTemplate ? (
+                      <Check className="w-3 h-3 mr-1" />
+                    ) : (
+                      <Edit3 className="w-3 h-3 mr-1" />
+                    )}
                     {isEditingTemplate ? "Done" : "Edit"}
                   </Button>
                 </div>
                 {isEditingTemplate ? (
-                  <Textarea 
+                  <Textarea
                     value={customTemplate}
                     onChange={(e) => setCustomTemplate(e.target.value)}
                     className="text-xs font-mono h-32"
@@ -194,7 +192,9 @@ function GeneratePageContent() {
                     {selectedTemplate.basePrompt}
                   </div>
                 )}
-                <p className="text-[10px] text-muted-foreground">Use &#123;prompt&#125; and &#123;bgcolor&#125; as placeholders.</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Use &#123;prompt&#125; and &#123;bgcolor&#125; as placeholders.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -223,8 +223,10 @@ function GeneratePageContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {POLLINATIONS_MODELS.map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    {POLLINATIONS_MODELS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -241,12 +243,14 @@ function GeneratePageContent() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleChatSubmit} className="flex gap-2">
-                <Input 
-                  placeholder="e.g., 'wearing a red hat'..." 
+                <Input
+                  placeholder="e.g., 'wearing a red hat'..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                 />
-                <Button type="submit" size="sm">Add</Button>
+                <Button type="submit" size="sm">
+                  Add
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -260,16 +264,16 @@ function GeneratePageContent() {
               <CardDescription>Describe your character in detail.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea 
+              <Textarea
                 placeholder="A brave female knight with silver armor and a flowing blue cape..."
                 className="h-32 text-lg"
                 value={userPrompt}
                 onChange={(e) => setUserPrompt(e.target.value)}
               />
-              
-              <Button 
-                onClick={handleGenerate} 
-                disabled={isGenerating} 
+
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating}
                 className="w-full h-12 text-lg"
               >
                 {isGenerating ? (
@@ -285,7 +289,7 @@ function GeneratePageContent() {
                 )}
               </Button>
             </CardContent>
-            
+
             <div className="flex-1 flex flex-col p-6 pt-0 border-t mt-4">
               <div className="flex items-center justify-between mb-4 mt-4">
                 <h3 className="font-semibold">Preview Result</h3>
@@ -295,10 +299,10 @@ function GeneratePageContent() {
                       <Download className="w-4 h-4 mr-2" />
                       Download
                     </Button>
-                    <Link 
+                    <Link
                       href={`/animate?imageUrl=${encodeURIComponent(generatedImageUrl)}`}
                       className={cn(
-                        "inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[0.8rem] font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                        "inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[0.8rem] font-medium bg-green-600 text-white hover:bg-green-700 transition-colors",
                       )}
                     >
                       Use for Animation
@@ -307,15 +311,17 @@ function GeneratePageContent() {
                   </div>
                 )}
               </div>
-              
-              <div className={cn(
-                "flex-1 min-h-[400px] border-2 border-dashed rounded-lg flex items-center justify-center overflow-hidden bg-muted/20",
-                !generatedImageUrl && "text-muted-foreground"
-              )}>
+
+              <div
+                className={cn(
+                  "flex-1 min-h-[400px] border-2 border-dashed rounded-lg flex items-center justify-center overflow-hidden bg-muted/20",
+                  !generatedImageUrl && "text-muted-foreground",
+                )}
+              >
                 {generatedImageUrl ? (
-                  <img 
-                    src={generatedImageUrl} 
-                    alt="Generated Sprite" 
+                  <img
+                    src={generatedImageUrl}
+                    alt="Generated Sprite"
                     className="max-w-full max-h-full object-contain shadow-xl"
                   />
                 ) : isGenerating ? (

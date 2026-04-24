@@ -1,26 +1,12 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  Boxes,
-  Copy,
-  Download,
-  Loader2,
-  Palette,
-  Trash2,
-  Upload,
-} from "lucide-react";
+import { Boxes, Copy, Download, Loader2, Palette, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -29,12 +15,7 @@ import { cn } from "@/lib/utils";
 import { ToolHeader } from "@/components/tool-header";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
-import {
-  computeTrimRect,
-  packAtlas,
-  type PackInput,
-  type PackedAtlas,
-} from "@/lib/atlas/pack";
+import { computeTrimRect, packAtlas, type PackInput, type PackedAtlas } from "@/lib/atlas/pack";
 
 interface AtlasSprite {
   id: string;
@@ -63,7 +44,10 @@ async function fileToImageData(file: File): Promise<ImageData> {
   return data;
 }
 
-function trimImageData(src: ImageData, rect: { x: number; y: number; w: number; h: number }): ImageData {
+function trimImageData(
+  src: ImageData,
+  rect: { x: number; y: number; w: number; h: number },
+): ImageData {
   const out = new ImageData(rect.w, rect.h);
   const sd = src.data;
   const od = out.data;
@@ -158,7 +142,10 @@ export default function AtlasPage() {
         width: s.content.width,
         height: s.content.height,
       }));
-      const trim = new Map<string, { sourceWidth: number; sourceHeight: number; offsetX: number; offsetY: number } | undefined>();
+      const trim = new Map<
+        string,
+        { sourceWidth: number; sourceHeight: number; offsetX: number; offsetY: number } | undefined
+      >();
       for (const s of sprites) {
         if (s.trim) {
           trim.set(s.id, {
@@ -348,9 +335,7 @@ export default function AtlasPage() {
                 onDrop={onDrop}
               >
                 <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Upload / drop multiple images
-                </p>
+                <p className="text-sm text-muted-foreground">Upload / drop multiple images</p>
                 <Input
                   ref={fileInputRef}
                   type="file"
@@ -385,9 +370,7 @@ export default function AtlasPage() {
                         <div
                           className={cn(
                             "w-8 h-8 shrink-0 border rounded overflow-hidden",
-                            gridTheme === "light"
-                              ? "checkerboard-light"
-                              : "checkerboard-dark",
+                            gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
                           )}
                         >
                           <SpriteThumb data={s.content} />
@@ -454,7 +437,8 @@ export default function AtlasPage() {
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium">Auto-trim transparent</Label>
                   <p className="text-[10px] text-muted-foreground leading-tight">
-                    Clip each sprite to its opaque bounds before packing. Toggle then re-upload to re-apply.
+                    Clip each sprite to its opaque bounds before packing. Toggle then re-upload to
+                    re-apply.
                   </p>
                 </div>
                 <Switch checked={autoTrim} onCheckedChange={setAutoTrim} />
@@ -503,9 +487,7 @@ export default function AtlasPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Atlas preview</CardTitle>
-                {isLoading && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"

@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -19,13 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -42,12 +36,7 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
-import {
-  hexToRgb,
-  pixelate,
-  type PixelateOptions,
-  type RGB,
-} from "@/lib/pixel-art/pixelate";
+import { hexToRgb, pixelate, type PixelateOptions, type RGB } from "@/lib/pixel-art/pixelate";
 import { PALETTES, paletteById } from "@/lib/pixel-art/palettes";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
@@ -330,9 +319,7 @@ export default function PixelatePage() {
     a.href = URL.createObjectURL(blob);
     const base = sourceFile.name.replace(/\.[^.]+$/, "");
     a.download =
-      sourceMode === "sheet"
-        ? `${base}-pixelated-${currentIndex}.png`
-        : `${base}-pixelated.png`;
+      sourceMode === "sheet" ? `${base}-pixelated-${currentIndex}.png` : `${base}-pixelated.png`;
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Frame downloaded");
@@ -426,9 +413,7 @@ export default function PixelatePage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -445,12 +430,10 @@ export default function PixelatePage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -559,10 +542,7 @@ export default function PixelatePage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs">Palette</Label>
-                <Select
-                  value={paletteId}
-                  onValueChange={(v) => v && setPaletteId(v)}
-                >
+                <Select value={paletteId} onValueChange={(v) => v && setPaletteId(v)}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -644,9 +624,7 @@ export default function PixelatePage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"
@@ -680,15 +658,9 @@ export default function PixelatePage() {
                 </Button>
               </div>
               <ViewportControls
-                onZoomIn={() =>
-                  rawFrame && viewport.setZoomIn(rawFrame.width, rawFrame.height)
-                }
-                onZoomOut={() =>
-                  rawFrame && viewport.setZoomOut(rawFrame.width, rawFrame.height)
-                }
-                onReset={() =>
-                  rawFrame && viewport.fitToView(rawFrame.width, rawFrame.height)
-                }
+                onZoomIn={() => rawFrame && viewport.setZoomIn(rawFrame.width, rawFrame.height)}
+                onZoomOut={() => rawFrame && viewport.setZoomOut(rawFrame.width, rawFrame.height)}
+                onReset={() => rawFrame && viewport.fitToView(rawFrame.width, rawFrame.height)}
               />
             </CardHeader>
             <CardContent className="space-y-3">
@@ -729,9 +701,7 @@ export default function PixelatePage() {
                         <ChevronLeft
                           className="w-3 h-3 cursor-pointer"
                           onClick={() =>
-                            setCurrentIndex(
-                              (i) => (i - 1 + rawFrames.length) % rawFrames.length,
-                            )
+                            setCurrentIndex((i) => (i - 1 + rawFrames.length) % rawFrames.length)
                           }
                         />
                         {currentIndex + 1} / {rawFrames.length}
@@ -768,9 +738,7 @@ export default function PixelatePage() {
                     min={0}
                     max={rawFrames.length - 1}
                     step={1}
-                    onValueChange={(v) =>
-                      setCurrentIndex(Array.isArray(v) ? v[0] : v)
-                    }
+                    onValueChange={(v) => setCurrentIndex(Array.isArray(v) ? v[0] : v)}
                   />
                 </div>
               )}

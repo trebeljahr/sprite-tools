@@ -5,7 +5,7 @@
 // explicit `output_path` so the client can control where files land;
 // responses include a `path` field so agents can chain tools.
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
@@ -22,11 +22,7 @@ import {
   rgbToHex,
   hexToRgb as paletteHexToRgb,
 } from "../src/lib/palette/extract";
-import {
-  packAtlas,
-  computeTrimRect,
-  type PackInput,
-} from "../src/lib/atlas/pack";
+import { packAtlas, computeTrimRect, type PackInput } from "../src/lib/atlas/pack";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -45,9 +41,7 @@ const PRESET_IDS = Object.keys(PIVOT_PRESETS) as (keyof typeof PIVOT_PRESETS)[];
 
 function jsonResult(payload: unknown) {
   return {
-    content: [
-      { type: "text" as const, text: JSON.stringify(payload, null, 2) },
-    ],
+    content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
   };
 }
 
@@ -99,8 +93,7 @@ export function registerAllTools(server: McpServer) {
     ({ input_path }) => {
       const img = loadPng(input_path);
       let opaque = 0;
-      for (let i = 3; i < img.data.length; i += 4)
-        if (img.data[i] > 0) opaque++;
+      for (let i = 3; i < img.data.length; i += 4) if (img.data[i] > 0) opaque++;
       const total = img.width * img.height;
       const det = detectGridFromImageData(img);
       const bounds = computeTrimRect(img);
@@ -126,8 +119,7 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_detect_grid",
     {
-      description:
-        "Auto-detect the (cols, rows) of a sprite sheet. Returns confidence in [0,1].",
+      description: "Auto-detect the (cols, rows) of a sprite sheet. Returns confidence in [0,1].",
       inputSchema: {
         input_path: z.string().describe("Absolute path to a PNG file"),
       },
@@ -188,8 +180,7 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_trim",
     {
-      description:
-        "Auto-crop transparent padding around the opaque region of a single sprite.",
+      description: "Auto-crop transparent padding around the opaque region of a single sprite.",
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
@@ -240,14 +231,7 @@ export function registerAllTools(server: McpServer) {
         convex_hull: z.boolean().default(false),
       },
     },
-    ({
-      input_path,
-      cols,
-      rows,
-      alpha_threshold,
-      simplify_tolerance,
-      convex_hull,
-    }) => {
+    ({ input_path, cols, rows, alpha_threshold, simplify_tolerance, convex_hull }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
       const collision = frames.map((f, i) => {
         const outline = generateOutline(f, {
@@ -282,15 +266,12 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_generate_pivot",
     {
-      description:
-        "Emit per-frame pivot (anchor) metadata from a preset or explicit coords.",
+      description: "Emit per-frame pivot (anchor) metadata from a preset or explicit coords.",
       inputSchema: {
         input_path: z.string(),
         cols: z.number().int().positive().optional(),
         rows: z.number().int().positive().optional(),
-        preset: z
-          .enum(PRESET_IDS as [string, ...string[]])
-          .default("bottom-center"),
+        preset: z.enum(PRESET_IDS as [string, ...string[]]).default("bottom-center"),
         x: z.number().int().optional().describe("Override X (pixels)"),
         y: z.number().int().optional().describe("Override Y (pixels)"),
       },
@@ -324,8 +305,7 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_generate_tags",
     {
-      description:
-        "Emit Aseprite-style animation tag metadata (named frame ranges).",
+      description: "Emit Aseprite-style animation tag metadata (named frame ranges).",
       inputSchema: {
         input_path: z.string(),
         cols: z.number().int().positive().optional(),
@@ -336,9 +316,7 @@ export function registerAllTools(server: McpServer) {
               name: z.string(),
               from: z.number().int().min(0),
               to: z.number().int().min(0),
-              direction: z
-                .enum(["forward", "reverse", "pingpong"])
-                .default("forward"),
+              direction: z.enum(["forward", "reverse", "pingpong"]).default("forward"),
               fps: z.number().int().positive().default(10),
             }),
           )
@@ -397,8 +375,7 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_palette_swap",
     {
-      description:
-        "Recolor a sprite by swapping one or more palette colors; writes a PNG.",
+      description: "Recolor a sprite by swapping one or more palette colors; writes a PNG.",
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
@@ -408,11 +385,7 @@ export function registerAllTools(server: McpServer) {
         swaps: z
           .array(
             z.object({
-              from: z
-                .string()
-                .describe(
-                  "hex #rrggbb (must match an extracted palette entry)",
-                ),
+              from: z.string().describe("hex #rrggbb (must match an extracted palette entry)"),
               to: z.string().describe("hex #rrggbb"),
             }),
           )
@@ -434,13 +407,9 @@ export function registerAllTools(server: McpServer) {
         from: paletteHexToRgb(s.from),
         to: paletteHexToRgb(s.to),
       }));
-      const recolored = frames.map((f) =>
-        applyPaletteSwap(f, palette, swapPairs),
-      );
+      const recolored = frames.map((f) => applyPaletteSwap(f, palette, swapPairs));
       const out =
-        recolored.length === 1
-          ? recolored[0]
-          : stitchSheet(recolored, grid.cols, grid.rows);
+        recolored.length === 1 ? recolored[0] : stitchSheet(recolored, grid.cols, grid.rows);
       mkdirSync(dirname(output_path), { recursive: true });
       savePng(out, output_path);
       return jsonResult({
@@ -466,9 +435,7 @@ export function registerAllTools(server: McpServer) {
         rows: z.number().int().positive().optional(),
         pixel_size: z.number().int().min(1).max(64).default(4),
         colors: z.number().int().min(0).max(256).default(16),
-        palette: z
-          .enum(PALETTES.map((p) => p.id) as [string, ...string[]])
-          .default("none"),
+        palette: z.enum(PALETTES.map((p) => p.id) as [string, ...string[]]).default("none"),
         dither: z.boolean().default(false),
         upscale: z
           .boolean()
@@ -476,21 +443,10 @@ export function registerAllTools(server: McpServer) {
           .describe("Scale back up to source size with blocky pixels"),
       },
     },
-    ({
-      input_path,
-      output_path,
-      cols,
-      rows,
-      pixel_size,
-      colors,
-      palette,
-      dither,
-      upscale,
-    }) => {
+    ({ input_path, output_path, cols, rows, pixel_size, colors, palette, dither, upscale }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
       const preset = paletteById(palette);
-      const paletteRgb =
-        preset.colors.length > 0 ? preset.colors.map(hexToRgb) : undefined;
+      const paletteRgb = preset.colors.length > 0 ? preset.colors.map(hexToRgb) : undefined;
 
       const processed = frames.map((f) => {
         const small = pixelate(f, {
@@ -506,9 +462,7 @@ export function registerAllTools(server: McpServer) {
       });
 
       const out =
-        processed.length === 1
-          ? processed[0]
-          : stitchSheet(processed, grid.cols, grid.rows);
+        processed.length === 1 ? processed[0] : stitchSheet(processed, grid.cols, grid.rows);
       mkdirSync(dirname(output_path), { recursive: true });
       savePng(out, output_path);
       return jsonResult({
@@ -538,17 +492,7 @@ export function registerAllTools(server: McpServer) {
         blur: z.number().int().min(0).max(16).default(0),
       },
     },
-    ({
-      input_path,
-      output_path,
-      cols,
-      rows,
-      source,
-      strength,
-      mix,
-      flip_y,
-      blur,
-    }) => {
+    ({ input_path, output_path, cols, rows, source, strength, mix, flip_y, blur }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
       const processed = frames.map((f) =>
         generateNormalMap(f, {
@@ -560,9 +504,7 @@ export function registerAllTools(server: McpServer) {
         }),
       );
       const out =
-        processed.length === 1
-          ? processed[0]
-          : stitchSheet(processed, grid.cols, grid.rows);
+        processed.length === 1 ? processed[0] : stitchSheet(processed, grid.cols, grid.rows);
       mkdirSync(dirname(output_path), { recursive: true });
       savePng(out, output_path);
       return jsonResult({
@@ -707,9 +649,7 @@ export function registerAllTools(server: McpServer) {
           .optional(),
         pivot: z
           .object({
-            preset: z
-              .enum(PRESET_IDS as [string, ...string[]])
-              .default("bottom-center"),
+            preset: z.enum(PRESET_IDS as [string, ...string[]]).default("bottom-center"),
             x: z.number().int().optional(),
             y: z.number().int().optional(),
           })
@@ -720,9 +660,7 @@ export function registerAllTools(server: McpServer) {
               name: z.string(),
               from: z.number().int().min(0),
               to: z.number().int().min(0),
-              direction: z
-                .enum(["forward", "reverse", "pingpong"])
-                .default("forward"),
+              direction: z.enum(["forward", "reverse", "pingpong"]).default("forward"),
               fps: z.number().int().positive().default(10),
             }),
           )
@@ -793,10 +731,7 @@ function sliceRect(
   const out = new ImageData(rect.w, rect.h);
   for (let y = 0; y < rect.h; y++) {
     const srcRow = ((rect.y + y) * src.width + rect.x) * 4;
-    out.data.set(
-      src.data.subarray(srcRow, srcRow + rect.w * 4),
-      y * rect.w * 4,
-    );
+    out.data.set(src.data.subarray(srcRow, srcRow + rect.w * 4), y * rect.w * 4);
   }
   return out;
 }

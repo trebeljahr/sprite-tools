@@ -18,23 +18,57 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CollisionDemo } from "@/components/collision-demo";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const TOOLS = [
-  { href: "/spritesheet", label: "Sheet Builder", icon: Scissors, blurb: "Slice video or existing sheet into clean frames with chroma key + crop." },
-  { href: "/collision", label: "Collision", icon: Hexagon, blurb: "Trace tight per-frame collision polygons for physics engines." },
-  { href: "/pixelate", label: "Pixelate", icon: Grid3x3, blurb: "Turn any sprite into pixel art — Game Boy, PICO-8, NES palettes." },
-  { href: "/normal-map", label: "Normals", icon: Compass, blurb: "Alpha/luminance → tangent-space normal map for 2D dynamic lighting." },
-  { href: "/palette", label: "Palette", icon: PaletteIcon, blurb: "Extract dominant colors, swap any of them to recolor the sprite." },
-  { href: "/atlas", label: "Atlas", icon: Boxes, blurb: "Bin-pack many sprites into one PNG + TexturePacker manifest." },
-  { href: "/gif", label: "GIF", icon: Film, blurb: "Animated GIF / WebM export from a sprite sheet." },
-  { href: "/tags", label: "Tags", icon: Layers, blurb: "Split a sheet into named animation clips — idle, run, attack." },
+  {
+    href: "/spritesheet",
+    label: "Sheet Builder",
+    icon: Scissors,
+    blurb: "Slice video or existing sheet into clean frames with chroma key + crop.",
+  },
+  {
+    href: "/collision",
+    label: "Collision",
+    icon: Hexagon,
+    blurb: "Trace tight per-frame collision polygons for physics engines.",
+  },
+  {
+    href: "/pixelate",
+    label: "Pixelate",
+    icon: Grid3x3,
+    blurb: "Turn any sprite into pixel art — Game Boy, PICO-8, NES palettes.",
+  },
+  {
+    href: "/normal-map",
+    label: "Normals",
+    icon: Compass,
+    blurb: "Alpha/luminance → tangent-space normal map for 2D dynamic lighting.",
+  },
+  {
+    href: "/palette",
+    label: "Palette",
+    icon: PaletteIcon,
+    blurb: "Extract dominant colors, swap any of them to recolor the sprite.",
+  },
+  {
+    href: "/atlas",
+    label: "Atlas",
+    icon: Boxes,
+    blurb: "Bin-pack many sprites into one PNG + TexturePacker manifest.",
+  },
+  {
+    href: "/gif",
+    label: "GIF",
+    icon: Film,
+    blurb: "Animated GIF / WebM export from a sprite sheet.",
+  },
+  {
+    href: "/tags",
+    label: "Tags",
+    icon: Layers,
+    blurb: "Split a sheet into named animation clips — idle, run, attack.",
+  },
 ];
 
 export default function HomePage() {
@@ -48,25 +82,19 @@ export default function HomePage() {
           </div>
           <h1 className="text-5xl font-bold tracking-tight mb-4">sprite-tools</h1>
           <p className="text-lg text-muted-foreground max-w-xl">
-            A batteries-included toolkit for turning AI-generated or hand-drawn
-            sprites into <strong className="text-foreground">game-ready assets</strong> —
-            collision polygons, pivots, animation tags, pixel-art conversion,
-            normal maps, palette swap, atlas packing, GIF export.
+            A batteries-included toolkit for turning AI-generated or hand-drawn sprites into{" "}
+            <strong className="text-foreground">game-ready assets</strong> — collision polygons,
+            pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing,
+            GIF export.
           </p>
           <p className="text-sm text-muted-foreground mt-3 max-w-xl">
             Web app, CLI, and MCP server — all sharing the same algorithms and JSON contracts.
           </p>
           <div className="flex items-center justify-center md:justify-start gap-3 mt-8">
-            <Link
-              href="/docs/quickstart"
-              className={cn(buttonVariants({ size: "lg" }))}
-            >
+            <Link href="/docs/quickstart" className={cn(buttonVariants({ size: "lg" }))}>
               Quickstart <ArrowRight className="w-4 h-4 ml-2" />
             </Link>
-            <Link
-              href="/docs"
-              className={cn(buttonVariants({ size: "lg", variant: "outline" }))}
-            >
+            <Link href="/docs" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>
               <BookOpen className="w-4 h-4 mr-2" /> Docs
             </Link>
           </div>

@@ -15,12 +15,23 @@ export interface ChromaKeySettings {
   backgroundColor?: string;
 }
 
-export function sampleBackground(image: HTMLImageElement, points?: { x: number, y: number }[]) {
-  const canvas = document.createElement('canvas');
+export function sampleBackground(image: HTMLImageElement, points?: { x: number; y: number }[]) {
+  const canvas = document.createElement("canvas");
   canvas.width = image.width;
   canvas.height = image.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return { r: 255, g: 255, b: 255, corners: { tl: {r:255,g:255,b:255}, tr: {r:255,g:255,b:255}, bl: {r:255,g:255,b:255}, br: {r:255,g:255,b:255} } };
+  const ctx = canvas.getContext("2d");
+  if (!ctx)
+    return {
+      r: 255,
+      g: 255,
+      b: 255,
+      corners: {
+        tl: { r: 255, g: 255, b: 255 },
+        tr: { r: 255, g: 255, b: 255 },
+        bl: { r: 255, g: 255, b: 255 },
+        br: { r: 255, g: 255, b: 255 },
+      },
+    };
   ctx.drawImage(image, 0, 0);
 
   const getPixel = (x: number, y: number) => {
@@ -32,15 +43,22 @@ export function sampleBackground(image: HTMLImageElement, points?: { x: number, 
     tl: getPixel(0, 0),
     tr: getPixel(image.width - 1, 0),
     bl: getPixel(0, image.height - 1),
-    br: getPixel(image.width - 1, image.height - 1)
+    br: getPixel(image.width - 1, image.height - 1),
   };
 
   let r, g, b;
   if (points && points.length > 0) {
-    let sr = 0, sg = 0, sb = 0;
-    points.forEach(p => {
-      const pix = getPixel(Math.max(0, Math.min(image.width - 1, p.x)), Math.max(0, Math.min(image.height - 1, p.y)));
-      sr += pix.r; sg += pix.g; sb += pix.b;
+    let sr = 0,
+      sg = 0,
+      sb = 0;
+    points.forEach((p) => {
+      const pix = getPixel(
+        Math.max(0, Math.min(image.width - 1, p.x)),
+        Math.max(0, Math.min(image.height - 1, p.y)),
+      );
+      sr += pix.r;
+      sg += pix.g;
+      sb += pix.b;
     });
     r = Math.round(sr / points.length);
     g = Math.round(sg / points.length);
@@ -56,37 +74,41 @@ export function sampleBackground(image: HTMLImageElement, points?: { x: number, 
 
 export function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : { r: 255, g: 255, b: 255 };
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : { r: 255, g: 255, b: 255 };
 }
 
 export function applyChromaKey(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  target: { r: number, g: number, b: number },
-  settings: ChromaKeySettings
+  target: { r: number; g: number; b: number },
+  settings: ChromaKeySettings,
 ) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const { similarity, softness, spill, choke } = settings;
-  const targetR = target.r, targetG = target.g, targetB = target.b;
+  const targetR = target.r,
+    targetG = target.g,
+    targetB = target.b;
 
   for (let j = 0; j < data.length; j += 4) {
-    const r = data[j], g = data[j + 1], b = data[j + 2];
-    const dist = Math.sqrt(
-      Math.pow(r - targetR, 2) + Math.pow(g - targetG, 2) + Math.pow(b - targetB, 2)
-    );
-    
+    const r = data[j],
+      g = data[j + 1],
+      b = data[j + 2];
+    const dist = Math.sqrt((r - targetR) ** 2 + (g - targetG) ** 2 + (b - targetB) ** 2);
+
     let alpha = 1.0;
     if (dist < similarity) alpha = 0;
     else if (dist < similarity + softness) {
       alpha = (dist - similarity) / softness;
     }
-    
+
     // Apply transparency to alpha channel
     data[j + 3] = Math.min(data[j + 3], alpha * 255);
 
@@ -109,7 +131,8 @@ export function applyChromaKey(
         let minAlpha = data[idx + 3];
         for (let dy = -choke; dy <= choke; dy++) {
           for (let dx = -choke; dx <= choke; dx++) {
-            const ny = y + dy, nx = x + dx;
+            const ny = y + dy,
+              nx = x + dx;
             if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
               const nAlpha = originalAlphas[ny * width + nx];
               if (nAlpha < minAlpha) minAlpha = nAlpha;
@@ -127,22 +150,26 @@ export function applySolidFillChroma(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  source: { r: number, g: number, b: number },
-  target: { r: number, g: number, b: number },
-  settings: ChromaKeySettings
+  source: { r: number; g: number; b: number },
+  target: { r: number; g: number; b: number },
+  settings: ChromaKeySettings,
 ) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const { similarity, softness, spill } = settings;
-  const srcR = source.r, srcG = source.g, srcB = source.b;
-  const tgtR = target.r, tgtG = target.g, tgtB = target.b;
+  const srcR = source.r,
+    srcG = source.g,
+    srcB = source.b;
+  const tgtR = target.r,
+    tgtG = target.g,
+    tgtB = target.b;
 
   for (let j = 0; j < data.length; j += 4) {
-    const r = data[j], g = data[j + 1], b = data[j + 2];
-    const dist = Math.sqrt(
-      Math.pow(r - srcR, 2) + Math.pow(g - srcG, 2) + Math.pow(b - srcB, 2)
-    );
-    
+    const r = data[j],
+      g = data[j + 1],
+      b = data[j + 2];
+    const dist = Math.sqrt((r - srcR) ** 2 + (g - srcG) ** 2 + (b - srcB) ** 2);
+
     let alpha = 1.0;
     if (dist < similarity) alpha = 0;
     else if (dist < similarity + softness) {
@@ -150,7 +177,9 @@ export function applySolidFillChroma(
     }
 
     // Apply spill reduction (to gray) before blending
-    let finalR = r, finalG = g, finalB = b;
+    let finalR = r,
+      finalG = g,
+      finalB = b;
     if (dist < similarity + softness + spill) {
       const sf = 1 - Math.max(0, Math.min(1, (dist - similarity) / (softness + spill)));
       const gray = (r + g + b) / 3;
@@ -167,4 +196,3 @@ export function applySolidFillChroma(
   }
   ctx.putImageData(imageData, 0, 0);
 }
-

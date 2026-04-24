@@ -30,13 +30,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -383,10 +377,7 @@ function SpritesheetContent() {
 
   // ------- Kickoff / re-run helpers -------
 
-  const runFromSource = async (
-    sourceTabOverride?: SourceTab,
-    crop: FrameCrop = appliedCrop,
-  ) => {
+  const runFromSource = async (sourceTabOverride?: SourceTab, crop: FrameCrop = appliedCrop) => {
     const tab = sourceTabOverride ?? sourceTab;
     let steps;
     if (tab === "video") {
@@ -683,7 +674,6 @@ function SpritesheetContent() {
 
   return (
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
-
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Scissors className="w-8 h-8 text-primary" />
@@ -887,9 +877,7 @@ function SpritesheetContent() {
                         variant="ghost"
                         className="h-7 w-7"
                         title="Toggle Background Grid Color"
-                        onClick={() =>
-                          setGridTheme((p) => (p === "light" ? "dark" : "light"))
-                        }
+                        onClick={() => setGridTheme((p) => (p === "light" ? "dark" : "light"))}
                       >
                         <Palette
                           className={cn(
@@ -968,17 +956,14 @@ function SpritesheetContent() {
                               className="w-3 h-3 cursor-pointer"
                               onClick={() =>
                                 setPreviewIndex(
-                                  (p) =>
-                                    (p - 1 + activeFrames.length) % activeFrames.length,
+                                  (p) => (p - 1 + activeFrames.length) % activeFrames.length,
                                 )
                               }
                             />
                             {previewIndex + 1} / {activeFrames.length}
                             <ChevronRight
                               className="w-3 h-3 cursor-pointer"
-                              onClick={() =>
-                                setPreviewIndex((p) => (p + 1) % activeFrames.length)
-                              }
+                              onClick={() => setPreviewIndex((p) => (p + 1) % activeFrames.length)}
                             />
                           </div>
                           <ZoomIndicator
@@ -1032,9 +1017,7 @@ function SpritesheetContent() {
                         variant="ghost"
                         className="h-7 w-7"
                         title="Toggle Background Grid Color"
-                        onClick={() =>
-                          setGridTheme((p) => (p === "light" ? "dark" : "light"))
-                        }
+                        onClick={() => setGridTheme((p) => (p === "light" ? "dark" : "light"))}
                       >
                         <Palette
                           className={cn(
@@ -1213,9 +1196,7 @@ function SpritesheetContent() {
                       size="sm"
                       variant="ghost"
                       className="h-8 text-xs"
-                      onClick={() =>
-                        setSelectedIndices(new Set(allFrames.map((_, i) => i)))
-                      }
+                      onClick={() => setSelectedIndices(new Set(allFrames.map((_, i) => i)))}
                     >
                       Mark All
                     </Button>
@@ -1306,20 +1287,10 @@ function UploadZone({
   );
 }
 
-function SheetPreviewWithGrid({
-  src,
-  cols,
-  rows,
-}: {
-  src: string;
-  cols: number;
-  rows: number;
-}) {
+function SheetPreviewWithGrid({ src, cols, rows }: { src: string; cols: number; rows: number }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<{ left: number; top: number; w: number; h: number } | null>(
-    null,
-  );
+  const [box, setBox] = useState<{ left: number; top: number; w: number; h: number } | null>(null);
 
   React.useLayoutEffect(() => {
     const img = imgRef.current;
@@ -1348,7 +1319,10 @@ function SheetPreviewWithGrid({
   }, [src]);
 
   return (
-    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center bg-black/5">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full flex items-center justify-center bg-black/5"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
@@ -1436,7 +1410,11 @@ function VideoSource({
         />
       </div>
       <Button onClick={onRun} disabled={running || !videoUrl} className="w-full">
-        {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Scissors className="mr-2 h-4 w-4" />}
+        {running ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Scissors className="mr-2 h-4 w-4" />
+        )}
         Extract Raw Frames
       </Button>
       {running && progressLabel && (
@@ -1534,7 +1512,11 @@ function SheetSource({
         </p>
       )}
       <Button onClick={onRun} disabled={running || !sheetUrl} className="w-full">
-        {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Grid3x3 className="mr-2 h-4 w-4" />}
+        {running ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Grid3x3 className="mr-2 h-4 w-4" />
+        )}
         Split Sheet
       </Button>
       {running && progressLabel && (
@@ -1549,7 +1531,6 @@ function SheetSource({
     </div>
   );
 }
-
 
 // -----------------------------------------------------------------
 

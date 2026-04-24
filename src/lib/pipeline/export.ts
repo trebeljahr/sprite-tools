@@ -33,9 +33,7 @@ export async function stitchSheet(
     ctx.drawImage(f.bitmap, c * (cellW + pad), r * (cellH + pad));
   });
 
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("toBlob failed");
   return { blob, width: canvas.width, height: canvas.height, cols, rows };
 }
@@ -63,17 +61,12 @@ async function frameToPngBlob(frame: Frame): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D context unavailable");
   ctx.drawImage(frame.bitmap, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("toBlob failed");
   return blob;
 }
 
-export async function exportAsZip(
-  frames: Frames,
-  cfg: ZipExportConfig = {},
-): Promise<Blob> {
+export async function exportAsZip(frames: Frames, cfg: ZipExportConfig = {}): Promise<Blob> {
   const zip = new JSZip();
   for (let i = 0; i < frames.frames.length; i++) {
     const f = frames.frames[i];

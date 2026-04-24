@@ -44,11 +44,7 @@ export function ShareSettingsButton({
       aria-label={label}
       title={label}
     >
-      {copied ? (
-        <Check className="w-3.5 h-3.5" />
-      ) : (
-        <Share2 className="w-3.5 h-3.5" />
-      )}
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
       <span className="ml-1.5">Share</span>
     </Button>
   );

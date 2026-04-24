@@ -152,12 +152,8 @@ export function CollisionDemo() {
           </div>
         </div>
         <div className="text-right min-w-[3.5rem]">
-          <div className="font-mono font-bold text-lg tabular-nums">
-            {polygon.length}
-          </div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            points
-          </div>
+          <div className="font-mono font-bold text-lg tabular-nums">{polygon.length}</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">points</div>
         </div>
       </div>
     </div>

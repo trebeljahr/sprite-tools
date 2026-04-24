@@ -1,13 +1,7 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-  writeJsonOutput,
-  fail,
-  parseIntArg,
-  loadSheet,
-  addHelpExtras,
-} from "../lib/common";
+import { writeJsonOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
 import { savePng } from "../lib/image-io";
 
 export function registerSliceCommand(program: Command) {

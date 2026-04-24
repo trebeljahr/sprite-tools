@@ -19,13 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -36,18 +30,10 @@ import {
   type BackgroundRemovalState,
 } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
-import {
-  ViewportControls,
-  ZoomIndicator,
-} from "@/components/viewport-controls";
+import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import { chromaKey as runChromaKey } from "@/lib/pipeline/transforms";
-import type {
-  Frame,
-  Frames,
-  ChromaKeyConfig,
-  BackgroundMode,
-} from "@/lib/pipeline/types";
+import type { Frame, Frames, ChromaKeyConfig, BackgroundMode } from "@/lib/pipeline/types";
 import {
   DEFAULT_OUTLINE_OPTIONS,
   generateOutline,
@@ -97,19 +83,14 @@ function chromaConfigFrom(br: BackgroundRemovalState): ChromaKeyConfig {
   };
 }
 
-async function consumeChromaKey(
-  frames: Frames,
-  cfg: ChromaKeyConfig,
-): Promise<Frames> {
+async function consumeChromaKey(frames: Frames, cfg: ChromaKeyConfig): Promise<Frames> {
   const gen = runChromaKey(frames, cfg);
   let r = await gen.next();
   while (!r.done) r = await gen.next();
   return r.value;
 }
 
-async function frameToImageData(
-  frame: Frame,
-): Promise<{ imageData: ImageData; url: string }> {
+async function frameToImageData(frame: Frame): Promise<{ imageData: ImageData; url: string }> {
   const canvas = document.createElement("canvas");
   canvas.width = frame.width;
   canvas.height = frame.height;
@@ -117,9 +98,7 @@ async function frameToImageData(
   if (!ctx) throw new Error("2D context unavailable");
   ctx.drawImage(frame.bitmap, 0, 0);
   const imageData = ctx.getImageData(0, 0, frame.width, frame.height);
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("toBlob failed");
   const url = URL.createObjectURL(blob);
   return { imageData, url };
@@ -137,8 +116,7 @@ export default function CollisionPage() {
   } | null>(null);
 
   // --- Chroma ---
-  const [brState, setBrState] =
-    useState<BackgroundRemovalState>(DEFAULT_BR_STATE);
+  const [brState, setBrState] = useState<BackgroundRemovalState>(DEFAULT_BR_STATE);
 
   // --- Outline params ---
   const [alphaThreshold, setAlphaThreshold] = useState<number>(
@@ -147,9 +125,7 @@ export default function CollisionPage() {
   const [simplifyTolerance, setSimplifyTolerance] = useState<number>(
     DEFAULT_OUTLINE_OPTIONS.simplifyTolerance,
   );
-  const [useConvexHull, setUseConvexHull] = useState<boolean>(
-    DEFAULT_OUTLINE_OPTIONS.convexHull,
-  );
+  const [useConvexHull, setUseConvexHull] = useState<boolean>(DEFAULT_OUTLINE_OPTIONS.convexHull);
 
   // --- Processed output ---
   // rawFrames: source-derived state (depends on file + grid + chroma).
@@ -176,21 +152,13 @@ export default function CollisionPage() {
     sheetCols: [sheetCols, setSheetCols, 1],
     sheetRows: [sheetRows, setSheetRows, 1],
     brState: [brState, setBrState, DEFAULT_BR_STATE],
-    alphaThreshold: [
-      alphaThreshold,
-      setAlphaThreshold,
-      DEFAULT_OUTLINE_OPTIONS.alphaThreshold,
-    ],
+    alphaThreshold: [alphaThreshold, setAlphaThreshold, DEFAULT_OUTLINE_OPTIONS.alphaThreshold],
     simplifyTolerance: [
       simplifyTolerance,
       setSimplifyTolerance,
       DEFAULT_OUTLINE_OPTIONS.simplifyTolerance,
     ],
-    useConvexHull: [
-      useConvexHull,
-      setUseConvexHull,
-      DEFAULT_OUTLINE_OPTIONS.convexHull,
-    ],
+    useConvexHull: [useConvexHull, setUseConvexHull, DEFAULT_OUTLINE_OPTIONS.convexHull],
   });
 
   // -----------------------------------------------------------------
@@ -586,8 +554,7 @@ export default function CollisionPage() {
             <CardHeader className="pb-3">
               <CardTitle>Source</CardTitle>
               <CardDescription className="text-xs">
-                Upload a single sprite or a sprite sheet. Grid is auto-detected
-                where possible.
+                Upload a single sprite or a sprite sheet. Grid is auto-detected where possible.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -617,9 +584,7 @@ export default function CollisionPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste an image
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste an image</p>
                   </div>
                 )}
                 <Input
@@ -712,16 +677,12 @@ export default function CollisionPage() {
             <CardHeader className="pb-3">
               <CardTitle>Background Removal</CardTitle>
               <CardDescription className="text-xs">
-                Enable chroma key if your image has a solid colored background.
-                Pure-alpha sprites can skip this.
+                Enable chroma key if your image has a solid colored background. Pure-alpha sprites
+                can skip this.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <BackgroundRemovalSettings
-                state={brState}
-                setState={setBrState}
-                mode="chroma-only"
-              />
+              <BackgroundRemovalSettings state={brState} setState={setBrState} mode="chroma-only" />
             </CardContent>
           </Card>
 
@@ -736,40 +697,31 @@ export default function CollisionPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <Label className="text-xs">Alpha threshold</Label>
-                  <span className="text-[10px] font-mono">
-                    {alphaThreshold}
-                  </span>
+                  <span className="text-[10px] font-mono">{alphaThreshold}</span>
                 </div>
                 <Slider
                   value={[alphaThreshold]}
                   min={0}
                   max={254}
                   step={1}
-                  onValueChange={(v) =>
-                    setAlphaThreshold(Array.isArray(v) ? v[0] : v)
-                  }
+                  onValueChange={(v) => setAlphaThreshold(Array.isArray(v) ? v[0] : v)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Pixels with alpha &gt; this are &ldquo;inside&rdquo;. Raise to
-                  ignore soft edges.
+                  Pixels with alpha &gt; this are &ldquo;inside&rdquo;. Raise to ignore soft edges.
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <Label className="text-xs">Simplification tolerance</Label>
-                  <span className="text-[10px] font-mono">
-                    {simplifyTolerance.toFixed(2)}px
-                  </span>
+                  <span className="text-[10px] font-mono">{simplifyTolerance.toFixed(2)}px</span>
                 </div>
                 <Slider
                   value={[simplifyTolerance]}
                   min={0}
                   max={20}
                   step={0.1}
-                  onValueChange={(v) =>
-                    setSimplifyTolerance(Array.isArray(v) ? v[0] : v)
-                  }
+                  onValueChange={(v) => setSimplifyTolerance(Array.isArray(v) ? v[0] : v)}
                 />
                 <p className="text-[10px] text-muted-foreground">
                   Higher = fewer vertices. 0 keeps every contour pixel.
@@ -783,10 +735,7 @@ export default function CollisionPage() {
                     Reduce to hull — for Box2D-style convex fixtures.
                   </p>
                 </div>
-                <Switch
-                  checked={useConvexHull}
-                  onCheckedChange={setUseConvexHull}
-                />
+                <Switch checked={useConvexHull} onCheckedChange={setUseConvexHull} />
               </div>
             </CardContent>
           </Card>
@@ -803,21 +752,15 @@ export default function CollisionPage() {
                 <div className="grid grid-cols-3 gap-2 text-[10px] font-mono text-muted-foreground border rounded-md p-2 bg-muted/20">
                   <div>
                     <div className="opacity-60">Frames</div>
-                    <div className="text-foreground text-sm font-bold">
-                      {frames.length}
-                    </div>
+                    <div className="text-foreground text-sm font-bold">{frames.length}</div>
                   </div>
                   <div>
                     <div className="opacity-60">Avg pts</div>
-                    <div className="text-foreground text-sm font-bold">
-                      {avgPoints.toFixed(1)}
-                    </div>
+                    <div className="text-foreground text-sm font-bold">{avgPoints.toFixed(1)}</div>
                   </div>
                   <div>
                     <div className="opacity-60">Total pts</div>
-                    <div className="text-foreground text-sm font-bold">
-                      {totalPoints}
-                    </div>
+                    <div className="text-foreground text-sm font-bold">{totalPoints}</div>
                   </div>
                 </div>
                 <Button onClick={downloadJson} className="w-full">
@@ -838,40 +781,31 @@ export default function CollisionPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
                   title="Toggle background grid"
-                  onClick={() =>
-                    setGridTheme((p) => (p === "light" ? "dark" : "light"))
-                  }
+                  onClick={() => setGridTheme((p) => (p === "light" ? "dark" : "light"))}
                 >
                   <Palette
                     className={cn(
                       "h-4 w-4",
-                      gridTheme === "dark"
-                        ? "text-primary"
-                        : "text-muted-foreground",
+                      gridTheme === "dark" ? "text-primary" : "text-muted-foreground",
                     )}
                   />
                 </Button>
               </div>
               <ViewportControls
                 onZoomIn={() =>
-                  currentFrame &&
-                  viewport.setZoomIn(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.setZoomIn(currentFrame.width, currentFrame.height)
                 }
                 onZoomOut={() =>
-                  currentFrame &&
-                  viewport.setZoomOut(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.setZoomOut(currentFrame.width, currentFrame.height)
                 }
                 onReset={() =>
-                  currentFrame &&
-                  viewport.fitToView(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.fitToView(currentFrame.width, currentFrame.height)
                 }
               />
             </CardHeader>
@@ -880,9 +814,7 @@ export default function CollisionPage() {
                 ref={previewContainerRef}
                 className={cn(
                   "aspect-video min-h-96 rounded-lg border overflow-hidden relative cursor-move touch-none",
-                  gridTheme === "light"
-                    ? "checkerboard-light"
-                    : "checkerboard-dark",
+                  gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
                 )}
                 onMouseDown={viewport.startPanning}
                 onMouseMove={viewport.updatePanning}
@@ -916,17 +848,13 @@ export default function CollisionPage() {
                         <ChevronLeft
                           className="w-3 h-3 cursor-pointer"
                           onClick={() =>
-                            setCurrentIndex(
-                              (i) => (i - 1 + frames.length) % frames.length,
-                            )
+                            setCurrentIndex((i) => (i - 1 + frames.length) % frames.length)
                           }
                         />
                         {currentIndex + 1} / {frames.length}
                         <ChevronRight
                           className="w-3 h-3 cursor-pointer"
-                          onClick={() =>
-                            setCurrentIndex((i) => (i + 1) % frames.length)
-                          }
+                          onClick={() => setCurrentIndex((i) => (i + 1) % frames.length)}
                         />
                       </div>
                     )}
@@ -958,11 +886,7 @@ export default function CollisionPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() =>
-                      setCurrentIndex(
-                        (i) => (i - 1 + frames.length) % frames.length,
-                      )
-                    }
+                    onClick={() => setCurrentIndex((i) => (i - 1 + frames.length) % frames.length)}
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -972,16 +896,12 @@ export default function CollisionPage() {
                     min={0}
                     max={frames.length - 1}
                     step={1}
-                    onValueChange={(v) =>
-                      setCurrentIndex(Array.isArray(v) ? v[0] : v)
-                    }
+                    onValueChange={(v) => setCurrentIndex(Array.isArray(v) ? v[0] : v)}
                   />
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() =>
-                      setCurrentIndex((i) => (i + 1) % frames.length)
-                    }
+                    onClick={() => setCurrentIndex((i) => (i + 1) % frames.length)}
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -995,8 +915,7 @@ export default function CollisionPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Frames</CardTitle>
                 <CardDescription className="text-xs">
-                  {frames.length} sprite{frames.length === 1 ? "" : "s"} — click
-                  to preview.
+                  {frames.length} sprite{frames.length === 1 ? "" : "s"} — click to preview.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1072,9 +991,7 @@ const FrameThumb = React.memo(function FrameThumbInner({
       className={cn(
         "aspect-square border rounded overflow-hidden relative transition-all",
         gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
-        isActive
-          ? "ring-2 ring-primary ring-offset-1"
-          : "opacity-70 hover:opacity-100",
+        isActive ? "ring-2 ring-primary ring-offset-1" : "opacity-70 hover:opacity-100",
       )}
     >
       <canvas

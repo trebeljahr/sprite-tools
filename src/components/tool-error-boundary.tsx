@@ -30,8 +30,8 @@ export function ToolErrorBoundaryPage({ error, reset }: Props) {
           </div>
           <CardTitle className="text-2xl">Something went wrong</CardTitle>
           <CardDescription>
-            This tool crashed while rendering. Your source is still saved; the
-            rest of the app is fine.
+            This tool crashed while rendering. Your source is still saved; the rest of the app is
+            fine.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

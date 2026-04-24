@@ -49,11 +49,7 @@ export function isCropEmpty(c: FrameCrop): boolean {
 
 // ---- Transform configs ----
 
-export type BackgroundMode =
-  | "none"
-  | "chroma-transparent"
-  | "chroma-solid"
-  | "transparent-cutout";
+export type BackgroundMode = "none" | "chroma-transparent" | "chroma-solid" | "transparent-cutout";
 
 export interface ChromaKeyConfig {
   mode: BackgroundMode;
@@ -132,9 +128,7 @@ export async function ensurePreviewUrl(frame: Frame): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D context unavailable");
   ctx.drawImage(frame.bitmap, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png"),
-  );
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("toBlob failed");
   const url = URL.createObjectURL(blob);
   previewUrlCache.set(frame, url);

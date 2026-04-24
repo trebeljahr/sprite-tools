@@ -10,9 +10,9 @@ import {
 } from "./transforms";
 import {
   disposeFrames,
-  Frames,
-  PipelineStep,
-  Progress,
+  type Frames,
+  type PipelineStep,
+  type Progress,
   type AutoCropConfig,
   type ChromaKeyConfig,
   type FrameCrop,
@@ -63,7 +63,8 @@ function sourceEqual(a: SourceInput, b: SourceInput): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.file !== b.file || a.url !== b.url) return false;
-  const ai = a.images, bi = b.images;
+  const ai = a.images,
+    bi = b.images;
   if (ai === bi) return true;
   if (!ai || !bi || ai.length !== bi.length) return false;
   for (let i = 0; i < ai.length; i++) if (ai[i] !== bi[i]) return false;
@@ -222,9 +223,7 @@ interface CacheEntry {
 }
 
 function isImportStep(kind: PipelineStep["kind"]): boolean {
-  return (
-    kind === "import-video" || kind === "import-sheet" || kind === "import-files"
-  );
+  return kind === "import-video" || kind === "import-sheet" || kind === "import-files";
 }
 
 // -----------------------------------------------------------------
@@ -271,15 +270,9 @@ export function usePipeline() {
         for (const step of state.steps) {
           visited.add(step.id);
           const configKey = JSON.stringify(step.config);
-          const inputRef: unknown = isImportStep(step.kind)
-            ? state.source
-            : current;
+          const inputRef: unknown = isImportStep(step.kind) ? state.source : current;
           const cached = cacheRef.current.get(step.id);
-          if (
-            cached &&
-            cached.configKey === configKey &&
-            cached.inputRef === inputRef
-          ) {
+          if (cached && cached.configKey === configKey && cached.inputRef === inputRef) {
             current = cached.output;
             continue;
           }
@@ -299,8 +292,7 @@ export function usePipeline() {
               break;
             }
             case "import-sheet": {
-              if (!state.source.file && !state.source.url)
-                throw new Error("No sheet source");
+              if (!state.source.file && !state.source.url) throw new Error("No sheet source");
               produced = await importFromSpriteSheet(
                 state.source.file ?? state.source.url!,
                 step.config,

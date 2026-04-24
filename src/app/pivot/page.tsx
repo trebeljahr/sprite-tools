@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -18,13 +18,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -438,9 +432,7 @@ export default function PivotPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Source</CardTitle>
-              <CardDescription className="text-xs">
-                Upload a sprite or sheet.
-              </CardDescription>
+              <CardDescription className="text-xs">Upload a sprite or sheet.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div
@@ -469,9 +461,7 @@ export default function PivotPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -488,12 +478,10 @@ export default function PivotPage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -694,16 +682,12 @@ export default function PivotPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
-                  onClick={() =>
-                    setGridTheme((p) => (p === "light" ? "dark" : "light"))
-                  }
+                  onClick={() => setGridTheme((p) => (p === "light" ? "dark" : "light"))}
                 >
                   <Palette
                     className={cn(
@@ -715,16 +699,13 @@ export default function PivotPage() {
               </div>
               <ViewportControls
                 onZoomIn={() =>
-                  currentFrame &&
-                  viewport.setZoomIn(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.setZoomIn(currentFrame.width, currentFrame.height)
                 }
                 onZoomOut={() =>
-                  currentFrame &&
-                  viewport.setZoomOut(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.setZoomOut(currentFrame.width, currentFrame.height)
                 }
                 onReset={() =>
-                  currentFrame &&
-                  viewport.fitToView(currentFrame.width, currentFrame.height)
+                  currentFrame && viewport.fitToView(currentFrame.width, currentFrame.height)
                 }
               />
             </CardHeader>
@@ -763,9 +744,7 @@ export default function PivotPage() {
                         <ChevronLeft
                           className="w-3 h-3 cursor-pointer"
                           onClick={() =>
-                            setCurrentIndex(
-                              (i) => (i - 1 + frames.length) % frames.length,
-                            )
+                            setCurrentIndex((i) => (i - 1 + frames.length) % frames.length)
                           }
                         />
                         {currentIndex + 1} / {frames.length}

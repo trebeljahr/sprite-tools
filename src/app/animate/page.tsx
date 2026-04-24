@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Upload, Video, Loader2, Play, RefreshCw, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -197,9 +196,7 @@ function HomeContent() {
           <Video className="w-8 h-8 text-primary" />
           AI Animation
         </h1>
-        <p className="text-muted-foreground">
-          Animate a character sprite with xAI Grok Imagine.
-        </p>
+        <p className="text-muted-foreground">Animate a character sprite with xAI Grok Imagine.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -208,9 +205,7 @@ function HomeContent() {
           <Card>
             <CardHeader>
               <CardTitle>Configure Animation</CardTitle>
-              <CardDescription>
-                Set the motion prompt for your character.
-              </CardDescription>
+              <CardDescription>Set the motion prompt for your character.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleGenerate} className="space-y-4">
@@ -219,8 +214,10 @@ function HomeContent() {
                   <div
                     className={cn(
                       "border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all",
-                      preview ? "border-primary/50" : "border-muted-foreground/20 hover:border-primary/50",
-                      isDragging && "ring-4 ring-primary ring-inset bg-primary/5 border-primary/50"
+                      preview
+                        ? "border-primary/50"
+                        : "border-muted-foreground/20 hover:border-primary/50",
+                      isDragging && "ring-4 ring-primary ring-inset bg-primary/5 border-primary/50",
                     )}
                     onClick={() => document.getElementById("image")?.click()}
                     onDragOver={handleDragOver}
@@ -235,17 +232,13 @@ function HomeContent() {
                           className="rounded object-cover w-full h-full"
                         />
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                          <p className="text-white text-sm font-medium">
-                            Change Image
-                          </p>
+                          <p className="text-white text-sm font-medium">Change Image</p>
                         </div>
                       </div>
                     ) : (
                       <>
                         <Upload className="w-10 h-10 text-muted-foreground mb-2" />
-                        <p className="text-sm text-muted-foreground">
-                          Click or drag to upload
-                        </p>
+                        <p className="text-sm text-muted-foreground">Click or drag to upload</p>
                       </>
                     )}
                     <Input
@@ -345,9 +338,7 @@ function HomeContent() {
           <Card className="h-full flex flex-col">
             <CardHeader>
               <CardTitle>Resulting Animation</CardTitle>
-              <CardDescription>
-                Your animated character clip will appear here.
-              </CardDescription>
+              <CardDescription>Your animated character clip will appear here.</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex items-center justify-center">
               {videoUrl ? (
@@ -360,7 +351,7 @@ function HomeContent() {
                     className="w-full rounded-lg shadow-lg border"
                   />
                   <div className="flex flex-col gap-2">
-                    <Link 
+                    <Link
                       href={`/spritesheet?videoUrl=${encodeURIComponent(videoUrl)}`}
                       className="inline-flex items-center justify-center rounded-lg h-10 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-medium transition-colors w-full"
                     >
@@ -410,7 +401,9 @@ export default function AnimatePage() {
         description="Turn a character image into a short animation using xAI Grok Imagine video generation."
         costHint="~1 credit per animation"
       >
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading…</div>}>
+        <Suspense
+          fallback={<div className="flex items-center justify-center min-h-screen">Loading…</div>}
+        >
           <HomeContent />
         </Suspense>
       </AuthWall>

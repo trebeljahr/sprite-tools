@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -19,13 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -34,12 +28,7 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
-import {
-  applyPaletteSwap,
-  extractPalette,
-  hexToRgb,
-  rgbToHex,
-} from "@/lib/palette/extract";
+import { applyPaletteSwap, extractPalette, hexToRgb, rgbToHex } from "@/lib/palette/extract";
 import type { RGB } from "@/lib/pixel-art/pixelate";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
@@ -358,9 +347,7 @@ export default function PalettePage() {
     a.href = URL.createObjectURL(blob);
     const base = sourceFile.name.replace(/\.[^.]+$/, "");
     a.download =
-      sourceMode === "sheet"
-        ? `${base}-recolor-${currentIndex}.png`
-        : `${base}-recolor.png`;
+      sourceMode === "sheet" ? `${base}-recolor-${currentIndex}.png` : `${base}-recolor.png`;
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Recolored frame downloaded");
@@ -460,9 +447,7 @@ export default function PalettePage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -478,12 +463,10 @@ export default function PalettePage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -582,22 +565,32 @@ export default function PalettePage() {
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-1 pt-2 border-t border-dashed">
-                    <Button size="sm" variant="ghost" onClick={() => shiftHue(-30)} className="h-8 text-[10px]">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => shiftHue(-30)}
+                      className="h-8 text-[10px]"
+                    >
                       Hue −30°
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => shiftHue(180)} className="h-8 text-[10px]">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => shiftHue(180)}
+                      className="h-8 text-[10px]"
+                    >
                       Invert hue
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => shiftHue(30)} className="h-8 text-[10px]">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => shiftHue(30)}
+                      className="h-8 text-[10px]"
+                    >
                       Hue +30°
                     </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={resetSwaps}
-                  >
+                  <Button size="sm" variant="outline" className="w-full" onClick={resetSwaps}>
                     <RotateCcw className="w-3.5 h-3.5 mr-2" /> Reset swaps
                   </Button>
                 </>
@@ -638,9 +631,7 @@ export default function PalettePage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"

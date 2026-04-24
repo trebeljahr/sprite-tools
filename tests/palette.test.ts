@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  extractPalette,
-  applyPaletteSwap,
-  rgbToHex,
-  hexToRgb,
-} from "@/lib/palette/extract";
+import { extractPalette, applyPaletteSwap, rgbToHex, hexToRgb } from "@/lib/palette/extract";
 import { filledRect } from "./helpers";
 
 describe("extractPalette", () => {

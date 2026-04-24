@@ -9,10 +9,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
     h1: ({ className, ...props }) => (
       <h1
-        className={cn(
-          "scroll-mt-24 text-4xl font-bold tracking-tight mb-4 mt-2",
-          className,
-        )}
+        className={cn("scroll-mt-24 text-4xl font-bold tracking-tight mb-4 mt-2", className)}
         {...props}
       />
     ),
@@ -27,27 +24,18 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ),
     h3: ({ className, ...props }) => (
       <h3
-        className={cn(
-          "scroll-mt-24 text-xl font-semibold tracking-tight mt-8 mb-2",
-          className,
-        )}
+        className={cn("scroll-mt-24 text-xl font-semibold tracking-tight mt-8 mb-2", className)}
         {...props}
       />
     ),
     h4: ({ className, ...props }) => (
       <h4
-        className={cn(
-          "scroll-mt-24 text-base font-semibold tracking-tight mt-6 mb-2",
-          className,
-        )}
+        className={cn("scroll-mt-24 text-base font-semibold tracking-tight mt-6 mb-2", className)}
         {...props}
       />
     ),
     p: ({ className, ...props }) => (
-      <p
-        className={cn("leading-7 text-foreground/80 my-4", className)}
-        {...props}
-      />
+      <p className={cn("leading-7 text-foreground/80 my-4", className)} {...props} />
     ),
     a: ({ href, className, ...props }) => {
       const isInternal = href && (href.startsWith("/") || href.startsWith("#"));
@@ -59,30 +47,16 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
         return <Link href={href} className={classes} {...props} />;
       }
       return (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={classes}
-          {...props}
-        />
+        <a href={href} target="_blank" rel="noopener noreferrer" className={classes} {...props} />
       );
     },
     ul: ({ className, ...props }) => (
-      <ul
-        className={cn("my-4 ml-6 list-disc space-y-2", className)}
-        {...props}
-      />
+      <ul className={cn("my-4 ml-6 list-disc space-y-2", className)} {...props} />
     ),
     ol: ({ className, ...props }) => (
-      <ol
-        className={cn("my-4 ml-6 list-decimal space-y-2", className)}
-        {...props}
-      />
+      <ol className={cn("my-4 ml-6 list-decimal space-y-2", className)} {...props} />
     ),
-    li: ({ className, ...props }) => (
-      <li className={cn("leading-7", className)} {...props} />
-    ),
+    li: ({ className, ...props }) => <li className={cn("leading-7", className)} {...props} />,
     blockquote: ({ className, ...props }) => (
       <blockquote
         className={cn(

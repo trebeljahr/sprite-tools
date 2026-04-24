@@ -41,8 +41,7 @@ function toBase64Url(input: string): string {
 function fromBase64Url(input: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    const pad =
-      input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
+    const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
     const b64 = input.replace(/-/g, "+").replace(/_/g, "/") + pad;
     return decodeURIComponent(escape(window.atob(b64)));
   } catch {

@@ -1,10 +1,5 @@
-import { Command } from "commander";
-import {
-  writeBinaryOutput,
-  writeJsonOutput,
-  fail,
-  parseIntArg,
-} from "../lib/common";
+import type { Command } from "commander";
+import { writeBinaryOutput, writeJsonOutput, fail, parseIntArg } from "../lib/common";
 import { loadPng, imageToPngBuffer } from "../lib/image-io";
 import { computeTrimRect } from "../../src/lib/atlas/pack";
 
@@ -23,47 +18,42 @@ export function registerTrimCommand(program: Command) {
 
   addHelpTrimExtras(cmd);
 
-  cmd.action(
-    (
-      input: string,
-      opts: { padding: number; json?: string; output?: string },
-    ) => {
-      try {
-        const img = loadPng(input);
-        const rect = computeTrimRect(img);
-        if (!rect) fail("image is fully transparent — nothing to trim");
+  cmd.action((input: string, opts: { padding: number; json?: string; output?: string }) => {
+    try {
+      const img = loadPng(input);
+      const rect = computeTrimRect(img);
+      if (!rect) fail("image is fully transparent — nothing to trim");
 
-        const pad = Math.max(0, opts.padding);
-        const x = Math.max(0, rect!.x - pad);
-        const y = Math.max(0, rect!.y - pad);
-        const w = Math.min(img.width - x, rect!.w + pad * 2);
-        const h = Math.min(img.height - y, rect!.h + pad * 2);
+      const pad = Math.max(0, opts.padding);
+      const x = Math.max(0, rect!.x - pad);
+      const y = Math.max(0, rect!.y - pad);
+      const w = Math.min(img.width - x, rect!.w + pad * 2);
+      const h = Math.min(img.height - y, rect!.h + pad * 2);
 
-        const out = new ImageData(w, h);
-        for (let yy = 0; yy < h; yy++) {
-          const srcRow = ((y + yy) * img.width + x) * 4;
-          out.data.set(img.data.subarray(srcRow, srcRow + w * 4), yy * w * 4);
-        }
-
-        writeBinaryOutput(imageToPngBuffer(out), opts.output);
-
-        if (opts.json) {
-          writeJsonOutput(
-            {
-              source: input,
-              sourceWidth: img.width,
-              sourceHeight: img.height,
-              trim: { x, y, width: w, height: h },
-              paddingKept: pad,
-            },
-            opts.json,
-          );
-        }
-      } catch (e) {
-        fail(e instanceof Error ? e.message : String(e));
+      const out = new ImageData(w, h);
+      for (let yy = 0; yy < h; yy++) {
+        const srcRow = ((y + yy) * img.width + x) * 4;
+        out.data.set(img.data.subarray(srcRow, srcRow + w * 4), yy * w * 4);
       }
-    },
-  );
+
+      writeBinaryOutput(imageToPngBuffer(out), opts.output);
+
+      if (opts.json) {
+        writeJsonOutput(
+          {
+            source: input,
+            sourceWidth: img.width,
+            sourceHeight: img.height,
+            trim: { x, y, width: w, height: h },
+            paddingKept: pad,
+          },
+          opts.json,
+        );
+      }
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+    }
+  });
 }
 
 function addHelpTrimExtras(cmd: Command) {

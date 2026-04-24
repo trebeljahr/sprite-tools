@@ -20,14 +20,23 @@ declare module "gifenc" {
     stream(): { bytes: Uint8Array };
   }
 
-  export function GIFEncoder(opts?: { auto?: boolean; initialCapacity?: number }): GIFEncoderInstance;
+  export function GIFEncoder(opts?: {
+    auto?: boolean;
+    initialCapacity?: number;
+  }): GIFEncoderInstance;
 
   export type QuantizeFormat = "rgb565" | "rgb444" | "rgba4444";
 
   export function quantize(
     data: Uint8ClampedArray | Uint8Array,
     maxColors: number,
-    opts?: { format?: QuantizeFormat; oneBitAlpha?: boolean | number; clearAlpha?: boolean; clearAlphaThreshold?: number; clearAlphaColor?: number },
+    opts?: {
+      format?: QuantizeFormat;
+      oneBitAlpha?: boolean | number;
+      clearAlpha?: boolean;
+      clearAlphaThreshold?: number;
+      clearAlphaColor?: number;
+    },
   ): number[][];
 
   export function applyPalette(

@@ -8,7 +8,7 @@
 //
 // The gating call site stays the same: wrap the page content in <AuthWall>.
 
-import * as React from "react";
+import type * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lock, Sparkles, Zap } from "lucide-react";
@@ -104,8 +104,8 @@ function SignInGate({
         <CardContent className="space-y-4">
           <div className="p-4 rounded-md border bg-muted/20 text-xs space-y-2">
             <p>
-              This tool calls a paid AI provider (image or video generation). You need an
-              account with credits to use it.
+              This tool calls a paid AI provider (image or video generation). You need an account
+              with credits to use it.
             </p>
             {costHint && (
               <p className="flex items-center gap-1.5 text-muted-foreground">

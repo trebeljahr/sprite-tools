@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -22,13 +22,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -273,10 +267,13 @@ export default function TagsPage() {
     let step = 0;
     // Start from where the tag begins rather than continuing a stale index
     setCurrentIndex(playbackSequence[0]);
-    playbackRef.current = window.setInterval(() => {
-      step = (step + 1) % playbackSequence.length;
-      setCurrentIndex(playbackSequence[step]);
-    }, Math.max(16, Math.round(1000 / Math.max(1, playbackFps))));
+    playbackRef.current = window.setInterval(
+      () => {
+        step = (step + 1) % playbackSequence.length;
+        setCurrentIndex(playbackSequence[step]);
+      },
+      Math.max(16, Math.round(1000 / Math.max(1, playbackFps))),
+    );
     return () => {
       if (playbackRef.current) {
         window.clearInterval(playbackRef.current);
@@ -441,9 +438,7 @@ export default function TagsPage() {
                 ) : (
                   <div className="text-center">
                     <Upload className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload / drop / paste
-                    </p>
+                    <p className="text-sm text-muted-foreground">Upload / drop / paste</p>
                   </div>
                 )}
                 <Input
@@ -460,12 +455,10 @@ export default function TagsPage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      { id: "single" as const, label: "Single", Icon: ImageIcon },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -546,9 +539,7 @@ export default function TagsPage() {
                   step={1}
                   onValueChange={(v) => setGlobalFps(Array.isArray(v) ? v[0] : v)}
                 />
-                <p className="text-[10px] text-muted-foreground">
-                  New tags inherit this rate.
-                </p>
+                <p className="text-[10px] text-muted-foreground">New tags inherit this rate.</p>
               </div>
               <Button
                 onClick={() => {
@@ -592,8 +583,8 @@ export default function TagsPage() {
                 </Button>
                 <JsonPreview data={jsonPayload} className="mt-2" />
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  {tags.length} tag{tags.length === 1 ? "" : "s"} • {frames.length}{" "}
-                  frame{frames.length === 1 ? "" : "s"}
+                  {tags.length} tag{tags.length === 1 ? "" : "s"} • {frames.length} frame
+                  {frames.length === 1 ? "" : "s"}
                 </p>
               </CardContent>
             </Card>
@@ -605,16 +596,12 @@ export default function TagsPage() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">Preview</CardTitle>
-                {isProcessing && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
-                  onClick={() =>
-                    setGridTheme((p) => (p === "light" ? "dark" : "light"))
-                  }
+                  onClick={() => setGridTheme((p) => (p === "light" ? "dark" : "light"))}
                 >
                   <Palette
                     className={cn(
@@ -727,7 +714,8 @@ export default function TagsPage() {
               <div>
                 <CardTitle>Tags</CardTitle>
                 <CardDescription className="text-xs">
-                  Each tag is a named [from, to] range. Set from/to with the “@” buttons using the current frame.
+                  Each tag is a named [from, to] range. Set from/to with the “@” buttons using the
+                  current frame.
                 </CardDescription>
               </div>
               <Button onClick={addTag} disabled={frames.length === 0} size="sm">

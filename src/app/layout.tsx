@@ -20,9 +20,7 @@ const geistMono = Geist_Mono({
 // `export const metadata` — the root values here serve as defaults and
 // as the fallback social preview.
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3471",
-  ),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3471"),
   title: {
     default: "sprite-tools — game-ready 2D sprite toolkit",
     template: "%s · sprite-tools",

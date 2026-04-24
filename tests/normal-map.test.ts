@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  generateNormalMap,
-  alphaDistance,
-  luminance,
-} from "@/lib/normal-map/normal-map";
+import { generateNormalMap, alphaDistance, luminance } from "@/lib/normal-map/normal-map";
 import { circle, filledRect, blank } from "./helpers";
 
 describe("alphaDistance", () => {

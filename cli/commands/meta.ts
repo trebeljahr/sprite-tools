@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import {
   writeJsonOutput,
   fail,
@@ -59,7 +59,12 @@ export function registerMetaCommand(program: Command) {
     .option("--pivot-x <n>", "[pivot] explicit X override", (v) => parseIntArg("pivot-x", v))
     .option("--pivot-y <n>", "[pivot] explicit Y override", (v) => parseIntArg("pivot-y", v))
     // Tags
-    .option("--tag <spec>", 'repeatable animation tag "name=from-to[:fps[:direction]]"', collect, [])
+    .option(
+      "--tag <spec>",
+      'repeatable animation tag "name=from-to[:fps[:direction]]"',
+      collect,
+      [],
+    )
     .option("--fps <n>", "[tags] default FPS", (v) => parseIntArg("fps", v), 10)
     // Output
     .option("-o, --output <file>", "output JSON file (default: stdout)");
@@ -128,19 +133,13 @@ export function registerMetaCommand(program: Command) {
         if (opts.pivot) {
           const preset = PRESETS.find((p) => p.id === opts.pivot);
           if (!preset) {
-            fail(
-              `--pivot must be one of ${PRESETS.map((p) => p.id).join(", ")}`,
-            );
+            fail(`--pivot must be one of ${PRESETS.map((p) => p.id).join(", ")}`);
           }
           base.pivots = frames.map((f, i) => {
             const x =
-              opts.pivotX !== undefined
-                ? opts.pivotX
-                : Math.round(preset!.nx * (f.width - 1));
+              opts.pivotX !== undefined ? opts.pivotX : Math.round(preset!.nx * (f.width - 1));
             const y =
-              opts.pivotY !== undefined
-                ? opts.pivotY
-                : Math.round(preset!.ny * (f.height - 1));
+              opts.pivotY !== undefined ? opts.pivotY : Math.round(preset!.ny * (f.height - 1));
             return {
               index: i,
               cell: { row: Math.floor(i / grid.cols), col: i % grid.cols },

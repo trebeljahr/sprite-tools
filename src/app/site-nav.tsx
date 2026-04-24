@@ -81,9 +81,7 @@ const TOOL_GROUPS = AI_ENABLED
 
 export function SiteNav() {
   const pathname = usePathname();
-  const isToolActive = TOOL_GROUPS.some((g) =>
-    g.items.some((i) => pathname === i.href),
-  );
+  const isToolActive = TOOL_GROUPS.some((g) => g.items.some((i) => pathname === i.href));
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -129,9 +127,7 @@ export function SiteNav() {
                       >
                         <span className="font-medium flex items-center gap-1.5">
                           {item.label}
-                          {item.paid && (
-                            <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                          )}
+                          {item.paid && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                         </span>
                       </DropdownMenuItem>
                     ))}
@@ -194,13 +190,9 @@ export function SiteNav() {
                         >
                           <span className="font-medium flex items-center gap-1.5">
                             {item.label}
-                            {item.paid && (
-                              <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                            )}
+                            {item.paid && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {item.hint}
-                          </span>
+                          <span className="text-[10px] text-muted-foreground">{item.hint}</span>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuGroup>

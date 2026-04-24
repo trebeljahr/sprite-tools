@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Claude Code local state
 .claude/
+# claude code
+.claude/settings.local.json
+.claude/worktrees/

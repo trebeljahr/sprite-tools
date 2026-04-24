@@ -12,10 +12,7 @@ export function SiteFooter() {
         <div className="flex items-center gap-3">
           <span>sprite-tools v{VERSION}</span>
           <span aria-hidden>·</span>
-          <Link
-            href="/docs"
-            className="hover:text-foreground transition-colors"
-          >
+          <Link href="/docs" className="hover:text-foreground transition-colors">
             docs
           </Link>
           <span aria-hidden>·</span>

@@ -1,10 +1,10 @@
 import {
-  AutoCropConfig,
-  ChromaKeyConfig,
+  type AutoCropConfig,
+  type ChromaKeyConfig,
   computeStats,
   EMPTY_CROP,
-  FrameCrop,
-  Frames,
+  type FrameCrop,
+  type Frames,
   isCropEmpty,
   nextFrameId,
   type Frame,
@@ -104,18 +104,14 @@ function dispatchTo(idx: number, task: QueuedTask): void {
   pool[idx].worker.postMessage(task.req, [task.req.bitmap]);
 }
 
-function runChromaInWorker(
-  bitmap: ImageBitmap,
-  config: ChromaKeyConfig,
-): Promise<ImageBitmap> {
+function runChromaInWorker(bitmap: ImageBitmap, config: ChromaKeyConfig): Promise<ImageBitmap> {
   const pool = ensurePool();
   const id = ++_chromaReqId;
   const req: ChromaWorkerRequest = {
     id,
     bitmap,
     config: {
-      mode:
-        config.mode === "chroma-solid" ? "chroma-solid" : "chroma-transparent",
+      mode: config.mode === "chroma-solid" ? "chroma-solid" : "chroma-transparent",
       similarity: config.similarity,
       softness: config.softness,
       spill: config.spill,
@@ -202,10 +198,7 @@ export async function* chromaKey(
 // Auto-crop — unify bounding box across all frames
 // -----------------------------------------------------------------
 
-export async function autoCrop(
-  frames: Frames,
-  cfg: AutoCropConfig,
-): Promise<Frames> {
+export async function autoCrop(frames: Frames, cfg: AutoCropConfig): Promise<Frames> {
   if (!cfg.enabled || frames.frames.length === 0) return await cloneFrames(frames);
 
   // Per-frame scan for content bounds (non-transparent pixels).
@@ -217,7 +210,8 @@ export async function autoCrop(
   for (let fi = 0; fi < frames.frames.length; fi++) {
     const f = frames.frames[fi];
     const { canvas, ctx } = await bitmapToCanvas(f.bitmap);
-    const W = canvas.width, H = canvas.height;
+    const W = canvas.width,
+      H = canvas.height;
     const d = ctx.getImageData(0, 0, W, H).data;
 
     // Opacity fast-path: if the corners are all fully opaque the frame has
@@ -225,7 +219,7 @@ export async function autoCrop(
     // mark the full frame as content and skip the per-pixel scan.
     const a0 = d[3];
     const aTR = d[(W - 1) * 4 + 3];
-    const aBL = d[((H - 1) * W) * 4 + 3];
+    const aBL = d[(H - 1) * W * 4 + 3];
     const aBR = d[(H * W - 1) * 4 + 3];
     if (a0 === 255 && aTR === 255 && aBL === 255 && aBR === 255) {
       minX = Math.min(minX, 0);
@@ -286,10 +280,7 @@ export async function autoCrop(
 // Manual crop — normalized insets per side
 // -----------------------------------------------------------------
 
-export async function manualCrop(
-  frames: Frames,
-  crop: FrameCrop,
-): Promise<Frames> {
+export async function manualCrop(frames: Frames, crop: FrameCrop): Promise<Frames> {
   if (isCropEmpty(crop) || frames.frames.length === 0) return await cloneFrames(frames);
   const fw = frames.stats.width;
   const fh = frames.stats.height;

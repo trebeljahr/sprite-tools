@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  packAtlas,
-  computeTrimRect,
-  type PackInput,
-} from "@/lib/atlas/pack";
+import { packAtlas, computeTrimRect, type PackInput } from "@/lib/atlas/pack";
 import { filledRect, blank, circle } from "./helpers";
 
 describe("computeTrimRect", () => {
@@ -87,9 +83,7 @@ describe("packAtlas", () => {
 
   it("carries trim metadata through", () => {
     const inputs: PackInput[] = [{ id: "a", width: 10, height: 10 }];
-    const trim = new Map([
-      ["a", { sourceWidth: 40, sourceHeight: 40, offsetX: 5, offsetY: 5 }],
-    ]);
+    const trim = new Map([["a", { sourceWidth: 40, sourceHeight: 40, offsetX: 5, offsetY: 5 }]]);
     const result = packAtlas(inputs, trim, { padding: 0, powerOfTwo: false });
     expect(result.frames[0].trimmed).toEqual({
       sourceWidth: 40,

@@ -47,24 +47,14 @@ export function JsonPreview({
   const byteLen = new TextEncoder().encode(full).length;
 
   return (
-    <div
-      className={cn(
-        "rounded-md border bg-muted/20 overflow-hidden",
-        className,
-      )}
-    >
+    <div className={cn("rounded-md border bg-muted/20 overflow-hidden", className)}>
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 text-xs border-b">
         <button
           onClick={() => setExpanded((v) => !v)}
           className="inline-flex items-center gap-1 font-mono text-muted-foreground hover:text-foreground transition-colors"
           title={expanded ? "Collapse" : "Expand"}
         >
-          <ChevronRight
-            className={cn(
-              "w-3 h-3 transition-transform",
-              expanded && "rotate-90",
-            )}
-          />
+          <ChevronRight className={cn("w-3 h-3 transition-transform", expanded && "rotate-90")} />
           output JSON
         </button>
         <span className="text-muted-foreground font-mono">

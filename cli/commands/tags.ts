@@ -1,11 +1,5 @@
-import { Command } from "commander";
-import {
-  writeJsonOutput,
-  fail,
-  parseIntArg,
-  loadSheet,
-  addHelpExtras,
-} from "../lib/common";
+import type { Command } from "commander";
+import { writeJsonOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
 
 type Direction = "forward" | "reverse" | "pingpong";
 
@@ -23,12 +17,7 @@ export function registerTagsCommand(program: Command) {
     .description("Emit animation tag (named frame range) metadata.")
     .option("--cols <n>", "sheet columns", (v) => parseIntArg("cols", v))
     .option("--rows <n>", "sheet rows", (v) => parseIntArg("rows", v))
-    .option(
-      "--tag <spec>",
-      'repeatable: "name=from-to[:fps[:direction]]"',
-      collect,
-      [],
-    )
+    .option("--tag <spec>", 'repeatable: "name=from-to[:fps[:direction]]"', collect, [])
     .option("--fps <n>", "default FPS for tags", (v) => parseIntArg("fps", v), 10)
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
@@ -46,33 +35,31 @@ export function registerTagsCommand(program: Command) {
   });
 
   cmd.action(
-      (
-        input: string,
-        opts: { cols?: number; rows?: number; tag: string[]; fps: number; output?: string },
-      ) => {
-        try {
-          const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
-          const frameCount = frames.length;
-          const tags: ParsedTag[] = opts.tag.map((spec) =>
-            parseTag(spec, frameCount, opts.fps),
-          );
+    (
+      input: string,
+      opts: { cols?: number; rows?: number; tag: string[]; fps: number; output?: string },
+    ) => {
+      try {
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const frameCount = frames.length;
+        const tags: ParsedTag[] = opts.tag.map((spec) => parseTag(spec, frameCount, opts.fps));
 
-          writeJsonOutput(
-            {
-              source: input,
-              frameWidth: frames[0]?.width ?? 0,
-              frameHeight: frames[0]?.height ?? 0,
-              grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
-              frameCount,
-              tags,
-            },
-            opts.output,
-          );
-        } catch (e) {
-          fail(e instanceof Error ? e.message : String(e));
-        }
-      },
-    );
+        writeJsonOutput(
+          {
+            source: input,
+            frameWidth: frames[0]?.width ?? 0,
+            frameHeight: frames[0]?.height ?? 0,
+            grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+            frameCount,
+            tags,
+          },
+          opts.output,
+        );
+      } catch (e) {
+        fail(e instanceof Error ? e.message : String(e));
+      }
+    },
+  );
 }
 
 function collect(v: string, prev: string[]): string[] {

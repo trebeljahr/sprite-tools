@@ -1,10 +1,6 @@
 "use server";
 
-import {
-  generateVideo,
-  pollVideoStatus,
-  VideoGenerationOptions,
-} from "@/lib/xai";
+import { generateVideo, pollVideoStatus, type VideoGenerationOptions } from "@/lib/xai";
 
 export async function generateVideoAction(formData: FormData) {
   try {

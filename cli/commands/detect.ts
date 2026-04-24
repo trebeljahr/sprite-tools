@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import { loadPng } from "../lib/image-io";
 import { writeJsonOutput, fail, addHelpExtras } from "../lib/common";
 import { detectGridFromImageData } from "../../src/lib/pipeline/detect";
@@ -23,21 +23,21 @@ export function registerDetectCommand(program: Command) {
   });
 
   cmd.action((input: string, opts: { output?: string }) => {
-      try {
-        const img = loadPng(input);
-        const det = detectGridFromImageData(img);
-        writeJsonOutput(
-          {
-            source: input,
-            width: img.width,
-            height: img.height,
-            grid: { cols: det.cols, rows: det.rows },
-            confidence: Number(det.confidence.toFixed(3)),
-          },
-          opts.output,
-        );
-      } catch (e) {
-        fail(e instanceof Error ? e.message : String(e));
-      }
-    });
+    try {
+      const img = loadPng(input);
+      const det = detectGridFromImageData(img);
+      writeJsonOutput(
+        {
+          source: input,
+          width: img.width,
+          height: img.height,
+          grid: { cols: det.cols, rows: det.rows },
+          confidence: Number(det.confidence.toFixed(3)),
+        },
+        opts.output,
+      );
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+    }
+  });
 }
