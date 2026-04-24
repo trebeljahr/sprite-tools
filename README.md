@@ -51,7 +51,7 @@ npm run cli:build && npm link   # installs `sprite-tools` on PATH
 npm run mcp:build               # dist/mcp/index.js is executable
 
 # Run the web app
-npm run dev                     # http://localhost:3000
+npm run dev                     # http://localhost:3471
 ```
 
 ## MCP in Claude Desktop
@@ -86,7 +86,7 @@ Full docs live in the app at `/docs`. Highlights:
 - **Algorithm notes** — how grid detection / contour tracing / bin packing work.
 - **Contributing** — how to add a new tool.
 
-Run `npm run dev` and open `http://localhost:3000/docs`.
+Run `npm run dev` and open `http://localhost:3471/docs`.
 
 ## Architecture
 

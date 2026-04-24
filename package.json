@@ -7,9 +7,9 @@
     "sprite-tools-mcp": "./dist/mcp/index.js"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3471",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3471",
     "lint": "eslint",
     "cli:build": "tsc -p cli/tsconfig.json && node -e \"require('fs').chmodSync('dist/cli/index.js', 0o755)\"",
     "cli:dev": "tsx cli/index.ts",
