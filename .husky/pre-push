@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# CI build gate — typecheck → lint → test → build. Skip with --no-verify
+# only when you're sure (e.g. hotfix, hook itself is broken).
+set -e
+
+echo "[pre-push] typecheck"
+npm run typecheck
+
+echo "[pre-push] lint"
+npm run lint
+
+echo "[pre-push] test"
+npm test
+
+echo "[pre-push] build"
+npm run build
+
+echo "[pre-push] ok"

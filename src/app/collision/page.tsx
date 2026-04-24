@@ -36,10 +36,18 @@ import {
   type BackgroundRemovalState,
 } from "@/components/background-removal-settings";
 import { useViewport } from "@/hooks/use-viewport";
-import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
+import {
+  ViewportControls,
+  ZoomIndicator,
+} from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import { chromaKey as runChromaKey } from "@/lib/pipeline/transforms";
-import type { Frame, Frames, ChromaKeyConfig, BackgroundMode } from "@/lib/pipeline/types";
+import type {
+  Frame,
+  Frames,
+  ChromaKeyConfig,
+  BackgroundMode,
+} from "@/lib/pipeline/types";
 import {
   DEFAULT_OUTLINE_OPTIONS,
   generateOutline,
@@ -50,6 +58,18 @@ import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
+import { ShareSettingsButton } from "@/components/share-settings-button";
+import { useUrlSettings } from "@/hooks/use-url-settings";
+
+const DEFAULT_BR_STATE: BackgroundRemovalState = {
+  backgroundMode: "transparent-cutout",
+  autoCrop: false,
+  aspectRatio: "free",
+  similarity: 30,
+  softness: 10,
+  spill: 20,
+  choke: 1,
+};
 
 interface RawFrame {
   index: number;
@@ -77,14 +97,19 @@ function chromaConfigFrom(br: BackgroundRemovalState): ChromaKeyConfig {
   };
 }
 
-async function consumeChromaKey(frames: Frames, cfg: ChromaKeyConfig): Promise<Frames> {
+async function consumeChromaKey(
+  frames: Frames,
+  cfg: ChromaKeyConfig,
+): Promise<Frames> {
   const gen = runChromaKey(frames, cfg);
   let r = await gen.next();
   while (!r.done) r = await gen.next();
   return r.value;
 }
 
-async function frameToImageData(frame: Frame): Promise<{ imageData: ImageData; url: string }> {
+async function frameToImageData(
+  frame: Frame,
+): Promise<{ imageData: ImageData; url: string }> {
   const canvas = document.createElement("canvas");
   canvas.width = frame.width;
   canvas.height = frame.height;
@@ -106,18 +131,14 @@ export default function CollisionPage() {
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
   const [sheetCols, setSheetCols] = useState(1);
   const [sheetRows, setSheetRows] = useState(1);
-  const [detectedGrid, setDetectedGrid] = useState<{ cols: number; rows: number } | null>(null);
+  const [detectedGrid, setDetectedGrid] = useState<{
+    cols: number;
+    rows: number;
+  } | null>(null);
 
   // --- Chroma ---
-  const [brState, setBrState] = useState<BackgroundRemovalState>({
-    backgroundMode: "transparent-cutout",
-    autoCrop: false,
-    aspectRatio: "free",
-    similarity: 30,
-    softness: 10,
-    spill: 20,
-    choke: 1,
-  });
+  const [brState, setBrState] =
+    useState<BackgroundRemovalState>(DEFAULT_BR_STATE);
 
   // --- Outline params ---
   const [alphaThreshold, setAlphaThreshold] = useState<number>(
@@ -149,41 +170,67 @@ export default function CollisionPage() {
   const { view, containerRef: previewContainerRef, baseView } = viewport;
   const hasAutoFittedRef = useRef(false);
 
+  // Mirror shareable knobs to URL hash — lets users copy a link that
+  // encodes their tweaked collision config without the image data.
+  useUrlSettings({
+    sheetCols: [sheetCols, setSheetCols, 1],
+    sheetRows: [sheetRows, setSheetRows, 1],
+    brState: [brState, setBrState, DEFAULT_BR_STATE],
+    alphaThreshold: [
+      alphaThreshold,
+      setAlphaThreshold,
+      DEFAULT_OUTLINE_OPTIONS.alphaThreshold,
+    ],
+    simplifyTolerance: [
+      simplifyTolerance,
+      setSimplifyTolerance,
+      DEFAULT_OUTLINE_OPTIONS.simplifyTolerance,
+    ],
+    useConvexHull: [
+      useConvexHull,
+      setUseConvexHull,
+      DEFAULT_OUTLINE_OPTIONS.convexHull,
+    ],
+  });
+
   // -----------------------------------------------------------------
   // Upload handling
   // -----------------------------------------------------------------
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file.");
-      return;
-    }
-    await setSharedSource(file);
-    setCurrentIndex(0);
-    hasAutoFittedRef.current = false;
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please upload an image file.");
+        return;
+      }
+      await setSharedSource(file);
+      setCurrentIndex(0);
+      hasAutoFittedRef.current = false;
 
-    // Try grid auto-detection
-    try {
-      const det = await detectSheetGrid(file);
-      if (det.confidence > 0 && (det.cols > 1 || det.rows > 1)) {
-        setSourceMode("sheet");
-        setSheetCols(det.cols);
-        setSheetRows(det.rows);
-        setDetectedGrid({ cols: det.cols, rows: det.rows });
-        toast.success(`Detected ${det.cols}×${det.rows} sprite grid`);
-      } else {
+      // Try grid auto-detection
+      try {
+        const det = await detectSheetGrid(file);
+        if (det.confidence > 0 && (det.cols > 1 || det.rows > 1)) {
+          setSourceMode("sheet");
+          setSheetCols(det.cols);
+          setSheetRows(det.rows);
+          setDetectedGrid({ cols: det.cols, rows: det.rows });
+          toast.success(`Detected ${det.cols}×${det.rows} sprite grid`);
+        } else {
+          setSourceMode("single");
+          setSheetCols(1);
+          setSheetRows(1);
+          setDetectedGrid(null);
+        }
+      } catch {
         setSourceMode("single");
         setSheetCols(1);
         setSheetRows(1);
         setDetectedGrid(null);
       }
-    } catch {
-      setSourceMode("single");
-      setSheetCols(1);
-      setSheetRows(1);
-      setDetectedGrid(null);
-    }
-  }, [setSharedSource]);
+    },
+    [setSharedSource],
+  );
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -439,7 +486,11 @@ export default function CollisionPage() {
       source: sourceFile.name,
       frameWidth: anyFrame.width,
       frameHeight: anyFrame.height,
-      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
+      grid: {
+        cols: sheetCols,
+        rows: sheetRows,
+        detected: sourceMode === "sheet",
+      },
       options: {
         alphaThreshold,
         simplifyTolerance,
@@ -459,7 +510,10 @@ export default function CollisionPage() {
         cell:
           f.cellRow != null && f.cellCol != null
             ? { row: f.cellRow, col: f.cellCol }
-            : { row: Math.floor(f.index / sheetCols), col: f.index % sheetCols },
+            : {
+                row: Math.floor(f.index / sheetCols),
+                col: f.index % sheetCols,
+              },
         pointCount: f.outline.polygon.length,
         bounds: f.outline.bounds,
         polygon: f.outline.polygon.map((p) => [p.x, p.y] as const),
@@ -518,7 +572,12 @@ export default function CollisionPage() {
         category="metadata"
         docs="collision"
       />
-      <SourceBanner onReplace={() => fileInputRef.current?.click()} />
+      <div className="flex items-start justify-between gap-2 mb-6">
+        <div className="flex-1 min-w-0">
+          <SourceBanner onReplace={() => fileInputRef.current?.click()} />
+        </div>
+        <ShareSettingsButton label="Copy a link with these settings baked in" />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left column: Source + Settings + Export */}
@@ -527,7 +586,8 @@ export default function CollisionPage() {
             <CardHeader className="pb-3">
               <CardTitle>Source</CardTitle>
               <CardDescription className="text-xs">
-                Upload a single sprite or a sprite sheet. Grid is auto-detected where possible.
+                Upload a single sprite or a sprite sheet. Grid is auto-detected
+                where possible.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -576,12 +636,14 @@ export default function CollisionPage() {
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
-                    {(
-                      [
-                        { id: "single" as const, label: "Single", Icon: ImageIcon },
-                        { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
-                      ]
-                    ).map(({ id, label, Icon }) => (
+                    {[
+                      {
+                        id: "single" as const,
+                        label: "Single",
+                        Icon: ImageIcon,
+                      },
+                      { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    ].map(({ id, label, Icon }) => (
                       <button
                         key={id}
                         onClick={() => {
@@ -650,7 +712,8 @@ export default function CollisionPage() {
             <CardHeader className="pb-3">
               <CardTitle>Background Removal</CardTitle>
               <CardDescription className="text-xs">
-                Enable chroma key if your image has a solid colored background. Pure-alpha sprites can skip this.
+                Enable chroma key if your image has a solid colored background.
+                Pure-alpha sprites can skip this.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -673,7 +736,9 @@ export default function CollisionPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <Label className="text-xs">Alpha threshold</Label>
-                  <span className="text-[10px] font-mono">{alphaThreshold}</span>
+                  <span className="text-[10px] font-mono">
+                    {alphaThreshold}
+                  </span>
                 </div>
                 <Slider
                   value={[alphaThreshold]}
@@ -685,7 +750,8 @@ export default function CollisionPage() {
                   }
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Pixels with alpha &gt; this are &ldquo;inside&rdquo;. Raise to ignore soft edges.
+                  Pixels with alpha &gt; this are &ldquo;inside&rdquo;. Raise to
+                  ignore soft edges.
                 </p>
               </div>
 
@@ -787,7 +853,9 @@ export default function CollisionPage() {
                   <Palette
                     className={cn(
                       "h-4 w-4",
-                      gridTheme === "dark" ? "text-primary" : "text-muted-foreground",
+                      gridTheme === "dark"
+                        ? "text-primary"
+                        : "text-muted-foreground",
                     )}
                   />
                 </Button>
@@ -812,7 +880,9 @@ export default function CollisionPage() {
                 ref={previewContainerRef}
                 className={cn(
                   "aspect-video min-h-96 rounded-lg border overflow-hidden relative cursor-move touch-none",
-                  gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
+                  gridTheme === "light"
+                    ? "checkerboard-light"
+                    : "checkerboard-dark",
                 )}
                 onMouseDown={viewport.startPanning}
                 onMouseMove={viewport.updatePanning}
@@ -925,7 +995,8 @@ export default function CollisionPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Frames</CardTitle>
                 <CardDescription className="text-xs">
-                  {frames.length} sprite{frames.length === 1 ? "" : "s"} — click to preview.
+                  {frames.length} sprite{frames.length === 1 ? "" : "s"} — click
+                  to preview.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1001,7 +1072,9 @@ const FrameThumb = React.memo(function FrameThumbInner({
       className={cn(
         "aspect-square border rounded overflow-hidden relative transition-all",
         gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
-        isActive ? "ring-2 ring-primary ring-offset-1" : "opacity-70 hover:opacity-100",
+        isActive
+          ? "ring-2 ring-primary ring-offset-1"
+          : "opacity-70 hover:opacity-100",
       )}
     >
       <canvas
