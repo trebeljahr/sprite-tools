@@ -137,6 +137,7 @@ export function BackgroundRemovalSettings({
             )}
           >
             <button
+              type="button"
               onClick={() => updateField("backgroundMode", "chroma-transparent")}
               className="flex flex-col items-start p-3 text-left w-full"
             >
@@ -205,6 +206,7 @@ export function BackgroundRemovalSettings({
             )}
           >
             <button
+              type="button"
               onClick={() => updateField("backgroundMode", "chroma-solid")}
               className="flex flex-col items-start p-3 text-left w-full"
             >
@@ -252,6 +254,7 @@ export function BackgroundRemovalSettings({
             )}
           >
             <button
+              type="button"
               onClick={() => updateField("backgroundMode", "transparent-cutout")}
               className="flex flex-col items-start p-3 text-left w-full"
             >

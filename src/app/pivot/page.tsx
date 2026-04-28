@@ -483,6 +483,7 @@ export default function PivotPage() {
                       { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
                     ].map(({ id, label, Icon }) => (
                       <button
+                        type="button"
                         key={id}
                         onClick={() => {
                           setSourceMode(id);

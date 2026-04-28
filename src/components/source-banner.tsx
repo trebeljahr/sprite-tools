@@ -39,6 +39,7 @@ export function SourceBanner({ onReplace, className }: SourceBannerProps) {
         </span>
       </div>
       <button
+        type="button"
         onClick={onReplace}
         className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/40 transition-colors text-muted-foreground hover:text-foreground"
         title="Upload a different image"
@@ -47,6 +48,7 @@ export function SourceBanner({ onReplace, className }: SourceBannerProps) {
         Replace
       </button>
       <button
+        type="button"
         onClick={() => void clearSharedSource()}
         className="inline-flex items-center p-1 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
         title="Clear source"

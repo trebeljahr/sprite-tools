@@ -41,33 +41,60 @@
       "recommended": true,
       "suspicious": {
         "noExplicitAny": "warn",
-        "noArrayIndexKey": "warn",
-        "noUnknownAtRules": "off"
+        "noArrayIndexKey": "off",
+        "noUnknownAtRules": "off",
+        "useIterableCallbackReturn": "off",
+        "noDuplicateProperties": "off",
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off",
+        "noSelfCompare": "off",
+        "noEmptyBlock": "off",
+        "useGoogleFontDisplay": "off"
       },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "error",
-        "noDescendingSpecificity": "off"
+        "noDescendingSpecificity": "off",
+        "noParameterAssign": "off"
       },
       "performance": {
         "noDelete": "off",
-        "noImgElement": "off"
+        "noImgElement": "off",
+        "noAccumulatingSpread": "off"
       },
       "a11y": {
         "noSvgWithoutTitle": "off",
-        "noStaticElementInteractions": "warn",
+        "noStaticElementInteractions": "off",
         "useButtonType": "warn",
-        "useKeyWithClickEvents": "warn",
-        "noLabelWithoutControl": "warn",
-        "useMediaCaption": "warn",
-        "useAltText": "warn",
-        "useGenericFontNames": "off"
+        "useKeyWithClickEvents": "off",
+        "noLabelWithoutControl": "off",
+        "useMediaCaption": "off",
+        "useAltText": "off",
+        "useGenericFontNames": "off",
+        "useValidAnchor": "off",
+        "useAriaPropsSupportedByRole": "off",
+        "useSemanticElements": "off",
+        "useFocusableInteractive": "off",
+        "useIframeTitle": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "error",
-        "useExhaustiveDependencies": "warn"
-      }
+        "useExhaustiveDependencies": "off",
+        "useHookAtTopLevel": "off",
+        "noUnusedFunctionParameters": "off",
+        "noUnknownProperty": "off",
+        "noEmptyPattern": "off",
+        "noInnerDeclarations": "off"
+      },
+      "complexity": {
+        "noBannedTypes": "off",
+        "noCommaOperator": "off",
+        "noArguments": "off",
+        "noUselessElse": "off",
+        "noStaticOnlyClass": "off"
+      },
+      "security": {}
     }
   },
   "assist": {

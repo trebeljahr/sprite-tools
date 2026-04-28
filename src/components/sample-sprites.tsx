@@ -52,6 +52,7 @@ export function SampleSprites({ className }: SampleSpritesProps) {
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         {SAMPLES.map((s) => (
           <button
+            type="button"
             key={s.file}
             onClick={() => void load(s.file)}
             disabled={loading === s.file}

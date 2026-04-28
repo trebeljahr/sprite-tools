@@ -726,6 +726,7 @@ function SpritesheetContent() {
                   ] as const
                 ).map(({ id, label, Icon }) => (
                   <button
+                    type="button"
                     key={id}
                     onClick={() => setSourceTab(id)}
                     className={cn(

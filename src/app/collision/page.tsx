@@ -613,6 +613,7 @@ export default function CollisionPage() {
                       { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
                     ].map(({ id, label, Icon }) => (
                       <button
+                        type="button"
                         key={id}
                         onClick={() => {
                           setSourceMode(id);
@@ -990,6 +991,7 @@ const FrameThumb = React.memo(function FrameThumbInner({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "aspect-square border rounded overflow-hidden relative transition-all",

@@ -16,7 +16,7 @@ export default function AppleIcon() {
         borderRadius: 36,
       }}
     >
-      <svg width="120" height="120" viewBox="0 0 24 24">
+      <svg aria-hidden="true" width="120" height="120" viewBox="0 0 24 24">
         <rect
           x="3"
           y="3"

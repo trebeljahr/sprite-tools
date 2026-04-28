@@ -100,7 +100,7 @@ export default function OpenGraphImage() {
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 12, color: "#22c55e" }}>
           {/* Hexagon glyph echoing the favicon */}
-          <svg width="48" height="48" viewBox="0 0 24 24">
+          <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24">
             <path
               d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"
               fill="none"

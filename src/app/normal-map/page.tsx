@@ -461,6 +461,7 @@ export default function NormalMapPage() {
                       { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
                     ].map(({ id, label, Icon }) => (
                       <button
+                        type="button"
                         key={id}
                         onClick={() => {
                           setSourceMode(id);
@@ -617,6 +618,7 @@ export default function NormalMapPage() {
                   { id: "lit" as const, label: "Lit" },
                 ].map(({ id, label }) => (
                   <button
+                    type="button"
                     key={id}
                     onClick={() => setPreviewMode(id)}
                     className={cn(
