@@ -94,7 +94,7 @@ importers:
         version: 1.4.0
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.4.13
+        specifier: ^2.4.13
         version: 2.4.13
       '@dotenvx/dotenvx':
         specifier: ^1.62.0
