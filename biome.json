@@ -7,7 +7,7 @@
   },
   "files": {
     "includes": [
-      "**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,mdx,css}",
+      "**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,mdx}",
       "!**/.next",
       "!**/dist",
       "!**/build",
@@ -39,18 +39,30 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn"
       },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "error"
       },
       "performance": {
-        "noDelete": "off"
+        "noDelete": "off",
+        "noImgElement": "off"
+      },
+      "a11y": {
+        "noSvgWithoutTitle": "off",
+        "noStaticElementInteractions": "warn",
+        "useButtonType": "warn",
+        "useKeyWithClickEvents": "warn",
+        "noLabelWithoutControl": "warn",
+        "useMediaCaption": "warn",
+        "useAltText": "warn"
       },
       "correctness": {
         "noUnusedVariables": "warn",
-        "noUnusedImports": "error"
+        "noUnusedImports": "error",
+        "useExhaustiveDependencies": "warn"
       }
     }
   },

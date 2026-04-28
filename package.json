@@ -9,20 +9,22 @@
   },
   "scripts": {
     "dev": "dotenvx run -f .env.development.local -f .env --ignore=MISSING_ENV_FILE -- next dev -p 3471",
-    "build": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next build",
-    "start": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next start -p 3471",
-    "lint": "eslint",
+    "build": "next build",
+    "start": "next start -p 3471",
+    "build:local": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next build",
+    "start:local": "dotenvx run -f .env.production -f .env --ignore=MISSING_ENV_FILE -- next start -p 3471",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "biome check --write .",
     "cli:build": "tsc -p cli/tsconfig.json && node -e \"require('fs').chmodSync('dist/cli/index.js', 0o755)\"",
     "cli:dev": "tsx cli/index.ts",
     "mcp:build": "tsc -p mcp/tsconfig.json && node -e \"require('fs').chmodSync('dist/mcp/index.js', 0o755)\"",
     "mcp:dev": "tsx mcp/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,md,mdx}": "biome check --write --no-errors-on-unmatched"
@@ -68,8 +70,6 @@
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.1.5",
     "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.1",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "tailwindcss": "^4",

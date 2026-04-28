@@ -46,6 +46,7 @@ import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
 import { ShareSettingsButton } from "@/components/share-settings-button";
 import { useUrlSettings } from "@/hooks/use-url-settings";
+import { track } from "@/lib/analytics";
 
 const DEFAULT_BR_STATE: BackgroundRemovalState = {
   backgroundMode: "transparent-cutout",
@@ -511,6 +512,7 @@ export default function CollisionPage() {
     a.download = `${baseName}-collision.json`;
     a.click();
     URL.revokeObjectURL(url);
+    track("export", { tool: "collision", format: "json", frames: frames.length });
     toast.success("Collision JSON downloaded");
   };
 

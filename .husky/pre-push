@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
-# CI build gate — typecheck → lint → test → build. Skip with --no-verify
-# only when you're sure (e.g. hotfix, hook itself is broken).
+# Local CI gate. Runs the fast checks in parallel; the full `next build`
+# is delegated to GitHub Actions so we don't pay 60s on every push. Use
+# --no-verify only when you're sure (hotfix, hook itself broken).
 set -e
 
-echo "[pre-push] typecheck"
-npm run typecheck
+run_parallel() {
+  local pids=()
+  for arg in "$@"; do
+    bash -c "$arg" &
+    pids+=($!)
+  done
+  local rc=0
+  for pid in "${pids[@]}"; do
+    wait "$pid" || rc=$?
+  done
+  return $rc
+}
 
-echo "[pre-push] lint"
-npm run lint
-
-echo "[pre-push] test"
-npm test
-
-echo "[pre-push] build"
-npm run build
+echo "[pre-push] typecheck + lint + test (parallel)"
+run_parallel \
+  "pnpm typecheck" \
+  "pnpm lint" \
+  "pnpm test"
 
 echo "[pre-push] ok"

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast checks fan out in parallel — fail one, fail the job, but each
+  # surfaces its own log so all the breakage is visible at once.
+  checks:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [typecheck, lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ${{ matrix.task }}
+
+  # Build runs separately because it's the slow one and we want logs
+  # next to the rest of the gate, not buried inside it.
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+        env:
+          # Defaults so build never trips on missing dotenvx files
+          # (real prod values come from Vercel project env, not the repo).
+          NEXT_PUBLIC_SITE_URL: https://sprite-tools.example.com

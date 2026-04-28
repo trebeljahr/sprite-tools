@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSharedProjectSource } from "@/lib/project/store";
+import { track } from "@/lib/analytics";
 
 // First-run helper: "Try a sample" drops a bundled PNG into the shared
 // source so users can see the tool actually working without having to find
@@ -36,6 +37,7 @@ export function SampleSprites({ className }: SampleSpritesProps) {
       const blob = await res.blob();
       const file = new File([blob], name, { type: "image/png" });
       await setSharedSource(file);
+      track("sample_loaded", { sample: name });
     } finally {
       setLoading(null);
     }

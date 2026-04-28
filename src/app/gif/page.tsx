@@ -32,6 +32,7 @@ import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
+import { track } from "@/lib/analytics";
 import { SourceBanner } from "@/components/source-banner";
 import { SampleSprites } from "@/components/sample-sprites";
 
@@ -292,6 +293,7 @@ export default function GifPage() {
       a.download = `${base}.gif`;
       a.click();
       URL.revokeObjectURL(a.href);
+      track("export", { tool: "gif", format: "gif", frames: sequence.length, fps });
       toast.success("GIF downloaded");
     } catch (e) {
       toast.error(`Export failed: ${e instanceof Error ? e.message : String(e)}`);

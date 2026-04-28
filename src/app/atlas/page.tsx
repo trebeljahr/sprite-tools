@@ -13,6 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { ToolHeader } from "@/components/tool-header";
+import { track } from "@/lib/analytics";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { computeTrimRect, packAtlas, type PackInput, type PackedAtlas } from "@/lib/atlas/pack";
@@ -264,6 +265,7 @@ export default function AtlasPage() {
       a.download = "atlas.png";
       a.click();
       URL.revokeObjectURL(a.href);
+      track("export", { tool: "atlas", format: "png", sprites: sprites.length });
       toast.success("Atlas PNG downloaded");
     }, "image/png");
   };
@@ -278,6 +280,7 @@ export default function AtlasPage() {
     a.download = "atlas.json";
     a.click();
     URL.revokeObjectURL(a.href);
+    track("export", { tool: "atlas", format: "json", sprites: sprites.length });
     toast.success("Atlas JSON downloaded");
   };
 

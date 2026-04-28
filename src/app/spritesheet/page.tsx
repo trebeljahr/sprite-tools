@@ -64,6 +64,7 @@ import {
   type ChromaKeyConfig,
   type Frame,
   type BackgroundMode,
+  type PipelineStep,
 } from "@/lib/pipeline/types";
 import { composeCrops } from "@/lib/pipeline/transforms";
 
@@ -379,7 +380,7 @@ function SpritesheetContent() {
 
   const runFromSource = async (sourceTabOverride?: SourceTab, crop: FrameCrop = appliedCrop) => {
     const tab = sourceTabOverride ?? sourceTab;
-    let steps;
+    let steps: PipelineStep[];
     if (tab === "video") {
       if (!videoUrl && !videoFile) return;
       const src = videoFile ?? videoUrl ?? undefined;

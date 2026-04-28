@@ -46,7 +46,9 @@ export function sampleBackground(image: HTMLImageElement, points?: { x: number; 
     br: getPixel(image.width - 1, image.height - 1),
   };
 
-  let r, g, b;
+  let r: number;
+  let g: number;
+  let b: number;
   if (points && points.length > 0) {
     let sr = 0,
       sg = 0,
