@@ -31,7 +31,7 @@ export function JsonPreview({
 
   const full = JSON.stringify(data, null, 2);
   const truncated = full.length > previewChars && !expanded;
-  const shown = truncated ? full.slice(0, previewChars) + "\n  …" : full;
+  const shown = truncated ? `${full.slice(0, previewChars)}\n  …` : full;
 
   const copy = async () => {
     try {

@@ -127,7 +127,7 @@ export default function LassoPage() {
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, []);
+  }, [handleFile]);
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -317,7 +317,7 @@ export default function LassoPage() {
     }
 
     return finalCanvas;
-  }, [image, points, brState]);
+  }, [image, points, brState, parseAspectRatio]);
 
   const processCutout = useCallback(
     async (silent = false, includeEffects = true) => {

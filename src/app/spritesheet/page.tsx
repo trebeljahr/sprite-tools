@@ -374,7 +374,7 @@ function SpritesheetContent() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, []);
+  }, [handleSingleFile]);
 
   // ------- Kickoff / re-run helpers -------
 
@@ -468,14 +468,14 @@ function SpritesheetContent() {
       setColumns((prev) => (prev === 8 ? smart : prev));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allFrames.length]);
+  }, [allFrames.length, activeFrames.length]);
 
   useEffect(() => {
     if (activeFrames.length > 0 && !isCompiling) {
       void compileSheet();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFrames.length, columns, output]);
+  }, [activeFrames.length, isCompiling, compileSheet]);
 
   const downloadSheet = () => {
     if (!sheetPreviewUrl) return;
@@ -1317,7 +1317,7 @@ function SheetPreviewWithGrid({ src, cols, rows }: { src: string; cols: number; 
       img.removeEventListener("load", onLoad);
       ro.disconnect();
     };
-  }, [src]);
+  }, []);
 
   return (
     <div

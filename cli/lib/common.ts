@@ -26,7 +26,7 @@ export function addHelpExtras(
     for (const o of opts.output) sections.push(`  ${o}`);
   }
   if (sections.length > 0) {
-    cmd.addHelpText("after", "\n" + sections.join("\n") + "\n");
+    cmd.addHelpText("after", `\n${sections.join("\n")}\n`);
   }
   return cmd;
 }
@@ -34,9 +34,9 @@ export function addHelpExtras(
 export function writeJsonOutput(json: unknown, outPath?: string): void {
   const text = JSON.stringify(json, null, 2);
   if (!outPath || outPath === "-") {
-    process.stdout.write(text + "\n");
+    process.stdout.write(`${text}\n`);
   } else {
-    writeFileSync(outPath, text + "\n");
+    writeFileSync(outPath, `${text}\n`);
   }
 }
 

@@ -16,7 +16,8 @@
       "!**/node_modules",
       "!**/public",
       "!**/*.min.*",
-      "!**/package-lock.json"
+      "!**/package-lock.json",
+      "!**/*.css"
     ]
   },
   "formatter": {
@@ -40,11 +41,13 @@
       "recommended": true,
       "suspicious": {
         "noExplicitAny": "warn",
-        "noArrayIndexKey": "warn"
+        "noArrayIndexKey": "warn",
+        "noUnknownAtRules": "off"
       },
       "style": {
         "noNonNullAssertion": "off",
-        "useImportType": "error"
+        "useImportType": "error",
+        "noDescendingSpecificity": "off"
       },
       "performance": {
         "noDelete": "off",
@@ -57,7 +60,8 @@
         "useKeyWithClickEvents": "warn",
         "noLabelWithoutControl": "warn",
         "useMediaCaption": "warn",
-        "useAltText": "warn"
+        "useAltText": "warn",
+        "useGenericFontNames": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn",
@@ -66,5 +70,7 @@
       }
     }
   },
-  "assist": { "enabled": false }
+  "assist": {
+    "enabled": false
+  }
 }

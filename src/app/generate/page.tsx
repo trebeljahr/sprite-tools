@@ -70,7 +70,7 @@ function GeneratePageContent() {
 
   useEffect(() => {
     setCustomTemplate(selectedTemplate.basePrompt);
-  }, [selectedTemplateId]);
+  }, [selectedTemplate.basePrompt]);
 
   const handleGenerate = async () => {
     if (!userPrompt) {

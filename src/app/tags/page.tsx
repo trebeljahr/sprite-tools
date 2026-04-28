@@ -654,7 +654,7 @@ export default function TagsPage() {
                     </div>
                     <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded font-mono pointer-events-none">
                       #{currentIndex}
-                      {playingTagId && " · " + tags.find((t) => t.id === playingTagId)?.name}
+                      {playingTagId && ` · ${tags.find((t) => t.id === playingTagId)?.name}`}
                       {isPlayingAll && " · all"}
                     </div>
                     <ZoomIndicator

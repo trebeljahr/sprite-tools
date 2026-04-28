@@ -6,7 +6,7 @@ export async function generateVideoAction(formData: FormData) {
   try {
     const file = formData.get("image") as File;
     const prompt = formData.get("prompt") as string;
-    const duration = parseInt((formData.get("duration") as string) || "1");
+    const duration = parseInt((formData.get("duration") as string) || "1", 10);
     const resolution = (formData.get("resolution") as string) || "720p";
     const aspectRatio = (formData.get("aspect_ratio") as string) || "16:9";
 

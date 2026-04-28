@@ -8,7 +8,7 @@ import {
   type VideoImportConfig,
 } from "./types";
 
-async function blobToBitmap(blob: Blob): Promise<ImageBitmap> {
+async function _blobToBitmap(blob: Blob): Promise<ImageBitmap> {
   return await createImageBitmap(blob);
 }
 

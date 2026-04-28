@@ -323,6 +323,7 @@ export default function CollisionPage() {
     brState.softness,
     brState.spill,
     brState.choke,
+    brState,
   ]);
 
   // -----------------------------------------------------------------
@@ -351,7 +352,7 @@ export default function CollisionPage() {
       // sourceUrl lifecycle is owned by useSharedProjectSource now.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [rawFrames]);
 
   // -----------------------------------------------------------------
   // Auto-fit + wheel wiring

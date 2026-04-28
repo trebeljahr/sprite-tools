@@ -53,7 +53,7 @@ function HomeContent() {
     if (imageUrl) {
       handleLoadFromUrl(imageUrl);
     }
-  }, [searchParams]);
+  }, [searchParams, handleLoadFromUrl]);
 
   const handleLoadFromUrl = async (url: string) => {
     try {
@@ -105,7 +105,7 @@ function HomeContent() {
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, []);
+  }, [handleFile]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

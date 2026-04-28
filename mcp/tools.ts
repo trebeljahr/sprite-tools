@@ -621,7 +621,7 @@ export function registerAllTools(server: McpServer) {
         ),
       };
       mkdirSync(dirname(json_path), { recursive: true });
-      writeFileSync(json_path, JSON.stringify(manifest, null, 2) + "\n");
+      writeFileSync(json_path, `${JSON.stringify(manifest, null, 2)}\n`);
       return jsonResult({
         atlas_path: output_path,
         manifest_path: json_path,
