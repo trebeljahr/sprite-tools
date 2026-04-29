@@ -28,8 +28,7 @@ const HASH_KEY = "s";
 
 // Each tuple: [current value, setter, default value]. Per-entry types
 // live at call sites; the hook itself only JSON-roundtrips the values.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Entry = readonly [unknown, (value: any) => void, unknown];
+type Entry = readonly [unknown, (value: unknown) => void, unknown];
 type Settings = Record<string, Entry>;
 
 function toBase64Url(input: string): string {
