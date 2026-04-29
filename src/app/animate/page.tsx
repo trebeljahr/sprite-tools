@@ -48,14 +48,6 @@ function HomeContent() {
 
   const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const imageUrl = searchParams.get("imageUrl");
-    if (imageUrl) {
-      handleLoadFromUrl(imageUrl);
-    }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: handleLoadFromUrl is defined later in the same component and stable
-  }, [searchParams]);
-
   const handleLoadFromUrl = async (url: string) => {
     try {
       setStatus("Loading image from designer...");
@@ -73,6 +65,14 @@ function HomeContent() {
       setStatus(null);
     }
   };
+
+  useEffect(() => {
+    const imageUrl = searchParams.get("imageUrl");
+    if (imageUrl) {
+      handleLoadFromUrl(imageUrl);
+    }
+    // biome-ignore lint/correctness/useExhaustiveDependencies: handleLoadFromUrl is stable; running on searchParams change only
+  }, [searchParams]);
 
   const [isDragging, setIsDragging] = useState(false);
 
