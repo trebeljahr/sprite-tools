@@ -329,6 +329,7 @@ function Handle({
 }: HandleProps) {
   if (variant === "move") {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control
       <div
         className={cn("absolute pointer-events-auto", className)}
         style={style}
@@ -339,6 +340,7 @@ function Handle({
   }
   // Hit zone (larger, invisible, clickable) with a visible dot centered.
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control
     <div
       className={cn("absolute pointer-events-auto flex items-center justify-center", className)}
       style={{

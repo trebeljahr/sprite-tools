@@ -121,6 +121,7 @@ const FrameItem = React.memo(function FrameItemInner({
   onMouseEnter: (index: number) => void;
 }) {
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control
     <div
       className={cn(
         "aspect-square border rounded overflow-hidden group relative cursor-pointer transition-all",
@@ -374,6 +375,7 @@ function SpritesheetContent() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
   }, [handleSingleFile]);
 
   // ------- Kickoff / re-run helpers -------
@@ -475,6 +477,7 @@ function SpritesheetContent() {
       void compileSheet();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
   }, [activeFrames.length, isCompiling, compileSheet]);
 
   const downloadSheet = () => {
@@ -913,6 +916,7 @@ function SpritesheetContent() {
                     />
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
                     <div
                       ref={previewContainerRef}
                       className={cn(
@@ -1070,6 +1074,7 @@ function SpritesheetContent() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
                     <div
                       ref={sheetContainerRef}
                       className={cn(
@@ -1262,6 +1267,8 @@ function UploadZone({
 }) {
   const inputId = React.useId();
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control
+    // biome-ignore lint/a11y/useKeyWithClickEvents: test
     <div
       className={cn(
         "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",

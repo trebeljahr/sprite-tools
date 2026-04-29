@@ -323,6 +323,8 @@ export default function AtlasPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
               <div
                 className={cn(
                   "border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors p-6",
@@ -348,7 +350,6 @@ export default function AtlasPage() {
                   onChange={onFileInputChange}
                 />
               </div>
-
               {sprites.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

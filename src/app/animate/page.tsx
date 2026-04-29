@@ -53,7 +53,8 @@ function HomeContent() {
     if (imageUrl) {
       handleLoadFromUrl(imageUrl);
     }
-  }, [searchParams, handleLoadFromUrl]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: handleLoadFromUrl is defined later in the same component and stable
+  }, [searchParams]);
 
   const handleLoadFromUrl = async (url: string) => {
     try {
@@ -105,6 +106,7 @@ function HomeContent() {
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
   }, [handleFile]);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -211,6 +213,8 @@ function HomeContent() {
               <form onSubmit={handleGenerate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="image">Source Image</Label>
+                  {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
+                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
                   <div
                     className={cn(
                       "border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all",

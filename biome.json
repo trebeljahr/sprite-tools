@@ -41,58 +41,59 @@
       "recommended": true,
       "suspicious": {
         "noExplicitAny": "warn",
-        "noArrayIndexKey": "off",
         "noUnknownAtRules": "off",
-        "useIterableCallbackReturn": "off",
-        "noDuplicateProperties": "off",
-        "noAssignInExpressions": "off",
-        "noImplicitAnyLet": "off",
         "noSelfCompare": "off",
-        "noEmptyBlock": "off",
-        "useGoogleFontDisplay": "off"
+        "noArrayIndexKey": "warn",
+        "noEmptyBlock": "warn",
+        "useIterableCallbackReturn": "warn",
+        "noDuplicateProperties": "warn",
+        "useGoogleFontDisplay": "warn",
+        "noShorthandPropertyOverrides": "warn",
+        "noAssignInExpressions": "warn",
+        "noImplicitAnyLet": "warn"
       },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "error",
         "noDescendingSpecificity": "off",
-        "noParameterAssign": "off"
+        "noParameterAssign": "warn"
       },
       "performance": {
         "noDelete": "off",
-        "noImgElement": "off",
-        "noAccumulatingSpread": "off"
+        "noImgElement": "warn",
+        "noAccumulatingSpread": "warn"
       },
       "a11y": {
-        "noSvgWithoutTitle": "off",
-        "noStaticElementInteractions": "off",
         "useButtonType": "warn",
-        "useKeyWithClickEvents": "off",
-        "noLabelWithoutControl": "off",
-        "useMediaCaption": "off",
-        "useAltText": "off",
         "useGenericFontNames": "off",
-        "useValidAnchor": "off",
-        "useAriaPropsSupportedByRole": "off",
-        "useSemanticElements": "off",
-        "useFocusableInteractive": "off",
-        "useIframeTitle": "off"
+        "noStaticElementInteractions": "warn",
+        "useSemanticElements": "warn",
+        "useFocusableInteractive": "warn",
+        "useKeyWithClickEvents": "warn",
+        "useValidAnchor": "warn",
+        "useAriaPropsSupportedByRole": "warn",
+        "noLabelWithoutControl": "warn",
+        "noSvgWithoutTitle": "warn",
+        "useMediaCaption": "warn",
+        "useIframeTitle": "warn",
+        "useAltText": "warn"
       },
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "error",
-        "useExhaustiveDependencies": "off",
-        "useHookAtTopLevel": "off",
-        "noUnusedFunctionParameters": "off",
-        "noUnknownProperty": "off",
-        "noEmptyPattern": "off",
-        "noInnerDeclarations": "off"
+        "useHookAtTopLevel": "warn",
+        "useExhaustiveDependencies": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "noUnknownProperty": "warn",
+        "noEmptyPattern": "warn",
+        "noInnerDeclarations": "warn",
+        "noVoidTypeReturn": "warn"
       },
       "complexity": {
-        "noBannedTypes": "off",
-        "noCommaOperator": "off",
-        "noArguments": "off",
-        "noUselessElse": "off",
-        "noStaticOnlyClass": "off"
+        "noBannedTypes": "warn",
+        "noStaticOnlyClass": "warn",
+        "noCommaOperator": "warn",
+        "noArguments": "warn"
       },
       "security": {}
     }

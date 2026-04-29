@@ -430,6 +430,8 @@ export default function GifPage() {
               <CardTitle>Source</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
               <div
                 className={cn(
                   "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",
@@ -467,7 +469,6 @@ export default function GifPage() {
                   onChange={onFileInputChange}
                 />
               </div>
-
               <SampleSprites />
               {sourceUrl && (
                 <>

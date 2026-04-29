@@ -387,6 +387,8 @@ export default function PixelatePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
               <div
                 className={cn(
                   "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",
@@ -424,9 +426,7 @@ export default function PixelatePage() {
                   onChange={onFileInputChange}
                 />
               </div>
-
               <SampleSprites />
-
               {sourceUrl && (
                 <>
                   <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
@@ -665,6 +665,7 @@ export default function PixelatePage() {
               />
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
               <div
                 ref={previewContainerRef}
                 className={cn(
