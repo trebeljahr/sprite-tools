@@ -25,6 +25,18 @@ interface StoredSource {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+// Same-tab subscriber list. The localStorage `storage` event only fires in
+// *other* tabs, so when one component on this page updates the source we
+// need an in-memory broadcaster to keep peer instances of useProjectSource
+// in sync. Without this, e.g. the SampleSprites button updates its own
+// state but the surrounding tool page still shows "no source".
+type SourceListener = (next: ProjectSource | null) => void;
+const sameTabListeners = new Set<SourceListener>();
+
+function notifySameTabListeners(next: ProjectSource | null): void {
+  for (const fn of sameTabListeners) fn(next);
+}
+
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -94,7 +106,7 @@ export interface ProjectSource {
 export function useProjectSource() {
   const [source, setSourceState] = useState<ProjectSource | null | undefined>(undefined);
 
-  // Initial load + cross-tab sync.
+  // Initial load + cross-tab + same-tab sync.
   useEffect(() => {
     let active = true;
     (async () => {
@@ -106,6 +118,11 @@ export function useProjectSource() {
         if (active) setSourceState(null);
       }
     })();
+
+    const onLocal: SourceListener = (next) => {
+      if (active) setSourceState(next);
+    };
+    sameTabListeners.add(onLocal);
 
     const onStorage = (e: StorageEvent) => {
       if (e.key !== "sprite-tools:source-rev") return;
@@ -119,6 +136,7 @@ export function useProjectSource() {
 
     return () => {
       active = false;
+      sameTabListeners.delete(onLocal);
       window.removeEventListener("storage", onStorage);
     };
   }, []);
@@ -131,7 +149,9 @@ export function useProjectSource() {
       savedAt: Date.now(),
     };
     await putSource(stored);
-    setSourceState(storedToProject(stored));
+    const next = storedToProject(stored);
+    setSourceState(next);
+    notifySameTabListeners(next);
     // Broadcast to other open tabs.
     try {
       localStorage.setItem("sprite-tools:source-rev", String(stored.savedAt));
@@ -143,6 +163,7 @@ export function useProjectSource() {
   const clearSource = useCallback(async () => {
     await deleteSource();
     setSourceState(null);
+    notifySameTabListeners(null);
     try {
       localStorage.setItem("sprite-tools:source-rev", String(Date.now()));
     } catch {

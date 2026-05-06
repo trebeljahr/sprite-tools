@@ -476,9 +476,12 @@ function SpritesheetContent() {
     if (activeFrames.length > 0 && !isCompiling) {
       void compileSheet();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
-  }, [activeFrames.length, isCompiling, compileSheet]);
+    // compileSheet is intentionally excluded — it's recreated every render
+    // and would fire an infinite loop. isCompiling is excluded for the same
+    // reason: it toggles inside compileSheet, which would re-trigger this
+    // effect. Reading both via closure is correct here.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  }, [activeFrames.length, columns, output]);
 
   const downloadSheet = () => {
     if (!sheetPreviewUrl) return;
