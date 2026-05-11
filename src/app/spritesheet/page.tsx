@@ -482,9 +482,10 @@ function SpritesheetContent() {
       );
       const url = URL.createObjectURL(blob);
       setSheetPreviewUrl(url);
+      const isFirstSheet = sheetDimensions.current.w === 0;
       sheetDimensions.current = { w: width, h: height };
       setSheetGrid({ cols, rows });
-      hasAutoFittedSheet.current = false;
+      if (isFirstSheet) hasAutoFittedSheet.current = false;
     } finally {
       setIsCompiling(false);
     }
