@@ -3,6 +3,9 @@
 # pushed to GHCR; Coolify pulls it and (re)starts the service when
 # the workflow's deploy webhook fires.
 #
+# Runtime: node + `next start` (see Dockerfile). Not nginx — the app
+# has Server Actions and a route handler that need a Node runtime.
+#
 # To pin a specific version, change the tag below from `latest` to a
 # git sha, semver tag, or whatever your release process uses.
 services:
@@ -13,22 +16,20 @@ services:
       - "80:80"
     environment:
       - NODE_ENV=production
-      # Forwarded from Coolify's app env. dotenvx inside the
-      # container uses this to decrypt .env.production at runtime.
+      # Forwarded from Coolify's app env. dotenvx inside the container
+      # uses this to decrypt the committed .env.production at startup
+      # so server-side secrets (XAI_API_KEY, etc.) reach Server Actions.
       - DOTENV_PRIVATE_KEY_PRODUCTION
-    # Coolify reads this and gates Traefik/Caddy routing on it.
-    # Without a healthcheck Coolify shows "No health check configured"
-    # and routes blind — traffic can hit the container before it's
-    # ready. busybox (bundled in both nginx:alpine and node:alpine
-    # base images) ships `wget`, so no extra deps are needed.
-    #
-    # `wget --spider` issues a HEAD-style request and exits non-zero
-    # on any 4xx/5xx. If your app's `/` legitimately returns a non-2xx
-    # (common for API-only servers that 404 the root), point this at a
-    # known-good path instead — e.g. replace `/` with `/health` or
-    # whatever your framework exposes.
+    # Coolify gates Traefik/Caddy routing on this. Without a healthcheck
+    # traffic can hit the container before next start finishes booting.
+    # node-based check (not wget/curl) — the runtime image is node:slim
+    # and doesn't ship either of those.
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:80/ || exit 1"]
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "require('http').get('http://127.0.0.1:80/',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"
       interval: 30s
       timeout: 10s
       retries: 5

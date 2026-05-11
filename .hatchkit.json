@@ -14,5 +14,5 @@
     "server": 3000,
     "client": 3001
   },
-  "surfaces": "client-only"
+  "surfaces": "both"
 }
