@@ -246,7 +246,7 @@ export function CropOverlay({
                         "s",
                         {
                           left: `calc(${crop.left * 100}% + ${(1 - crop.left - crop.right) * 50}%)`,
-                          bottom: `${crop.bottom * 100}%`,
+                          top: `${(1 - crop.bottom) * 100}%`,
                         },
                         "cursor-ns-resize",
                       ],
@@ -261,7 +261,7 @@ export function CropOverlay({
                       [
                         "e",
                         {
-                          right: `${crop.right * 100}%`,
+                          left: `${(1 - crop.right) * 100}%`,
                           top: `calc(${crop.top * 100}% + ${(1 - crop.top - crop.bottom) * 50}%)`,
                         },
                         "cursor-ew-resize",
@@ -273,17 +273,17 @@ export function CropOverlay({
                       ],
                       [
                         "ne",
-                        { right: `${crop.right * 100}%`, top: `${crop.top * 100}%` },
+                        { left: `${(1 - crop.right) * 100}%`, top: `${crop.top * 100}%` },
                         "cursor-nesw-resize",
                       ],
                       [
                         "sw",
-                        { left: `${crop.left * 100}%`, bottom: `${crop.bottom * 100}%` },
+                        { left: `${crop.left * 100}%`, top: `${(1 - crop.bottom) * 100}%` },
                         "cursor-nesw-resize",
                       ],
                       [
                         "se",
-                        { right: `${crop.right * 100}%`, bottom: `${crop.bottom * 100}%` },
+                        { left: `${(1 - crop.right) * 100}%`, top: `${(1 - crop.bottom) * 100}%` },
                         "cursor-nwse-resize",
                       ],
                     ] as const
