@@ -4,6 +4,16 @@ export const metadata = { title: "CLI — sprite-tools" };
 
 `sprite-tools` is a composable CLI around the same algorithms the web app uses. Everything is file-in, JSON-or-file-out. Everything reads stdin on `-`. JSON outputs share a namespace scheme so they merge cleanly with `jq`.
 
+## Install
+
+```bash
+npm install -g @trebeljahr/sprite-tools
+# or, no install:
+npx @trebeljahr/sprite-tools <command>
+```
+
+Requires Node 20+. Full install options — pnpm, MCP server config, building from source — live on the [Install](/docs/install) page.
+
 ## Quickstart
 
 ```bash

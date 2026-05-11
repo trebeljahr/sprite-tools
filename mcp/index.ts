@@ -11,12 +11,13 @@ import "../cli/lib/imagedata-shim";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { getCliVersion } from "../cli/lib/version";
 import { registerAllTools } from "./tools";
 
 async function main() {
   const server = new McpServer({
     name: "sprite-tools",
-    version: "0.1.0",
+    version: getCliVersion(),
   });
   registerAllTools(server);
 

@@ -2,22 +2,22 @@ export const metadata = { title: "Install MCP in Claude Desktop — sprite-tools
 
 # Install MCP in Claude Desktop
 
-## 1. Build + link the server
+## 1. Install the server
 
 ```bash
-git clone https://github.com/trebeljahr/sprite-tools.git
-cd sprite-tools
-npm install
-npm run mcp:build
-npm link
+npm install -g @trebeljahr/sprite-tools
+# or
+pnpm add -g @trebeljahr/sprite-tools
 ```
 
-This puts `sprite-tools-mcp` on your PATH. Verify:
+This puts `sprite-tools-mcp` on your `PATH` alongside the CLI. Verify:
 
 ```bash
 which sprite-tools-mcp
 sprite-tools-mcp --help       # no-op — MCP servers don't respond to --help, they speak JSON-RPC
 ```
+
+Building from source instead? See the [Install page](/docs/install#from-source-contributors).
 
 ## 2. Add to Claude Desktop config
 
@@ -38,14 +38,13 @@ Add an entry under `mcpServers`:
 }
 ```
 
-If `npm link` didn't put `sprite-tools-mcp` on Claude's PATH, use the absolute path:
+If Claude Desktop can't find `sprite-tools-mcp` on its `PATH` (common with `nvm`/`fnm`/Volta), point at the binary explicitly. `which sprite-tools-mcp` prints the right path:
 
 ```json
 {
   "mcpServers": {
     "sprite-tools": {
-      "command": "node",
-      "args": ["/absolute/path/to/sprite-tools/dist/mcp/index.js"]
+      "command": "/Users/you/.nvm/versions/node/v20.18.0/bin/sprite-tools-mcp"
     }
   }
 }

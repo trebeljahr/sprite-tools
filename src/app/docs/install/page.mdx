@@ -2,59 +2,56 @@ export const metadata = { title: "Install — sprite-tools" };
 
 # Install
 
-Three ways to use sprite-tools. Pick what you need — they share the same algorithms under the hood.
+Three surfaces, one shared algorithm core. Pick the surfaces you actually need — they all speak the same JSON.
 
-## Web app
+| Surface | What you install | Where it runs |
+|---|---|---|
+| **Web app** | nothing | this site, fully client-side |
+| **CLI** | `@trebeljahr/sprite-tools` from npm | your terminal |
+| **MCP server** | same npm package, second binary | Claude Desktop / any MCP client |
 
-The tools under the **Tools** menu run entirely in the browser. No install, nothing uploaded to a server — everything is client-side. The AI tools (Character / Animation) require sign-in because they call paid third-party APIs on your behalf.
-
-If you want to run the web app locally:
-
-```bash
-git clone https://github.com/trebeljahr/sprite-tools.git
-cd sprite-tools
-npm install
-npm run dev
-```
-
-Opens on `http://localhost:3471`.
+The published package on npm: **[`@trebeljahr/sprite-tools`](https://www.npmjs.com/package/@trebeljahr/sprite-tools)**. One install gets you both binaries.
 
 ## CLI
 
+### One-off (no install)
+
 ```bash
-git clone https://github.com/trebeljahr/sprite-tools.git
-cd sprite-tools
-npm install
-npm run cli:build
-npm link   # installs `sprite-tools` on your PATH
+npx @trebeljahr/sprite-tools info hero.png
+npx @trebeljahr/sprite-tools meta hero.png --collision --pivot bottom-center -o hero.json
 ```
 
-Check it works:
+Useful for trying a single command, or wiring sprite-tools into a CI step where you don't want a global install.
+
+### Global install
 
 ```bash
-sprite-tools --help
+npm install -g @trebeljahr/sprite-tools
+# or
+pnpm add -g @trebeljahr/sprite-tools
+```
+
+This puts two binaries on your `PATH`:
+
+```bash
+sprite-tools --help          # the CLI
+sprite-tools-mcp             # the MCP server (started by your MCP client, not by you)
+```
+
+Verify:
+
+```bash
+sprite-tools --version
 sprite-tools info some-sheet.png
 ```
 
-During development you can also run without building:
-
-```bash
-npm run cli:dev -- detect my-sheet.png
-```
+Requires **Node 20 or newer**. No native dependencies — PNG I/O is pure JS (`pngjs`), so the install is portable and skips the `node-gyp` dance.
 
 ## MCP server
 
-For Claude Desktop or any [MCP](https://modelcontextprotocol.io) client:
+The same npm install ships `sprite-tools-mcp`. Point Claude Desktop (or any [MCP](https://modelcontextprotocol.io) client) at it.
 
-```bash
-git clone https://github.com/trebeljahr/sprite-tools.git
-cd sprite-tools
-npm install
-npm run mcp:build
-npm link   # installs `sprite-tools-mcp` on your PATH
-```
-
-Then add it to your Claude Desktop config (typically `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
 
 ```json
 {
@@ -66,10 +63,58 @@ Then add it to your Claude Desktop config (typically `~/Library/Application Supp
 }
 ```
 
-Restart Claude Desktop. All 13 tools will appear under the MCP menu. See the [tool catalog](/docs/mcp/tools) for the full input/output schemas.
+Restart Claude Desktop. All 13 tools show up under the MCP menu — see the [tool catalog](/docs/mcp/tools) for input/output schemas.
+
+If `sprite-tools-mcp` isn't on the PATH that Claude Desktop sees (a common gotcha with version managers like `nvm`/`fnm`), point at the binary explicitly:
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "/Users/you/.nvm/versions/node/v20.18.0/bin/sprite-tools-mcp"
+    }
+  }
+}
+```
+
+`which sprite-tools-mcp` prints the right path.
+
+## Web app
+
+The browser app you're reading these docs on is fully client-side — no uploads, no backend. Run it locally for hacking on it:
+
+```bash
+git clone https://github.com/trebeljahr/sprite-tools.git
+cd sprite-tools
+pnpm install
+pnpm dev      # http://localhost:3471
+```
+
+The only network-touching features are the AI generators (Character / Animation) — those require sign-in because they call paid third-party APIs on your behalf.
+
+## From source (contributors)
+
+If you want to hack on the CLI/MCP themselves:
+
+```bash
+git clone https://github.com/trebeljahr/sprite-tools.git
+cd sprite-tools
+pnpm install
+
+# Build + symlink the binaries onto your PATH
+pnpm install-local
+
+# …or run uncompiled, against TS source
+pnpm cli:dev -- detect my-sheet.png
+pnpm mcp:dev
+```
+
+`pnpm install-local` builds the CLI + MCP and runs `npm install -g .` so your local checkout overrides any prior npm-installed version. Repeat after pulling.
+
+See [Contributing](/docs/reference/contributing) for the layout and how to add a new tool.
 
 ## Requirements
 
-- Node 20 or newer (for both CLI and MCP).
-- A browser (Chrome/Firefox/Safari current) for the web app.
-- No native dependencies — PNG I/O uses `pngjs` (pure JS). That means the install is portable; no `node-gyp` / image-library build step.
+- **Node 20+** for the CLI and MCP server.
+- A current evergreen browser (Chrome / Firefox / Safari) for the web app.
+- No native modules — nothing to compile at install time.

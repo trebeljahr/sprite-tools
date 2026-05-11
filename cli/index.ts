@@ -13,6 +13,7 @@ import "./lib/imagedata-shim";
 
 import { Command } from "commander";
 
+import { getCliVersion } from "./lib/version";
 import { registerCollisionCommand } from "./commands/collision";
 import { registerPixelateCommand } from "./commands/pixelate";
 import { registerNormalMapCommand } from "./commands/normal-map";
@@ -34,7 +35,7 @@ program
   .description(
     "CLI for sprite-sheet processing. Run any subcommand with --help for full options, examples, and output shape.",
   )
-  .version("0.1.0");
+  .version(getCliVersion());
 
 program.addHelpText(
   "after",

@@ -45,14 +45,17 @@ Roughly:
 
 ## Run it locally
 
+The repo uses **pnpm** — `pnpm install` at the root sets up the web app, CLI, and MCP server in one shot.
+
 ```bash
-npm install
-npm run dev            # Next.js dev server for the web app
-npm run cli:dev -- info some.png    # run CLI via tsx (no build)
-npm run mcp:dev        # run MCP over stdio for local testing
-npm test               # vitest
-npm run cli:build      # compiled CLI at dist/cli/index.js
-npm run mcp:build      # compiled MCP at dist/mcp/index.js
+pnpm install
+pnpm dev                       # Next.js dev server for the web app (http://localhost:3471)
+pnpm cli:dev -- info some.png  # run the CLI via tsx, no build
+pnpm mcp:dev                   # run the MCP server over stdio for local testing
+pnpm test                      # vitest
+pnpm cli:build                 # compiled CLI at dist/cli/index.js
+pnpm mcp:build                 # compiled MCP at dist/mcp/index.js
+pnpm install-local             # build + symlink as a global `sprite-tools` / `sprite-tools-mcp`
 ```
 
 ## Code style
@@ -65,10 +68,28 @@ npm run mcp:build      # compiled MCP at dist/mcp/index.js
 
 ## Tests
 
-Every pure algorithm module has a `tests/*.test.ts`. If you're adding a new one, mirror the pattern — construct tiny `ImageData` fixtures in-memory via `tests/helpers.ts` and assert on the outputs. Run `npm test`.
+Every pure algorithm module has a `tests/*.test.ts`. If you're adding a new one, mirror the pattern — construct tiny `ImageData` fixtures in-memory via `tests/helpers.ts` and assert on the outputs. Run `pnpm test`.
 
 ## Pull requests
 
 - Keep PRs small and focused. If you're adding a tool, one PR per tool is easier to review than one mega-PR.
 - Update the docs in the same PR as the feature.
-- Run `npm test && npm run cli:build && npm run mcp:build` before opening.
+- Run `pnpm test && pnpm cli:build && pnpm mcp:build` before opening.
+
+## Releasing
+
+Maintainer-only. The published artifact is `@trebeljahr/sprite-tools` on npm — the root `package.json`'s `files` whitelist ships only the compiled CLI, MCP, and shared algorithm modules. No Next.js code or web-app deps make it into the tarball.
+
+```bash
+pnpm release        # patch (default)
+pnpm release:minor
+pnpm release:major
+```
+
+Each command:
+
+1. `release-prep` refuses to start unless the working tree is clean and the local version is ahead of (or equal to) the npm registry.
+2. `release-bump` rewrites `package.json`, commits, and tags atomically.
+3. `_release:finish` builds the CLI + MCP, typechecks, `npm publish`es, and pushes the tag.
+
+`prepublishOnly` re-runs both builds as a final safety check before npm uploads.
