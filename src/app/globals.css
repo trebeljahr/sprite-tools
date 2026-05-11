@@ -117,6 +117,25 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+@keyframes heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  14% {
+    transform: scale(1.2);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.15);
+  }
+  56% {
+    transform: scale(1);
+  }
+}
+
 @utility checkerboard-light {
   background-image: conic-gradient(
     #f3f4f6 25%, 
