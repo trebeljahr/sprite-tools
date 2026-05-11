@@ -26,10 +26,14 @@ import { useEffect, useRef } from "react";
 
 const HASH_KEY = "s";
 
-// Each tuple: [current value, setter, default value]. Per-entry types
-// live at call sites; the hook itself only JSON-roundtrips the values.
-type Entry = readonly [unknown, (value: unknown) => void, unknown];
-type Settings = Record<string, Entry>;
+// Each tuple: [current value, setter, default value]. Per-entry T lets
+// React's Dispatch<SetStateAction<T>> flow through (contravariance —
+// (value: unknown) => void can't accept a setter typed for a specific T).
+// The hook only JSON-roundtrips the values, so heterogeneous call sites
+// land in Entry<any>.
+type Entry<T = unknown> = readonly [T, (value: T) => void, T];
+// biome-ignore lint/suspicious/noExplicitAny: heterogeneous setter bag — per-entry T narrows at call sites
+type Settings = Record<string, Entry<any>>;
 
 function toBase64Url(input: string): string {
   if (typeof window === "undefined") return "";
