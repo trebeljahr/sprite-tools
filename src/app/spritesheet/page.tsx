@@ -46,6 +46,8 @@ import {
   isCropEmpty,
   type FrameCrop,
 } from "@/components/crop-overlay";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import {
@@ -227,6 +229,7 @@ function SpritesheetContent() {
   const [isDragging, setIsDragging] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [isExportingZip, setIsExportingZip] = useState(false);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = previewViewport.containerRef;
   const sheetContainerRef = sheetViewport.containerRef;
@@ -240,6 +243,8 @@ function SpritesheetContent() {
       toast.success("Animation loaded from AI Animation");
     }
   }, [searchParams]);
+
+  const hasInitedTutorial = useRef(false);
 
   // Pipeline output drives what the preview/selection show
   const output = pipeline.state.output;
@@ -378,6 +383,28 @@ function SpritesheetContent() {
     // biome-ignore lint/correctness/useExhaustiveDependencies: handleSingleFile is recreated each render but only closes over stable setters; rebinding listener is intentional
   }, [handleSingleFile]);
 
+  // ?tutorial=1 from the homepage Quickstart button: preload a bundled
+  // sample sheet so step 1 is a one-click experience. (The strip itself
+  // is opened by useTutorial via the same URL param + localStorage logic.)
+  useEffect(() => {
+    if (hasInitedTutorial.current) return;
+    if (searchParams.get("tutorial") !== "1") return;
+    hasInitedTutorial.current = true;
+    setSourceTab("sheet");
+    void (async () => {
+      try {
+        const res = await fetch("/samples/sheet.png");
+        const blob = await res.blob();
+        const file = new File([blob], "sheet.png", { type: "image/png" });
+        await handleSheetFile(file);
+      } catch {
+        // If the sample fails to load, leave the strip open with step 1
+        // unsatisfied — the user can still upload their own file.
+      }
+    })();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: ref guard makes this one-shot
+  }, [searchParams, handleSheetFile]);
+
   // ------- Kickoff / re-run helpers -------
 
   const runFromSource = async (sourceTabOverride?: SourceTab, crop: FrameCrop = appliedCrop) => {
@@ -487,6 +514,7 @@ function SpritesheetContent() {
     a.href = sheetPreviewUrl;
     a.download = "spritesheet.png";
     a.click();
+    setHasDownloaded(true);
   };
 
   const exportFramesZip = async () => {
@@ -501,6 +529,7 @@ function SpritesheetContent() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Exported ${activeFrames.length} frames as ZIP`);
+      setHasDownloaded(true);
     } finally {
       setIsExportingZip(false);
     }
@@ -677,6 +706,35 @@ function SpritesheetContent() {
       )
     : 0;
 
+  const hasSource = sourceTab === "sheet" ? !!sheetUrl : !!videoUrl;
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: sourceTab === "sheet" ? "Pick a sprite sheet" : "Pick a video",
+        hint:
+          sourceTab === "sheet"
+            ? "Drop a sheet image into the upload area on the left — or use the preloaded sample."
+            : "Drop a video file into the upload area on the left.",
+        done: hasSource,
+      },
+      {
+        label: sourceTab === "sheet" ? "Split into frames" : "Extract frames",
+        hint:
+          sourceTab === "sheet"
+            ? "Confirm the columns/rows, then click Split Sheet."
+            : "Set the FPS, then click Extract Raw Frames.",
+        done: showResults && allFrames.length > 0,
+      },
+      {
+        label: "Download",
+        hint: "Stitched sheet PNG or per-frame ZIP — whatever your engine wants.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceTab, hasSource, showResults, allFrames.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "spritesheet", steps: tutorialSteps });
+
   return (
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
       <div className="text-center mb-8">
@@ -710,6 +768,16 @@ function SpritesheetContent() {
           </Button>
         </div>
       </div>
+
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left column: Source + Settings + Export */}

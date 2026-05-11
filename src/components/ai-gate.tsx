@@ -42,7 +42,7 @@ export function AiGate({ feature, description, children }: AiGateProps) {
             browser or via the CLI.
           </div>
           <div className="flex justify-center gap-3">
-            <Link href="/docs/quickstart" className={cn(buttonVariants({ size: "sm" }))}>
+            <Link href="/spritesheet?tutorial=1" className={cn(buttonVariants({ size: "sm" }))}>
               Try what ships today
             </Link>
             <Link href="/" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>

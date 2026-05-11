@@ -45,6 +45,8 @@ import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
 import { ShareSettingsButton } from "@/components/share-settings-button";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 import { useUrlSettings } from "@/hooks/use-url-settings";
 import { track } from "@/lib/analytics";
 
@@ -136,6 +138,7 @@ export default function CollisionPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   // --- UI chrome ---
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
@@ -515,6 +518,7 @@ export default function CollisionPage() {
     URL.revokeObjectURL(url);
     track("export", { tool: "collision", format: "json", frames: frames.length });
     toast.success("Collision JSON downloaded");
+    setHasDownloaded(true);
   };
 
   const copyJson = async () => {
@@ -522,6 +526,7 @@ export default function CollisionPage() {
     try {
       await navigator.clipboard.writeText(JSON.stringify(jsonPayload, null, 2));
       toast.success("Copied JSON to clipboard");
+      setHasDownloaded(true);
     } catch {
       toast.error("Clipboard copy failed");
     }
@@ -534,6 +539,28 @@ export default function CollisionPage() {
   const totalPoints = frames.reduce((n, f) => n + f.outline.polygon.length, 0);
   const avgPoints = frames.length > 0 ? totalPoints / frames.length : 0;
 
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite",
+        hint: "Drop an image into the upload area — or click a sample sprite below it.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Tune the outline",
+        hint: "Adjust alpha threshold + simplify tolerance until each frame has a tight polygon.",
+        done: frames.length > 0,
+      },
+      {
+        label: "Export JSON",
+        hint: "Download or copy the collision JSON for your physics engine.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, frames.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "collision", steps: tutorialSteps });
+
   return (
     <main className="container mx-auto py-8 px-4">
       <ToolHeader
@@ -542,6 +569,15 @@ export default function CollisionPage() {
         icon={Hexagon}
         category="metadata"
         docs="collision"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <div className="flex items-start justify-between gap-2 mb-6">
         <div className="flex-1 min-w-0">

@@ -91,7 +91,7 @@ export default function HomePage() {
             Web app, CLI, and MCP server — all sharing the same algorithms and JSON contracts.
           </p>
           <div className="flex items-center justify-center md:justify-start gap-3 mt-8">
-            <Link href="/docs/quickstart" className={cn(buttonVariants({ size: "lg" }))}>
+            <Link href="/spritesheet?tutorial=1" className={cn(buttonVariants({ size: "lg" }))}>
               Quickstart <ArrowRight className="w-4 h-4 ml-2" />
             </Link>
             <Link href="/docs" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>

@@ -42,6 +42,8 @@ import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface RawFrame {
   index: number;
@@ -94,6 +96,7 @@ export default function PixelatePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
   const [isDragging, setIsDragging] = useState(false);
@@ -323,6 +326,7 @@ export default function PixelatePage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Frame downloaded");
+    setHasDownloaded(true);
   };
 
   const downloadStitched = async () => {
@@ -364,7 +368,30 @@ export default function PixelatePage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Sheet downloaded");
+    setHasDownloaded(true);
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite",
+        hint: "Drop an image or click a sample below it.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Adjust pixel-art settings",
+        hint: "Tweak target size, palette, and dither — preview updates live.",
+        done: rawFrames.length > 0,
+      },
+      {
+        label: "Download PNG",
+        hint: "Save the pixelated PNG (or stitched sheet).",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, rawFrames.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "pixelate", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -374,6 +401,15 @@ export default function PixelatePage() {
         icon={Sparkles}
         category="transform"
         docs="pixelate"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 

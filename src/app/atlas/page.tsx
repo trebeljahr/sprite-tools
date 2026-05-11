@@ -17,6 +17,8 @@ import { track } from "@/lib/analytics";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { computeTrimRect, packAtlas, type PackInput, type PackedAtlas } from "@/lib/atlas/pack";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface AtlasSprite {
   id: string;
@@ -72,6 +74,7 @@ export default function AtlasPage() {
   const [autoTrim, setAutoTrim] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
@@ -267,6 +270,7 @@ export default function AtlasPage() {
       URL.revokeObjectURL(a.href);
       track("export", { tool: "atlas", format: "png", sprites: sprites.length });
       toast.success("Atlas PNG downloaded");
+      setHasDownloaded(true);
     }, "image/png");
   };
 
@@ -282,6 +286,7 @@ export default function AtlasPage() {
     URL.revokeObjectURL(a.href);
     track("export", { tool: "atlas", format: "json", sprites: sprites.length });
     toast.success("Atlas JSON downloaded");
+    setHasDownloaded(true);
   };
 
   const copyJson = async () => {
@@ -289,6 +294,7 @@ export default function AtlasPage() {
     try {
       await navigator.clipboard.writeText(JSON.stringify(jsonPayload, null, 2));
       toast.success("Copied to clipboard");
+      setHasDownloaded(true);
     } catch {
       toast.error("Copy failed");
     }
@@ -303,6 +309,28 @@ export default function AtlasPage() {
     return (used / total) * 100;
   }, [atlas]);
 
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Add sprites",
+        hint: "Drop multiple PNGs into the upload area.",
+        done: sprites.length > 0,
+      },
+      {
+        label: "Pack the atlas",
+        hint: "Configure padding / power-of-two / trim, then click Pack.",
+        done: atlas !== null,
+      },
+      {
+        label: "Download atlas",
+        hint: "Save the atlas.png and atlas.json.",
+        done: hasDownloaded,
+      },
+    ],
+    [sprites.length, atlas, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "atlas", steps: tutorialSteps });
+
   return (
     <main className="container mx-auto py-8 px-4">
       <ToolHeader
@@ -311,6 +339,15 @@ export default function AtlasPage() {
         icon={Boxes}
         category="export"
         docs="atlas"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

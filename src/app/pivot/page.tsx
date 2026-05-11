@@ -33,6 +33,8 @@ import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface PivotFrame {
   index: number;
@@ -96,6 +98,7 @@ export default function PivotPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   const [lockAll, setLockAll] = useState(false); // apply every click to all frames
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
@@ -404,6 +407,7 @@ export default function PivotPage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Pivot JSON downloaded");
+    setHasDownloaded(true);
   };
 
   const copyJson = async () => {
@@ -411,10 +415,33 @@ export default function PivotPage() {
     try {
       await navigator.clipboard.writeText(JSON.stringify(jsonPayload, null, 2));
       toast.success("Copied to clipboard");
+      setHasDownloaded(true);
     } catch {
       toast.error("Copy failed");
     }
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite",
+        hint: "Drop a sprite or sheet.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Set pivot points",
+        hint: "Click on the sprite or use a preset to set each frame's pivot.",
+        done: pivots.length > 0 && pivots.some((p) => p != null),
+      },
+      {
+        label: "Download pivots JSON",
+        hint: "Save the pivots JSON for engine rotation origins.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, pivots, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "pivot", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -424,6 +451,15 @@ export default function PivotPage() {
         icon={Crosshair}
         category="metadata"
         docs="pivot"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 

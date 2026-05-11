@@ -36,6 +36,8 @@ import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface TagFrame {
   index: number;
@@ -85,6 +87,7 @@ export default function TagsPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   // Playback state
   const [playingTagId, setPlayingTagId] = useState<string | null>(null);
@@ -379,6 +382,7 @@ export default function TagsPage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Animation JSON downloaded");
+    setHasDownloaded(true);
   };
 
   const copyJson = async () => {
@@ -386,10 +390,33 @@ export default function TagsPage() {
     try {
       await navigator.clipboard.writeText(JSON.stringify(jsonPayload, null, 2));
       toast.success("Copied to clipboard");
+      setHasDownloaded(true);
     } catch {
       toast.error("Copy failed");
     }
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite sheet",
+        hint: "Drop a sprite sheet — frames appear in the grid below.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Define animation tags",
+        hint: "Name each clip (idle, run, attack) and set its frame range + FPS.",
+        done: tags.length > 0,
+      },
+      {
+        label: "Download tags JSON",
+        hint: "Save the Aseprite-compatible tags JSON.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, tags.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "tags", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -399,6 +426,15 @@ export default function TagsPage() {
         icon={TagsIcon}
         category="metadata"
         docs="tags"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 

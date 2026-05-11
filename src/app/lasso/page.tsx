@@ -22,8 +22,10 @@ import {
   Upload,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface Point {
   x: number;
@@ -36,6 +38,7 @@ export default function LassoPage() {
   const [isClosed, setIsClosed] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [lastClickTime, setLastClickTime] = useState(0);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   // View State using shared hook
   const canvasViewport = useViewport();
@@ -693,6 +696,7 @@ export default function LassoPage() {
       link.href = previewUrl;
       link.click();
       toast.success("Image exported successfully!");
+      setHasDownloaded(true);
     }
   };
 
@@ -709,6 +713,28 @@ export default function LassoPage() {
     }
   };
 
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload an image",
+        hint: "Drop an image with the object you want to extract.",
+        done: !!image,
+      },
+      {
+        label: "Draw a lasso polygon",
+        hint: "Click around the object to draw a polygon — double-click or press Enter to close.",
+        done: isClosed && points.length > 2,
+      },
+      {
+        label: "Download cutout",
+        hint: "Apply background removal/crop, then save the cutout PNG.",
+        done: hasDownloaded,
+      },
+    ],
+    [image, isClosed, points.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "lasso", steps: tutorialSteps });
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="text-center mb-8">
@@ -720,6 +746,16 @@ export default function LassoPage() {
           Draw precise polygons to extract objects from any image.
         </p>
       </div>
+
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-6">

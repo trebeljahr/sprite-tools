@@ -35,6 +35,8 @@ import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { JsonPreview } from "@/components/json-preview";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface SourceFrame {
   index: number;
@@ -80,6 +82,7 @@ export default function PalettePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   const [colorCount, setColorCount] = useState(8);
   const [palette, setPalette] = useState<RGB[]>([]);
@@ -336,6 +339,7 @@ export default function PalettePage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Palette JSON downloaded");
+    setHasDownloaded(true);
   };
 
   const downloadCurrent = async () => {
@@ -351,6 +355,7 @@ export default function PalettePage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Recolored frame downloaded");
+    setHasDownloaded(true);
   };
 
   const downloadStitched = async () => {
@@ -391,6 +396,7 @@ export default function PalettePage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Recolored sheet downloaded");
+    setHasDownloaded(true);
   };
 
   const copyPalette = async () => {
@@ -398,10 +404,33 @@ export default function PalettePage() {
     try {
       await navigator.clipboard.writeText(palette.map(rgbToHex).join("\n"));
       toast.success("Palette copied");
+      setHasDownloaded(true);
     } catch {
       toast.error("Copy failed");
     }
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite",
+        hint: "Drop an image or click a sample.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Extract palette",
+        hint: "Pick how many colors to extract; the dominant palette appears below.",
+        done: palette.length > 0,
+      },
+      {
+        label: "Swap & download",
+        hint: "Swap any swatch to recolor, then save the PNG or JSON.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, palette.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "palette", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -411,6 +440,15 @@ export default function PalettePage() {
         icon={PaletteIcon}
         category="transform"
         docs="palette"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 

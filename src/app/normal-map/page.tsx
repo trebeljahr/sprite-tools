@@ -44,6 +44,8 @@ import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface SourceFrame {
   index: number;
@@ -129,6 +131,7 @@ export default function NormalMapPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   const [source, setSource] = useState<NormalSource>(DEFAULT_NORMAL_OPTIONS.source);
   const [strength, setStrength] = useState(DEFAULT_NORMAL_OPTIONS.strength * 50); // 0-200
@@ -352,6 +355,7 @@ export default function NormalMapPage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Normal map downloaded");
+    setHasDownloaded(true);
   };
 
   const downloadStitched = async () => {
@@ -390,7 +394,30 @@ export default function NormalMapPage() {
     a.click();
     URL.revokeObjectURL(a.href);
     toast.success("Normal sheet downloaded");
+    setHasDownloaded(true);
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite",
+        hint: "Drop a sprite with transparent background.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Configure normal generation",
+        hint: "Adjust source (alpha/luminance), strength, and blur.",
+        done: frames.length > 0,
+      },
+      {
+        label: "Download normal map",
+        hint: "Save the tangent-space normal map PNG.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, frames.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "normal-map", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -400,6 +427,15 @@ export default function NormalMapPage() {
         icon={Compass}
         category="transform"
         docs="normal-map"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 

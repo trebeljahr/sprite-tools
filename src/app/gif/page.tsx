@@ -35,6 +35,8 @@ import { ToolHeader } from "@/components/tool-header";
 import { track } from "@/lib/analytics";
 import { SourceBanner } from "@/components/source-banner";
 import { SampleSprites } from "@/components/sample-sprites";
+import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
+import { useTutorial } from "@/hooks/use-tutorial";
 
 interface SourceFrame {
   index: number;
@@ -85,6 +87,7 @@ export default function GifPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isEncoding, setIsEncoding] = useState(false);
   const [encodeProgress, setEncodeProgress] = useState(0);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
   const playbackRef = useRef<number | null>(null);
 
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
@@ -295,6 +298,7 @@ export default function GifPage() {
       URL.revokeObjectURL(a.href);
       track("export", { tool: "gif", format: "gif", frames: sequence.length, fps });
       toast.success("GIF downloaded");
+      setHasDownloaded(true);
     } catch (e) {
       toast.error(`Export failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -405,12 +409,35 @@ export default function GifPage() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success("WebM downloaded");
+      setHasDownloaded(true);
     } catch (e) {
       toast.error(`WebM export failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsEncoding(false);
     }
   };
+
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        label: "Upload a sprite sheet",
+        hint: "Drop a sprite sheet, or run the Sheet Builder first.",
+        done: !!sourceUrl,
+      },
+      {
+        label: "Configure animation",
+        hint: "Set FPS, scale, and ordering (forward / reverse / ping-pong).",
+        done: frames.length > 0,
+      },
+      {
+        label: "Export GIF/WebM",
+        hint: "Encode and download — GIF or WebM.",
+        done: hasDownloaded,
+      },
+    ],
+    [sourceUrl, frames.length, hasDownloaded],
+  );
+  const tutorial = useTutorial({ id: "gif", steps: tutorialSteps });
 
   return (
     <main className="container mx-auto py-8 px-4">
@@ -420,6 +447,15 @@ export default function GifPage() {
         icon={Film}
         category="export"
         docs="gif"
+      />
+      <TutorialStrip
+        open={tutorial.isOpen}
+        steps={tutorialSteps}
+        currentStep={tutorial.currentStep}
+        onDismiss={tutorial.dismiss}
+        onPrev={tutorial.goPrev}
+        onNext={tutorial.goNext}
+        onStepClick={tutorial.setCurrentStep}
       />
       <SourceBanner onReplace={() => fileInputRef.current?.click()} />
 
