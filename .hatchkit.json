@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "cliVersion": "0.1.41",
+  "scaffoldedAt": "2026-05-11T17:21:04.127Z",
+  "name": "sprite-tools",
+  "domain": "sprites.trebeljahr.com",
+  "description": "Sprite Tools for Creating Game Ready Assets",
+  "features": ["analytics"],
+  "mlServices": [],
+  "s3Provider": "none",
+  "deployTarget": "existing",
+  "deploymentMode": "coolify",
+  "ports": {
+    "server": 3000,
+    "client": 3001
+  },
+  "surfaces": "client-only"
+}
