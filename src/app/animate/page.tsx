@@ -66,12 +66,12 @@ function HomeContent() {
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleLoadFromUrl is stable; effect should only run on searchParams change
   useEffect(() => {
     const imageUrl = searchParams.get("imageUrl");
     if (imageUrl) {
       handleLoadFromUrl(imageUrl);
     }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: handleLoadFromUrl is stable; running on searchParams change only
   }, [searchParams]);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -106,7 +106,7 @@ function HomeContent() {
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
+    // biome-ignore lint/correctness/useExhaustiveDependencies: handleFile is recreated each render but only closes over stable setters; rebinding listener is intentional
   }, [handleFile]);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -214,7 +214,7 @@ function HomeContent() {
                 <div className="space-y-2">
                   <Label htmlFor="image">Source Image</Label>
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
-                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
+                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: file drop zone — click forwards to nested <input type="file">; keyboard a11y tracked separately */}
                   <div
                     className={cn(
                       "border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all",

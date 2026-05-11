@@ -127,7 +127,7 @@ export default function LassoPage() {
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
+    // biome-ignore lint/correctness/useExhaustiveDependencies: handleFile is recreated each render but only closes over stable setters; rebinding listener is intentional
   }, [handleFile]);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -318,7 +318,7 @@ export default function LassoPage() {
     }
 
     return finalCanvas;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
+    // biome-ignore lint/correctness/useExhaustiveDependencies: parseAspectRatio is a pure helper recreated each render; behavior depends only on the listed deps
   }, [image, points, brState, parseAspectRatio]);
 
   const processCutout = useCallback(
@@ -810,9 +810,8 @@ export default function LassoPage() {
                 </Button>
               </div>
             </div>
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not */}
-            {/* biome-ignore lint/suspicious/noCommentText: auto-suppressed; revisit per-case */}a
-            control // biome-ignore lint/a11y/useKeyWithClickEvents: test
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone wraps file input; click forwards to input which is keyboard-accessible */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: drop zone wraps file input; click forwards to input which is keyboard-accessible */}
             <div
               ref={canvasContainerRef}
               className={cn(

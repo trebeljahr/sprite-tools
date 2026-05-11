@@ -342,8 +342,7 @@ export default function PivotPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
+    // biome-ignore lint/correctness/useExhaustiveDependencies: setCurrentIndex is the stable updater from useState; listed deps cover everything else read in the handler
   }, [currentFrame, currentPivot, frames.length, setPivot]);
 
   // -----------------------------------------------------------------
@@ -437,7 +436,7 @@ export default function PivotPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
-              {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: file drop zone — click forwards to nested <input type="file">; keyboard a11y tracked separately */}
               <div
                 className={cn(
                   "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",

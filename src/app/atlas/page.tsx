@@ -324,7 +324,7 @@ export default function AtlasPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control */}
-              {/* biome-ignore lint/a11y/useKeyWithClickEvents: test */}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: file drop zone — click forwards to nested <input type="file">; keyboard a11y tracked separately */}
               <div
                 className={cn(
                   "border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors p-6",

@@ -375,7 +375,7 @@ function SpritesheetContent() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: test rationale
+    // biome-ignore lint/correctness/useExhaustiveDependencies: handleSingleFile is recreated each render but only closes over stable setters; rebinding listener is intentional
   }, [handleSingleFile]);
 
   // ------- Kickoff / re-run helpers -------
@@ -469,18 +469,16 @@ function SpritesheetContent() {
       const smart = calculateSmartColumns(activeFrames.length || allFrames.length);
       setColumns((prev) => (prev === 8 ? smart : prev));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFrames.length, activeFrames.length]);
 
+  // compileSheet is intentionally excluded — it's recreated every render and would fire an
+  // infinite loop. isCompiling is excluded for the same reason: it toggles inside compileSheet,
+  // which would re-trigger this effect. Reading both via closure is correct here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above — compileSheet/isCompiling intentionally read via closure to avoid loop
   useEffect(() => {
     if (activeFrames.length > 0 && !isCompiling) {
       void compileSheet();
     }
-    // compileSheet is intentionally excluded — it's recreated every render
-    // and would fire an infinite loop. isCompiling is excluded for the same
-    // reason: it toggles inside compileSheet, which would re-trigger this
-    // effect. Reading both via closure is correct here.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   }, [activeFrames.length, columns, output]);
 
   const downloadSheet = () => {
@@ -1271,7 +1269,7 @@ function UploadZone({
   const inputId = React.useId();
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: container intercepts events; not a control
-    // biome-ignore lint/a11y/useKeyWithClickEvents: test
+    // biome-ignore lint/a11y/useKeyWithClickEvents: file drop zone — click forwards to nested <input type="file">; keyboard a11y tracked separately
     <div
       className={cn(
         "border-2 border-dashed rounded-lg overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors relative",
