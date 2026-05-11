@@ -158,6 +158,7 @@ export function CropOverlay({
             height: `${cellHFrac * 100}%`,
           };
           return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: positional grid cell, never reordered
             <div key={`${row}-${col}`} className="absolute" style={cellStyle}>
               {/* Dimmed mask panels outside the crop */}
               <div

@@ -60,7 +60,7 @@
       },
       "performance": {
         "noDelete": "off",
-        "noImgElement": "warn",
+        "noImgElement": "off",
         "noAccumulatingSpread": "warn"
       },
       "a11y": {

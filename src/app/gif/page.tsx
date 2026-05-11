@@ -625,14 +625,14 @@ export default function GifPage() {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="flex items-center justify-between p-2 rounded-lg border bg-muted/5">
+                <div className="flex items-center justify-between p-2 rounded-lg border bg-muted/5">
                   <span className="text-xs">Reverse</span>
                   <Switch checked={reverse} onCheckedChange={setReverse} />
-                </label>
-                <label className="flex items-center justify-between p-2 rounded-lg border bg-muted/5">
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-lg border bg-muted/5">
                   <span className="text-xs">Pingpong</span>
                   <Switch checked={pingpong} onCheckedChange={setPingpong} />
-                </label>
+                </div>
               </div>
               <Button
                 variant="outline"

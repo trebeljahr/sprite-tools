@@ -347,6 +347,7 @@ function HomeContent() {
             <CardContent className="flex-1 flex items-center justify-center">
               {videoUrl ? (
                 <div className="w-full space-y-4">
+                  {/* biome-ignore lint/a11y/useMediaCaption: generated animation preview has no audio track */}
                   <video
                     src={videoUrl}
                     controls

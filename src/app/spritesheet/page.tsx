@@ -97,8 +97,7 @@ function FrameImg({
   }, [frame, syncUrl]);
   const url = syncUrl ?? asyncUrl;
   if (!url) return null;
-  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
-  return <img src={url} {...rest} />;
+  return <img src={url} alt="" {...rest} />;
 }
 
 // -----------------------------------------------------------------
@@ -1416,6 +1415,7 @@ function SheetPreviewWithGrid({ src, cols, rows }: { src: string; cols: number; 
         >
           {Array.from({ length: cols - 1 }).map((_, i) => (
             <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: positional grid line, never reordered
               key={`c${i}`}
               className="absolute top-0 bottom-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
               style={{ left: `${((i + 1) / cols) * 100}%`, width: 1 }}
@@ -1423,6 +1423,7 @@ function SheetPreviewWithGrid({ src, cols, rows }: { src: string; cols: number; 
           ))}
           {Array.from({ length: rows - 1 }).map((_, i) => (
             <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: positional grid line, never reordered
               key={`r${i}`}
               className="absolute left-0 right-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
               style={{ top: `${((i + 1) / rows) * 100}%`, height: 1 }}
