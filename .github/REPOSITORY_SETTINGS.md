@@ -10,10 +10,8 @@ Game-ready 2D sprite toolkit: web app, CLI, and MCP server for collision polygon
 
 **Website**
 
-Use the production app URL when it is final. Until then, keep the README as the homepage:
-
 ```text
-https://github.com/trebeljahr/sprite-tools#readme
+https://sprites.trebeljahr.com
 ```
 
 ## Topics
@@ -42,4 +40,3 @@ typescript
 - Enable Dependabot alerts and security updates.
 - Enable private vulnerability reporting if available.
 - Add releases from npm-published tags.
-

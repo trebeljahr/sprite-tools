@@ -47,4 +47,4 @@ jobs:
         env:
           # Defaults so build never trips on missing dotenvx files
           # (real prod values come from Vercel project env, not the repo).
-          NEXT_PUBLIC_SITE_URL: https://sprite-tools.example.com
+          NEXT_PUBLIC_SITE_URL: https://sprites.trebeljahr.com

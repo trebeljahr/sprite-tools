@@ -2,22 +2,35 @@
 
 [![npm](https://img.shields.io/npm/v/@trebeljahr/sprite-tools.svg)](https://www.npmjs.com/package/@trebeljahr/sprite-tools)
 [![CI](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml)
+[![Web app](https://img.shields.io/badge/web-sprites.trebeljahr.com-0f766e.svg)](https://sprites.trebeljahr.com)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready assets** — collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing, GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, palette swaps, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
-- **Web app** — interactive browser-based tools (no backend, no upload).
+- **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
 - **CLI (`sprite-tools`)** — 13 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
 
+## Try it online
+
+Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools in your browser. Images stay local to the page unless you opt into an AI-powered flow that explicitly calls an external service.
+
+Good starting points:
+
+- [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, or loose frames into a clean sheet.
+- [Collision](https://sprites.trebeljahr.com/collision) — trace tight polygons for physics engines.
+- [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art.
+- [Atlas](https://sprites.trebeljahr.com/atlas) — pack loose sprites into one PNG plus JSON.
+- [Docs](https://sprites.trebeljahr.com/docs) — quickstart, CLI reference, MCP setup, schemas, and algorithm notes.
+
 ## Project status
 
-sprite-tools is an actively maintained open-source project. The npm package ships the CLI and MCP server; the web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and small focused pull requests are welcome.
+sprite-tools is actively maintained. The npm package ships the CLI and MCP server; the deployed web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and focused pull requests are welcome.
 
 ## Quick taste
 
@@ -56,7 +69,7 @@ npm install -g @trebeljahr/sprite-tools
 npx @trebeljahr/sprite-tools meta hero.png --collision -o hero.json
 ```
 
-Requires **Node 20+**. No native dependencies — PNG I/O is pure JS, so it installs portably with no `node-gyp` step. Full install options (pnpm, MCP client config, building from source) on the [Install docs page](https://github.com/trebeljahr/sprite-tools#install).
+Requires **Node 20+**. No native dependencies — PNG I/O is pure JS, so it installs portably with no `node-gyp` step. Full install options (pnpm, MCP client config, building from source) live in the [install docs](https://sprites.trebeljahr.com/docs/install).
 
 ## MCP in Claude Desktop
 
@@ -74,7 +87,7 @@ Restart Claude Desktop — 13 tools appear under the MCP menu. If `sprite-tools-
 
 ## What's in the box
 
-**Web app**: `/overview` (metadata composited on your sheet), `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/palette`, `/atlas`, `/gif`, plus the existing `/generate`, `/spritesheet` (Stitch), `/lasso`, `/` (Animate).
+**Web app**: `/spritesheet`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/palette`, `/atlas`, `/gif`, `/generate`, `/lasso`, and `/` (Animate).
 
 **CLI**: `info`, `detect`, `slice`, `trim`, `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `atlas`, `gif`.
 
@@ -82,7 +95,7 @@ Restart Claude Desktop — 13 tools appear under the MCP menu. If `sprite-tools-
 
 ## Docs
 
-Full docs live in the app at `/docs`. Highlights:
+Full docs live in the app at [sprites.trebeljahr.com/docs](https://sprites.trebeljahr.com/docs). Highlights:
 
 - **Quickstart** — 5 minutes end-to-end.
 - **CLI reference** — every flag + output shape.
