@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Github } from "lucide-react";
+import { REPO_URL } from "@/lib/project-info";
 
-// Repo URL lives in one place. Swap when the repo moves.
-export const REPO_URL = "https://github.com/trebeljahr/sprite-tools";
 const VERSION = "0.1.0";
 
 export function SiteFooter() {
