@@ -1,0 +1,25 @@
+export const metadata = { title: "AI Character — sprite-tools" };
+
+# AI Character
+
+[Open AI Character](/generate)
+
+AI Character generates a character sprite image from a text prompt, then hands it to the animation or sheet-building flow.
+
+## Availability
+
+This feature is web-only and gated behind sign-in because it calls paid third-party image generation APIs. The core CLI package does not include AI generation.
+
+## Workflow
+
+1. Pick a sprite template.
+2. Describe the character.
+3. Choose a chroma-key-friendly background color.
+4. Generate the image.
+5. Download it, or send it to [AI Animation](/docs/web/animate).
+
+## Local setup
+
+AI generation depends on deployment secrets and auth configuration. For local development, see [Contributing](/docs/reference/contributing) for the app setup, then configure the required AI provider environment variables before enabling the feature.
+
+For offline or scriptable sprite processing, use the [CLI](/docs/cli) after you already have source art.

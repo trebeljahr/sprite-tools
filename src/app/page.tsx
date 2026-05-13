@@ -6,11 +6,13 @@ import {
   BookOpen,
   Boxes,
   Compass,
+  Crop,
   Film,
   Grid3x3,
   Hexagon,
   Layers,
   Palette as PaletteIcon,
+  Package,
   Scissors,
   Sparkles,
   Terminal,
@@ -32,6 +34,12 @@ const TOOLS = [
     label: "Collision",
     icon: Hexagon,
     blurb: "Trace tight per-frame collision polygons for physics engines.",
+  },
+  {
+    href: "/lasso",
+    label: "Lasso",
+    icon: Crop,
+    blurb: "Manually cut one clean sprite from a cluttered source image.",
   },
   {
     href: "/pixelate",
@@ -96,6 +104,12 @@ export default function HomePage() {
             </Link>
             <Link href="/docs" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>
               <BookOpen className="w-4 h-4 mr-2" /> Docs
+            </Link>
+            <Link
+              href="/docs/install"
+              className={cn(buttonVariants({ size: "lg", variant: "outline" }))}
+            >
+              <Package className="w-4 h-4 mr-2" /> Install
             </Link>
           </div>
         </div>

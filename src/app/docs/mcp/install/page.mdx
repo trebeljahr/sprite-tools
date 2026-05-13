@@ -14,7 +14,8 @@ This puts `sprite-tools-mcp` on your `PATH` alongside the CLI. Verify:
 
 ```bash
 which sprite-tools-mcp
-sprite-tools-mcp --help       # no-op — MCP servers don't respond to --help, they speak JSON-RPC
+sprite-tools-mcp --version
+sprite-tools-mcp --help
 ```
 
 Building from source instead? See the [Install page](/docs/install#from-source-contributors).
@@ -45,6 +46,19 @@ If Claude Desktop can't find `sprite-tools-mcp` on its `PATH` (common with `nvm`
   "mcpServers": {
     "sprite-tools": {
       "command": "/Users/you/.nvm/versions/node/v20.18.0/bin/sprite-tools-mcp"
+    }
+  }
+}
+```
+
+Some MCP clients prefer an explicit `node` command with the compiled server path:
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "node",
+      "args": ["/Users/you/.nvm/versions/node/v20.18.0/bin/sprite-tools-mcp"]
     }
   }
 }

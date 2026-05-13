@@ -87,7 +87,7 @@ Restart Claude Desktop — 13 tools appear under the MCP menu. If `sprite-tools-
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/palette`, `/atlas`, `/gif`, `/generate`, `/lasso`, and `/` (Animate).
+**Web app**: `/spritesheet`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
 
 **CLI**: `info`, `detect`, `slice`, `trim`, `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `atlas`, `gif`.
 
@@ -98,6 +98,8 @@ Restart Claude Desktop — 13 tools appear under the MCP menu. If `sprite-tools-
 Full docs live in the app at [sprites.trebeljahr.com/docs](https://sprites.trebeljahr.com/docs). Highlights:
 
 - **Quickstart** — 5 minutes end-to-end.
+- **Install** — web app, CLI, MCP, npm, and source setup.
+- **Web app guide** — Sheet Builder, Lasso, metadata tools, transforms, exports, and AI flows.
 - **CLI reference** — every flag + output shape.
 - **JSON schemas** — the canonical data contract shared across all surfaces.
 - **Algorithm notes** — how grid detection / contour tracing / bin packing work.

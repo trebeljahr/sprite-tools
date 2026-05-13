@@ -1,0 +1,28 @@
+export const metadata = { title: "AI Animation — sprite-tools" };
+
+# AI Animation
+
+[Open AI Animation](/animate)
+
+AI Animation turns a character image into a short motion clip, then passes that clip into Sheet Builder for frame extraction.
+
+## Availability
+
+This feature is web-only and gated behind sign-in because it calls paid third-party video generation APIs. The CLI package does not include AI video generation.
+
+## Workflow
+
+1. Upload a character image, or arrive from [AI Character](/docs/web/generate).
+2. Describe the motion.
+3. Choose duration, resolution, and aspect ratio.
+4. Generate the clip.
+5. Send the result to [Sheet Builder](/docs/web/spritesheet) to extract frames and export a sheet.
+
+## CLI note
+
+There is no CLI equivalent for AI video generation. Once you have a sheet or frames, the CLI can detect grids, slice frames, generate metadata, pack atlases, and export GIFs:
+
+```bash
+sprite-tools meta sheet.png --collision --pivot bottom-center -o meta.json
+sprite-tools gif sheet.png --fps 12 -o preview.gif
+```

@@ -7,7 +7,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Github, Lock, Menu } from "lucide-react";
+import { ChevronDown, Github, Lock, Menu, Package } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AI_ENABLED } from "@/lib/features";
-import { REPO_URL } from "@/lib/project-info";
+import { NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
 import { cn } from "@/lib/utils";
 
 // Top-level links (the main pipeline flow) stay flat in the nav. The grab-bag
@@ -204,6 +204,16 @@ export function SiteNav() {
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end gap-1.5">
+          <Link
+            href={NPM_PACKAGE_URL}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open npm package"
+            title="npm package"
+          >
+            <Package className="h-4.5 w-4.5" />
+          </Link>
           <Link
             href={REPO_URL}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"

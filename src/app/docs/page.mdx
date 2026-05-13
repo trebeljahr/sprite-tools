@@ -9,8 +9,8 @@ A batteries-included toolkit for turning AI-generated or hand-drawn sprites into
 
 Three surfaces, one shared pipeline:
 
-- **Web app** — 10 interactive tools (collision polygons, pivots, tags, palette swap, normal maps, pixel-art conversion, atlas packer, GIF export, plus the Stitch / Lasso / Animate / Design tools).
-- **CLI (`sprite-tools`)** — 13 composable subcommands for everything the web app does, plus primitives like `slice`, `trim`, `info`. Pipe them together; merge their JSON with `jq`.
+- **Web app** — interactive tools for sheet building, cutouts, collision polygons, pivots, tags, palette swap, normal maps, pixel-art conversion, atlas packing, GIF export, and optional AI-assisted character / animation flows.
+- **CLI (`sprite-tools`)** — 13 composable subcommands for scriptable sprite processing, plus primitives like `slice`, `trim`, `info`. Pipe them together; merge their JSON with `jq`.
 - **MCP server (`sprite-tools-mcp`)** — exposes the same 13 tools over the Model Context Protocol so Claude Desktop (or any MCP client) can drive the pipeline directly.
 
 ## Why
@@ -45,6 +45,6 @@ jq -s 'add' c.json p.json t.json > hero-meta.json
 
 - [Install](/docs/install) — three flavors: web, CLI, MCP.
 - [Quickstart](/docs/quickstart) — five-minute tour.
-- [Web app guide](/docs/web/collision) — what each tab does.
+- [Web app guide](/docs/web/spritesheet) — what each tool does.
 - [CLI reference](/docs/cli/reference) — every command with shapes.
 - [MCP catalog](/docs/mcp/tools) — tool schemas for agents.

@@ -31,6 +31,8 @@ const DOC_ROUTES = [
   "/docs/reference/algorithms",
   "/docs/reference/json-schemas",
   "/docs/reference/contributing",
+  "/docs/web/spritesheet",
+  "/docs/web/lasso",
   "/docs/web/collision",
   "/docs/web/pivot",
   "/docs/web/tags",
@@ -39,6 +41,8 @@ const DOC_ROUTES = [
   "/docs/web/palette",
   "/docs/web/atlas",
   "/docs/web/gif",
+  "/docs/web/generate",
+  "/docs/web/animate",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

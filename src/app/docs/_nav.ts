@@ -24,6 +24,8 @@ export const DOCS_SECTIONS: DocSection[] = [
   {
     label: "Web app",
     items: [
+      { href: "/docs/web/spritesheet", label: "Sheet Builder" },
+      { href: "/docs/web/lasso", label: "Lasso cutout" },
       { href: "/docs/web/collision", label: "Collision" },
       { href: "/docs/web/pivot", label: "Pivot" },
       { href: "/docs/web/tags", label: "Animation tags" },
@@ -32,6 +34,8 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/palette", label: "Palette" },
       { href: "/docs/web/atlas", label: "Atlas packer" },
       { href: "/docs/web/gif", label: "GIF export" },
+      { href: "/docs/web/generate", label: "AI Character" },
+      { href: "/docs/web/animate", label: "AI Animation" },
     ],
   },
   {

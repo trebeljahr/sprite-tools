@@ -1,0 +1,31 @@
+export const metadata = { title: "Lasso cutout — sprite-tools" };
+
+# Lasso Cutout
+
+[Open Lasso](/lasso)
+
+Lasso is a browser-only cutout tool for manually extracting one object from an image.
+
+## When to use it
+
+- The automatic crop is not enough.
+- The sprite is mixed with background clutter.
+- You need a clean PNG before building a sheet, atlas, or metadata.
+
+## Workflow
+
+1. Upload, drop, or paste an image.
+2. Click around the object to draw a polygon.
+3. Close the polygon with double-click or Enter.
+4. Tune chroma key, softness, spill, crop, and aspect ratio.
+5. Export the cutout PNG.
+
+## CLI note
+
+There is no direct CLI equivalent for manual lasso selection. For automated cleanup, use:
+
+```bash
+sprite-tools trim sprite.png --padding 1 -o tight.png
+```
+
+Use Lasso when the selection needs human judgment.

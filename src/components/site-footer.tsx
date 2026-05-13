@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Github } from "lucide-react";
-import { REPO_URL } from "@/lib/project-info";
+import { Github, Package } from "lucide-react";
+import { NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
 
 const VERSION = "0.1.0";
 
@@ -25,6 +25,15 @@ export function SiteFooter() {
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href={NPM_PACKAGE_URL}
+            className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Package className="w-3.5 h-3.5" />
+            npm
+          </Link>
           <Link
             href={REPO_URL}
             className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"

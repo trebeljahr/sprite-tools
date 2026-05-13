@@ -1,0 +1,35 @@
+export const metadata = { title: "Sheet Builder — sprite-tools" };
+
+# Sheet Builder
+
+[Open Sheet Builder](/spritesheet)
+
+Sheet Builder turns video, GIFs, existing sprite sheets, or loose frame images into a clean exported sheet.
+
+## When to use it
+
+- You have a short animation and need individual frames.
+- You have an existing sheet and want to split, crop, restitch, or export a different layout.
+- You want chroma-key cleanup before sending frames into Collision, Pivot, Tags, Atlas, or GIF.
+
+## Workflow
+
+1. Choose **Video** or **Sheet**.
+2. Drop, paste, or upload your source.
+3. Tune background removal, crop, grid, and selected frames.
+4. Export a stitched PNG sheet or a ZIP of individual frames.
+
+When you arrive from [AI Animation](/docs/web/animate), the generated video is passed into Sheet Builder automatically.
+
+## CLI equivalents
+
+Use the CLI for scriptable pieces of this workflow:
+
+```bash
+sprite-tools detect sheet.png
+sprite-tools slice sheet.png --out-dir frames --json frames.json
+sprite-tools trim sprite.png --padding 1 -o tight.png
+sprite-tools atlas frames/*.png -o atlas.png --json atlas.json
+```
+
+The browser tool is the best fit for manual frame selection, visual crop tuning, and video-to-sheet cleanup.
