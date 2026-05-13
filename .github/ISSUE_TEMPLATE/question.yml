@@ -1,0 +1,32 @@
+name: Question
+description: Ask about setup, usage, commands, or workflows.
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow or result you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Web app
+        - CLI
+        - MCP server
+        - Shared algorithm
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include commands, config, input shape, screenshots, or links that help explain the question.
+

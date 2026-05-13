@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a new capability or workflow.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that sprite-tools cannot do yet?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, output, or API you want.
+    validations:
+      required: true
+  - type: checkboxes
+    id: surfaces
+    attributes:
+      label: Surfaces
+      description: Where should this feature show up?
+      options:
+        - label: Web app
+        - label: CLI
+        - label: MCP server
+        - label: Shared algorithm only
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples or references
+      description: Link examples, expected JSON, commands, screenshots, or game-engine docs.
+

@@ -1,6 +1,7 @@
 # sprite-tools
 
 [![npm](https://img.shields.io/npm/v/@trebeljahr/sprite-tools.svg)](https://www.npmjs.com/package/@trebeljahr/sprite-tools)
+[![CI](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
@@ -13,6 +14,10 @@ Three surfaces, one shared pipeline:
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
+
+## Project status
+
+sprite-tools is an actively maintained open-source project. The npm package ships the CLI and MCP server; the web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and small focused pull requests are welcome.
 
 ## Quick taste
 
@@ -86,6 +91,14 @@ Full docs live in the app at `/docs`. Highlights:
 - **Contributing** — how to add a new tool.
 
 Or run the app locally: `pnpm install && pnpm dev`, then open `http://localhost:3471/docs`.
+
+## Community and maintenance
+
+- [Contributing guide](./CONTRIBUTING.md) — local setup, code style, PR checklist.
+- [Support](./SUPPORT.md) — where to ask questions or report bugs.
+- [Security policy](./SECURITY.md) — how to report vulnerabilities privately.
+- [Code of Conduct](./CODE_OF_CONDUCT.md) — community expectations.
+- [Changelog](./CHANGELOG.md) — notable release history.
 
 ## Architecture
 
