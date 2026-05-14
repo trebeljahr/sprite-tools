@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 import { AI_ENABLED } from "@/lib/features";
+import { getSiteUrl } from "@/lib/site-url";
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3471";
+const SITE = getSiteUrl();
 
 const TOOL_ROUTES = [
   "/spritesheet",

@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SiteFooter } from "@/components/site-footer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ClientProviders } from "@/components/client-providers";
+import { getSiteUrl } from "@/lib/site-url";
 import { SiteNav } from "./site-nav";
 
 const geistSans = Geist({
@@ -26,7 +27,7 @@ const plausibleScriptUrl =
 // `export const metadata` — the root values here serve as defaults and
 // as the fallback social preview.
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sprites.trebeljahr.com"),
+  metadataBase: new URL(getSiteUrl()),
   title: {
     default: "sprite-tools — game-ready 2D sprite toolkit",
     template: "%s · sprite-tools",
