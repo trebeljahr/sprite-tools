@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SiteFooter } from "@/components/site-footer";
@@ -17,11 +18,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const plausibleDomain = "sprites.trebeljahr.com";
+const plausibleScriptUrl =
+  "https://plausible.trebeljahr.com/js/script.file-downloads.hash.outbound-links.pageview-props.revenue.tagged-events.js";
+
 // Site-wide metadata. Individual routes can override via their own
 // `export const metadata` — the root values here serve as defaults and
 // as the fallback social preview.
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3471"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sprites.trebeljahr.com"),
   title: {
     default: "sprite-tools — game-ready 2D sprite toolkit",
     template: "%s · sprite-tools",
@@ -76,6 +81,22 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
+        <Script id="plausible-loader" strategy="afterInteractive">
+          {`
+              (function () {
+                var domain = ${JSON.stringify(plausibleDomain)};
+                if (location.hostname !== domain) return;
+                window.plausible = window.plausible || function() {
+                  (window.plausible.q = window.plausible.q || []).push(arguments);
+                };
+                var script = document.createElement("script");
+                script.defer = true;
+                script.dataset.domain = domain;
+                script.src = ${JSON.stringify(plausibleScriptUrl)};
+                document.head.appendChild(script);
+              })();
+            `}
+        </Script>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
