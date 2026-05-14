@@ -1,8 +1,12 @@
+import { readdir, stat } from "node:fs/promises";
+import { dirname, join, relative, sep } from "node:path";
 import type { MetadataRoute } from "next";
 import { AI_ENABLED } from "@/lib/features";
 import { getSiteUrl } from "@/lib/site-url";
 
 const SITE = getSiteUrl();
+const APP_DIR = join(process.cwd(), "src", "app");
+const DOCS_DIR = join(APP_DIR, "docs");
 
 const TOOL_ROUTES = [
   "/spritesheet",
@@ -19,41 +23,62 @@ const TOOL_ROUTES = [
 
 const AI_ROUTES = ["/generate", "/animate"];
 
-const DOC_ROUTES = [
-  "/docs",
-  "/docs/install",
-  "/docs/quickstart",
-  "/docs/cli",
-  "/docs/cli/reference",
-  "/docs/cli/recipes",
-  "/docs/mcp",
-  "/docs/mcp/install",
-  "/docs/mcp/tools",
-  "/docs/reference/algorithms",
-  "/docs/reference/json-schemas",
-  "/docs/reference/contributing",
-  "/docs/web/spritesheet",
-  "/docs/web/lasso",
-  "/docs/web/collision",
-  "/docs/web/pivot",
-  "/docs/web/tags",
-  "/docs/web/pixelate",
-  "/docs/web/normal-map",
-  "/docs/web/palette",
-  "/docs/web/atlas",
-  "/docs/web/gif",
-  "/docs/web/generate",
-  "/docs/web/animate",
-];
+type RouteEntry = {
+  path: string;
+  lastModified: Date;
+};
 
-export default function sitemap(): MetadataRoute.Sitemap {
+async function discoverDocRoutes(dir = DOCS_DIR): Promise<RouteEntry[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const routes = await Promise.all(
+    entries.flatMap(async (entry) => {
+      const filePath = join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        return discoverDocRoutes(filePath);
+      }
+
+      if (!entry.isFile() || entry.name !== "page.mdx") {
+        return [];
+      }
+
+      const routeDir = dirname(filePath);
+      const path = `/${relative(APP_DIR, routeDir).split(sep).join("/")}`;
+      const { mtime } = await stat(filePath);
+
+      return [{ path, lastModified: mtime }];
+    }),
+  );
+
+  return routes.flat().sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function routeQuality(path: string) {
+  if (path === "/") {
+    return { changeFrequency: "weekly" as const, priority: 1 };
+  }
+
+  if (path === "/privacy") {
+    return { changeFrequency: "yearly" as const, priority: 0.3 };
+  }
+
+  if (path.startsWith("/docs")) {
+    return { changeFrequency: "monthly" as const, priority: path === "/docs" ? 0.75 : 0.6 };
+  }
+
+  return { changeFrequency: "weekly" as const, priority: 0.8 };
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
-  const routes = ["/", ...TOOL_ROUTES, ...(AI_ENABLED ? AI_ROUTES : []), ...DOC_ROUTES, "/privacy"];
+  const staticRoutes = ["/", ...TOOL_ROUTES, ...(AI_ENABLED ? AI_ROUTES : []), "/privacy"].map(
+    (path) => ({ path, lastModified }),
+  );
+  const routes = [...staticRoutes, ...(await discoverDocRoutes())];
 
   return routes.map((path) => ({
-    url: `${SITE}${path}`,
-    lastModified,
-    changeFrequency: path.startsWith("/docs") ? "monthly" : "weekly",
-    priority: path === "/" ? 1 : path.startsWith("/docs") ? 0.6 : 0.8,
+    url: `${SITE}${path.path}`,
+    lastModified: path.lastModified,
+    ...routeQuality(path.path),
   }));
 }

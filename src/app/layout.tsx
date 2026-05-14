@@ -48,18 +48,36 @@ export const metadata: Metadata = {
     "mcp",
   ],
   authors: [{ name: "sprite-tools contributors" }],
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
     siteName: "sprite-tools",
+    url: "/",
     title: "sprite-tools — game-ready 2D sprite toolkit",
     description:
       "Web app, CLI, and MCP server for collision polygons, pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing, and GIF export.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "sprite-tools social preview",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "sprite-tools",
     description:
       "Game-ready 2D sprite toolkit — collision polygons, pivots, tags, pixel art, normals, palette, atlas, GIF.",
+    images: [
+      {
+        url: "/twitter-image",
+        alt: "sprite-tools social preview",
+      },
+    ],
   },
 };
 
