@@ -49,6 +49,27 @@ sprite-tools pixelate hero.png \
   -o hero-gb.png
 ```
 
+## Key a flat background out, then trim in the same pass
+
+```bash
+sprite-tools chroma render.png \
+  --color '#00ff00' --similarity 60 --spill 30 --choke 1 --trim \
+  -o hero.png
+```
+
+Drop `--color` to let it vote the background colour from the four corners. Works per image, not per cell — slice a sheet first if you need per-frame keying.
+
+## Batch: key a folder of renders, then pack them into an atlas
+
+```bash
+mkdir -p cut
+for f in renders/*.png; do
+  sprite-tools chroma "$f" --trim -o "cut/$(basename "$f")"
+done
+
+sprite-tools atlas cut/*.png -o atlas.png --json atlas.json
+```
+
 ## Trim then feed into collision (pipe chain)
 
 ```bash

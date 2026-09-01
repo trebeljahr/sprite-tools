@@ -309,7 +309,10 @@ async function cropFrames(
     if (!ctx) continue;
     ctx.drawImage(f.bitmap, -Math.round(cx), -Math.round(cy));
     const bitmap = await canvasToBitmap(canvas);
-    f.bitmap.close?.();
+    // The input bitmaps belong to the previous step's cache entry, not to
+    // us — usePipeline disposes them when that entry is replaced. Closing
+    // them here would strand the cache: any later re-run that only changes
+    // this step's config re-reads the same (now detached) input frames.
     out.push({ ...f, id: nextFrameId(), bitmap, width: outW, height: outH });
   }
   return { frames: out, stats: computeStats(out) };

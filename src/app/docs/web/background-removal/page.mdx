@@ -1,0 +1,78 @@
+export const metadata = {
+  title: "Background removal — sprite-tools",
+  description:
+    "Chroma-key the background out of a video, a sprite sheet, or loose images in the browser, then auto-crop and export PNGs, a ZIP, or a stitched sheet.",
+};
+
+# Background Removal
+
+[Open Background Removal](/background-removal)
+
+Background Removal is a browser-only tool that does one thing: key a background colour out of every frame, optionally crop to the content, and export. It is the background step of [Sheet Builder](/docs/web/spritesheet) on its own page, without the grid editing, frame selection, and playback around it.
+
+## When to use it
+
+- A render, screen capture, or generated video sits on a flat colour and you want transparent PNGs.
+- You have a sheet or a folder of frames and only need the background gone — nothing else.
+- You want the same cleanup the Sheet Builder does, but with fewer controls in the way.
+
+Use [Lasso](/docs/web/lasso) instead when the background is not a colour you can key — a photograph, a painted scene, anything where the sprite and the backdrop share colours.
+
+## Workflow
+
+1. Pick a source: **Video**, **Sheet**, or **Images**. Dropping or pasting a file anywhere on the page picks the tab for you — a video goes to Video, several images go to Images, a single image goes to Sheet.
+2. Import the frames.
+   - **Video** — set the extraction FPS (1–60, default 10) and press **Extract Raw Frames**.
+   - **Sheet** — columns and rows are auto-detected from the image and shown as a hint; correct them if the guess is off, then press **Split Sheet**. Sample sprites are available if you just want to try it.
+   - **Images** — select any number of files and press **Load Images**. They are imported in filename order.
+3. Tune the settings. Every change re-runs the pipeline automatically, and only the step you touched: an auto-crop tweak does not redo the key.
+4. Check the result. **Compare** shows the original frame next to the keyed one; the light/dark toggle swaps the checkerboard behind the preview so you can see soft edges against either.
+5. Export — a ZIP of PNGs, a stitched sheet, or a single PNG when there is only one frame.
+
+Video files stay local to this page. A sheet is shared with the other tools, so you can send the same source into Collision, Pivot, Tags, Atlas, or GIF without re-importing it.
+
+## Background modes
+
+- **Auto Background Removal (Chroma)** — the default. Detects the background colour and knocks it out to transparency.
+- **Auto Background Solid Color Fill** — replaces the background with a flat colour instead of transparency. The output stays fully opaque.
+- **Transparent Background (Cutout)** — no keying at all. Use it when the source already has an alpha channel and you only want the crop and export steps.
+
+The background colour is never picked by hand here: each frame is sampled at its four corners and the colour appearing at the most corners wins, falling back to the top-left corner when all four differ. Frames are keyed independently, so a video whose backdrop drifts in brightness still keys per frame.
+
+## What the sliders do
+
+Every pixel is scored by its straight RGB distance to the detected background colour. The four sliders all act on that distance.
+
+- **Similarity** (0–150, default 30) — distances below this are treated as pure background and go fully transparent. Raise it when patches of background survive; lower it when parts of the sprite disappear.
+- **Softness** (0–50, default 10) — the width of the band just above **Similarity** where alpha ramps linearly from 0 to fully opaque. This is the feathered edge. 0 gives a hard, aliased cutout.
+- **Color Spill** (0–100, default 20) — background colour that bled onto the sprite's edge. Pixels out to `similarity + softness + spill` are pulled toward their own grey value, strongest at the edge and fading to nothing at the far end of the band. It desaturates the fringe rather than recolouring it, so a green rim goes grey, not skin-toned.
+- **Mask Choke** (0–5, default 1) — erodes the finished matte by N pixels: each pixel takes the lowest alpha in the (2N+1)×(2N+1) square around it. One pixel usually removes the last halo left by anti-aliasing. Large values eat into the sprite.
+
+**Auto-Crop Content** (on by default) crops every frame to the shared bounding box of what is left, keeping 2 px of padding. **Aspect Ratio** (free, 1:1, 16:9, 9:16, 4:3, 3:4) pads that crop out to a fixed shape.
+
+In solid-fill mode only **Edge Softness (Feather)** is exposed — it is the same softness value, applied to the mask that composites the fill. Spill and choke do not apply there.
+
+## Limits
+
+This is colour keying, not segmentation. There is no model and no subject detection:
+
+- The background has to be reasonably uniform. Gradients, textures, and busy scenes will not key cleanly.
+- Anything in the sprite that matches the background colour is removed too. A green shirt on a green screen goes with the background.
+- Semi-transparent and motion-blurred edges keep some of the background tint. Spill helps; it does not erase it.
+- Shadows on the backdrop are a different colour from the backdrop, so they usually survive the key.
+
+If the source does not fit that, cut it by hand in [Lasso](/docs/web/lasso).
+
+## CLI equivalent
+
+The same pixel math runs in the CLI on a single image:
+
+```bash
+sprite-tools chroma hero.png -o hero-cut.png
+sprite-tools chroma hero.png --color '#00ff00' --similarity 60 -o hero-cut.png
+sprite-tools chroma hero.png --softness 20 --spill 30 --choke 2 --trim -o hero-cut.png
+```
+
+`remove-bg` is an alias for `chroma`. The defaults match this page's defaults exactly. For sheets, the MCP tool `sprite_remove_background` keys every cell and restitches the grid — see the [tool catalog](/docs/mcp/tools).
+
+Video extraction, live preview, and the before/after compare are browser-only.

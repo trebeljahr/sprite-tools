@@ -133,6 +133,32 @@ sprite-tools palette <input>
   [-o FILE]                        # JSON
 ```
 
+## `chroma`
+
+```
+sprite-tools chroma <input>            # alias: remove-bg
+  [--mode transparent|solid]       # default: transparent
+  [--similarity N]                 # background distance, default 30
+  [--softness N]                   # feather band width, default 10
+  [--spill N]                      # edge desaturation reach, default 20
+  [--choke N]                      # erode the matte N px, default 1
+  [--color #RRGGBB]                # colour to key out (default: auto-detect from corners)
+  [--fill #RRGGBB]                 # fill colour for --mode solid (default: auto-sample corners)
+  [--trim]                         # auto-crop the transparent border afterwards
+  [-o FILE]                        # output PNG (default: stdout)
+```
+
+Chroma-key background removal on the whole image, treated as one frame. In `transparent` mode the keyed colour becomes transparency; without `--color` it is voted from the four corners. In `solid` mode the background is replaced by `--fill`, or by a gradient blended from the four corner colours when `--fill` is omitted — the output is fully opaque, and `--color`, `--spill`, and `--choke` are ignored. `--trim` crops to the opaque bounding box with no padding.
+
+Defaults match the web app's [Background Removal](/docs/web/background-removal) page.
+
+```bash
+sprite-tools chroma hero.png --color '#00ff00' --similarity 60 --trim -o hero-cut.png
+sprite-tools chroma hero.png --mode solid --fill '#ffffff' -o hero-white.png
+```
+
+For sheets, key each cell with the MCP tool `sprite_remove_background`, or `slice` first and loop.
+
 ## `pixelate`
 
 ```

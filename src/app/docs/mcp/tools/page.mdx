@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 13 MCP tools.
+Full input/output schema for each of the 14 MCP tools.
 
 ## `sprite_info`
 
@@ -60,6 +60,53 @@ Inputs:
 ```
 
 Returns `{ source, output_path, sourceWidth, sourceHeight, trim: {x,y,width,height}, paddingKept }`.
+
+## `sprite_remove_background`
+
+Chroma-keys the background out of a sprite, or out of every cell of a sheet.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,          // auto-detected if omitted
+  mode?: "transparent" | "solid",        // default "transparent"
+  similarity?: number,                   // 0..150, default 30
+  softness?: number,                     // 0..50,  default 10
+  spill?: number,                        // 0..100, default 20
+  choke?: number,                        // 0..5,   default 1
+  color?: "#rrggbb",                     // key colour; omit to auto-detect per frame
+  fill?: "#rrggbb",                      // flat fill for "solid"; omit to blend corner colours
+  trim?: boolean,                        // default false
+  trim_padding?: number                  // default 0
+}
+```
+
+Writes PNG. Returns JSON:
+
+```json
+{ "source", "output_path",
+  "sourceWidth", "sourceHeight", "width", "height",
+  "grid": {cols,rows,detected},
+  "frameCount", "frameWidth", "frameHeight",
+  "backgroundColor": "#rrggbb"|null,
+  "backgroundColorSource": "explicit"|"detected"|null,
+  "distinctBackgroundColors": ["#rrggbb", ...],
+  "transparentFraction": 0..1,
+  "trim": {x,y,width,height}|null,
+  "options": {...} }
+```
+
+`backgroundColor` and `transparentFraction` are there so an agent can tell whether the key actually took — a `transparentFraction` near 0 means nothing was removed.
+
+Notes:
+
+- Frames are sliced, keyed independently (background auto-detected per frame unless `color` is given), and restitched. A 1×1 grid is a single sprite.
+- `trim` uses one crop rect shared by every frame — the union of the per-frame content bounds — so the cells still line up as a grid.
+- `"solid"` output is fully opaque, so `trim` is a no-op there and no background colour is reported. `spill` and `choke` are ignored by the solid path.
+- See the [Background Removal page](/docs/web/background-removal) for what each slider does and where colour keying breaks down.
 
 ## `sprite_generate_collision`
 

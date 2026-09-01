@@ -47,7 +47,10 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   },
   {
     label: "Extract",
-    items: [{ href: "/lasso", label: "Lasso", hint: "manual polygon cutout" }],
+    items: [
+      { href: "/background-removal", label: "Background", hint: "chroma-key removal" },
+      { href: "/lasso", label: "Lasso", hint: "manual polygon cutout" },
+    ],
   },
   {
     label: "Metadata",

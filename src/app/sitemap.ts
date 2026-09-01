@@ -19,6 +19,7 @@ const TOOL_ROUTES = [
   "/atlas",
   "/gif",
   "/lasso",
+  "/background-removal",
 ];
 
 const AI_ROUTES = ["/generate", "/animate"];

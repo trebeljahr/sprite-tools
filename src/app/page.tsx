@@ -7,6 +7,7 @@ import {
   Boxes,
   Compass,
   Crop,
+  Eraser,
   Film,
   Grid3x3,
   Hexagon,
@@ -34,6 +35,12 @@ const TOOLS = [
     label: "Collision",
     icon: Hexagon,
     blurb: "Trace tight per-frame collision polygons for physics engines.",
+  },
+  {
+    href: "/background-removal",
+    label: "Background",
+    icon: Eraser,
+    blurb: "Chroma-key a flat background out of video, a sheet, or loose images.",
   },
   {
     href: "/lasso",
@@ -148,7 +155,7 @@ export default function HomePage() {
             <div>
               <CardTitle className="text-base">CLI</CardTitle>
               <CardDescription className="text-xs">
-                13 composable subcommands. Pipe-friendly.
+                14 composable subcommands. Pipe-friendly.
               </CardDescription>
             </div>
           </CardHeader>

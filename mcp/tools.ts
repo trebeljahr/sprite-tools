@@ -12,6 +12,14 @@ import { dirname, join, basename } from "node:path";
 
 import { loadPng, savePng, sliceSheet, stitchSheet } from "../cli/lib/image-io";
 import { detectGridFromImageData } from "../src/lib/pipeline/detect";
+import {
+  applyChromaKeyToImageData,
+  applySolidFillToImageData,
+  detectBackgroundColor,
+  hexToRgb as chromaHexToRgb,
+  type ChromaCoreConfig,
+  type Rgb,
+} from "../src/lib/pipeline/chroma-core";
 import { generateOutline } from "../src/lib/collision/outline";
 import { pixelate, hexToRgb } from "../src/lib/pixel-art/pixelate";
 import { paletteById, PALETTES } from "../src/lib/pixel-art/palettes";
@@ -38,6 +46,8 @@ const PIVOT_PRESETS: Record<string, { nx: number; ny: number }> = {
   "bottom-right": { nx: 1, ny: 1 },
 };
 const PRESET_IDS = Object.keys(PIVOT_PRESETS) as (keyof typeof PIVOT_PRESETS)[];
+
+const HEX_COLOR = /^#?[0-9a-fA-F]{6}$/;
 
 function jsonResult(payload: unknown) {
   return {
@@ -212,6 +222,178 @@ export function registerAllTools(server: McpServer) {
         sourceHeight: img.height,
         trim: { x, y, width: w, height: h },
         paddingKept: pad,
+      });
+    },
+  );
+
+  // ------- remove_background -------
+  server.registerTool(
+    "sprite_remove_background",
+    {
+      description:
+        "Chroma-key the background out of a sprite or every cell of a sheet. Samples the background colour from each frame's corners (or keys the explicit `color`) and knocks it out to transparency, optionally auto-cropping afterwards. Mode 'solid' replaces the background with a flat fill instead of transparency. Returns the colour that was keyed and how much of the image it removed, so you can tell whether the key took.",
+      inputSchema: {
+        input_path: z.string(),
+        output_path: z.string(),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        mode: z
+          .enum(["transparent", "solid"])
+          .default("transparent")
+          .describe("'transparent' keys the background out; 'solid' replaces it with a fill"),
+        similarity: z
+          .number()
+          .min(0)
+          .max(150)
+          .default(30)
+          .describe("Colour distance from the background that still counts as background"),
+        softness: z
+          .number()
+          .min(0)
+          .max(50)
+          .default(10)
+          .describe("Width of the feathered edge band"),
+        spill: z
+          .number()
+          .min(0)
+          .max(100)
+          .default(20)
+          .describe("Desaturate background colour bleeding into the edges"),
+        choke: z.number().int().min(0).max(5).default(1).describe("Erode the mask by N pixels"),
+        color: z
+          .string()
+          .regex(HEX_COLOR, "expected a hex colour like #00ff00")
+          .optional()
+          .describe(
+            "Background colour to key out; omit to auto-detect it per frame. Ignored in 'solid' mode.",
+          ),
+        fill: z
+          .string()
+          .regex(HEX_COLOR, "expected a hex colour like #ffffff")
+          .optional()
+          .describe(
+            "Flat fill colour for 'solid' mode; omit to blend the frame's own corner colours.",
+          ),
+        trim: z
+          .boolean()
+          .default(false)
+          .describe("Auto-crop to the content bounds shared by every frame"),
+        trim_padding: z
+          .number()
+          .int()
+          .min(0)
+          .default(0)
+          .describe("Transparent pixels kept around the crop"),
+      },
+    },
+    ({
+      input_path,
+      output_path,
+      cols,
+      rows,
+      mode,
+      similarity,
+      softness,
+      spill,
+      choke,
+      color,
+      fill,
+      trim,
+      trim_padding,
+    }) => {
+      const { image, frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const solid = mode === "solid";
+      const cfg: ChromaCoreConfig = {
+        mode: solid ? "chroma-solid" : "chroma-transparent",
+        similarity,
+        softness,
+        spill,
+        choke,
+        solidColor: fill,
+        // Matches the web app, which samples the corners unless told otherwise.
+        autoDetermineFillColor: fill === undefined,
+      };
+      const explicit = color ? chromaHexToRgb(color) : null;
+
+      // The core mutates in place, so every frame is copied first — a 1x1
+      // "sheet" is the source image itself, which must stay untouched.
+      const backgrounds: (Rgb | null)[] = [];
+      let processed = frames.map((f) => {
+        const out = new ImageData(f.width, f.height);
+        out.data.set(f.data);
+        if (solid) {
+          applySolidFillToImageData(out, cfg);
+          backgrounds.push(null);
+          return out;
+        }
+        const target = explicit ?? detectBackgroundColor(out);
+        applyChromaKeyToImageData(out, target, cfg);
+        backgrounds.push(target);
+        return out;
+      });
+
+      // One crop rect for the whole sheet: per-frame rects would produce
+      // differently sized cells that no longer stitch back into a grid.
+      let cropped: { x: number; y: number; width: number; height: number } | null = null;
+      if (trim) {
+        const rects = processed
+          .map((p) => computeTrimRect(p))
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+        if (rects.length > 0) {
+          const fw = processed[0].width;
+          const fh = processed[0].height;
+          const minX = Math.min(...rects.map((r) => r.x));
+          const minY = Math.min(...rects.map((r) => r.y));
+          const maxX = Math.max(...rects.map((r) => r.x + r.w));
+          const maxY = Math.max(...rects.map((r) => r.y + r.h));
+          const x = Math.max(0, minX - trim_padding);
+          const y = Math.max(0, minY - trim_padding);
+          const w = Math.min(fw - x, maxX - minX + trim_padding * 2);
+          const h = Math.min(fh - y, maxY - minY + trim_padding * 2);
+          if (x !== 0 || y !== 0 || w !== fw || h !== fh) {
+            processed = processed.map((p) => sliceRect(p, { x, y, w, h }));
+          }
+          cropped = { x, y, width: w, height: h };
+        }
+      }
+
+      const out =
+        processed.length === 1 ? processed[0] : stitchSheet(processed, grid.cols, grid.rows);
+      mkdirSync(dirname(output_path), { recursive: true });
+      savePng(out, output_path);
+
+      let clear = 0;
+      for (let i = 3; i < out.data.length; i += 4) if (out.data[i] === 0) clear++;
+      const total = out.width * out.height;
+      const keyed = backgrounds.filter((b): b is Rgb => b !== null).map(rgbToHex);
+
+      return jsonResult({
+        source: input_path,
+        output_path,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
+        width: out.width,
+        height: out.height,
+        grid,
+        frameCount: processed.length,
+        frameWidth: processed[0]?.width ?? 0,
+        frameHeight: processed[0]?.height ?? 0,
+        backgroundColor: keyed[0] ?? null,
+        backgroundColorSource: solid ? null : color ? "explicit" : "detected",
+        distinctBackgroundColors: [...new Set(keyed)],
+        transparentFraction: total > 0 ? Number((clear / total).toFixed(4)) : 0,
+        trim: cropped,
+        options: {
+          mode,
+          similarity,
+          softness,
+          spill,
+          choke,
+          color: color ?? null,
+          fill: fill ?? null,
+          trim,
+          trim_padding,
+        },
       });
     },
   );

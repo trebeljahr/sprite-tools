@@ -25,6 +25,7 @@ import { registerGifCommand } from "./commands/gif";
 import { registerDetectCommand } from "./commands/detect";
 import { registerSliceCommand } from "./commands/slice";
 import { registerTrimCommand } from "./commands/trim";
+import { registerChromaCommand } from "./commands/chroma";
 import { registerInfoCommand } from "./commands/info";
 import { registerMetaCommand } from "./commands/meta";
 
@@ -56,6 +57,7 @@ program.addHelpText(
     "  atlas      packed-atlas manifest                                 (JSON + PNG)",
     "",
     "Image transforms (default: stdout, use -o <file>):",
+    "  chroma     chroma-key background removal (alias: remove-bg)      (PNG)",
     "  pixelate   downscale + quantize + dither + palette-snap           (PNG)",
     "  normal-map alpha/luminance → tangent-space normals               (PNG)",
     "  gif        animated GIF from sheet                               (GIF)",
@@ -90,6 +92,7 @@ registerPivotCommand(program);
 registerTagsCommand(program);
 registerMetaCommand(program);
 registerPaletteCommand(program);
+registerChromaCommand(program);
 registerPixelateCommand(program);
 registerNormalMapCommand(program);
 registerAtlasCommand(program);

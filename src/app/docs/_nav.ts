@@ -25,6 +25,7 @@ export const DOCS_SECTIONS: DocSection[] = [
     label: "Web app",
     items: [
       { href: "/docs/web/spritesheet", label: "Sheet Builder" },
+      { href: "/docs/web/background-removal", label: "Background removal" },
       { href: "/docs/web/lasso", label: "Lasso cutout" },
       { href: "/docs/web/collision", label: "Collision" },
       { href: "/docs/web/pivot", label: "Pivot" },
