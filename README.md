@@ -55,6 +55,7 @@ sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero
 sprite-tools normal-map hero.png -o hero-normal.png
 
 # Pack a folder of loose sprites into an atlas + TexturePacker manifest
+# (sprite edges are extruded 1px into the gutter by default — no filtering halos)
 sprite-tools atlas sprites/*.png -o atlas.png --json atlas.json
 
 # Pipe stdin to stdout

@@ -31,6 +31,7 @@ import {
   hexToRgb as paletteHexToRgb,
 } from "../src/lib/palette/extract";
 import { packAtlas, computeTrimRect, type PackInput } from "../src/lib/atlas/pack";
+import { effectiveExtrude, extrudeFrames } from "../src/lib/atlas/extrude";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -703,17 +704,23 @@ export function registerAllTools(server: McpServer) {
     "sprite_pack_atlas",
     {
       description:
-        "Pack multiple sprite PNGs into a single atlas PNG + TexturePacker-style JSON manifest.",
+        "Pack multiple sprite PNGs into a single atlas PNG + TexturePacker-style JSON manifest, with edge extrusion into the padding gutter to avoid bilinear/mipmap halos.",
       inputSchema: {
         input_paths: z.array(z.string()).min(1),
         output_path: z.string(),
         json_path: z.string(),
         padding: z.number().int().min(0).default(2),
+        extrude: z
+          .number()
+          .int()
+          .min(0)
+          .default(1)
+          .describe("Repeat edge pixels N px into the padding gutter; clamped to padding"),
         power_of_two: z.boolean().default(false),
         trim: z.boolean().default(true),
       },
     },
-    ({ input_paths, output_path, json_path, padding, power_of_two, trim }) => {
+    ({ input_paths, output_path, json_path, padding, extrude, power_of_two, trim }) => {
       interface Sprite {
         id: string;
         name: string;
@@ -771,6 +778,8 @@ export function registerAllTools(server: McpServer) {
         if (!s) continue;
         blit(s.content, out, f.x, f.y);
       }
+      const bleed = effectiveExtrude(extrude, padding);
+      if (bleed > 0) extrudeFrames(out, atlas.frames, bleed);
       mkdirSync(dirname(output_path), { recursive: true });
       savePng(out, output_path);
 
@@ -807,6 +816,7 @@ export function registerAllTools(server: McpServer) {
       return jsonResult({
         atlas_path: output_path,
         manifest_path: json_path,
+        extrude: bleed,
         ...manifest,
       });
     },

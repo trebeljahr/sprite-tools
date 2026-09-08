@@ -20,8 +20,20 @@ The [**Atlas**](/atlas) tab takes **multiple separate sprite PNGs** and packs th
 ## Controls
 
 - **Padding** — gutter between sprites (prevents texture bleeding in filtered sampling).
+- **Extrude** — how many pixels of each sprite's edge to repeat into that gutter. Default 1; 0 opts out. Clamped to **Padding**.
 - **Power-of-2 size** — round atlas dimensions up to 2ⁿ (required by some GPUs).
 - **Auto-trim transparent** — strip transparent padding before packing. Recommended for most sprites.
+
+## Edge extrusion
+
+Padding alone leaves a gutter of transparent pixels around every sprite. Under bilinear filtering, mipmapping, or non-integer scaling, the sampler reaches slightly past a sprite's rect and picks up those transparent texels. Blended in, they show up as dark seams or halos around each sprite — worst at fractional scales and on lower mip levels.
+
+Extrusion fills that gutter instead of leaving it empty: each sprite's edge row and column are repeated outward, and each corner repeats the corner pixel. The sampler then blends a sprite's edge colour with itself, and the seam disappears.
+
+- The sprite's `frame` rect in the manifest is **unchanged** — extrusion only writes into space the padding had already reserved, so nothing changes on the engine side.
+- Extrude is independent of padding but never exceeds it. The gutter a sprite gets on any one side is exactly `padding` pixels, so extruding further would write over a neighbouring sprite.
+- **At padding 0 there is no gutter, so extrusion is a no-op.** It does not force a minimum gutter, because that would change the atlas dimensions.
+- The default is 1, which covers the one-texel reach of bilinear filtering. Set it to 0 to keep the old transparent gutter.
 
 ## Manifest shape
 
@@ -51,6 +63,6 @@ Most engines (Phaser, PixiJS, Godot with TPatch) import this format natively.
 
 ## Tips
 
-- For a walk cycle where every frame is the same size, padding=0 is fine. For mixed-size sprites, padding=2 prevents color bleeding at atlas edges.
+- For a walk cycle where every frame is the same size, padding=0 is fine — note that it also disables extrusion. For mixed-size sprites, padding=2 prevents color bleeding at atlas edges.
 - Power-of-2 only matters for GL ES 2.0 / very old hardware. Modern WebGL / WebGPU accepts any size.
 - The packer is deterministic — same inputs in the same order give the same layout. Useful for reproducible builds.

@@ -245,12 +245,15 @@ Inputs:
   output_path: string,     // atlas.png
   json_path: string,       // atlas.json manifest
   padding?: number,        // default 2
+  extrude?: number,        // edge bleed, default 1, clamped to padding
   power_of_two?: boolean,  // default false
   trim?: boolean           // default true
 }
 ```
 
 Writes atlas PNG + manifest JSON. Returns the manifest inline.
+
+`extrude` repeats each sprite's edge pixels into the surrounding gutter so filtered sampling can't pull in transparent texels. It never exceeds `padding` — at `padding: 0` there is no gutter and extrusion does nothing. Frame rects in the manifest are unaffected.
 
 ## Common notes
 

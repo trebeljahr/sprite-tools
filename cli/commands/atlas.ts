@@ -4,12 +4,19 @@ import { writeJsonOutput, fail, parseIntArg, addHelpExtras } from "../lib/common
 import { loadPng, imageToPngBuffer } from "../lib/image-io";
 import { writeFileSync } from "node:fs";
 import { computeTrimRect, packAtlas, type PackInput } from "../../src/lib/atlas/pack";
+import { effectiveExtrude, extrudeFrames } from "../../src/lib/atlas/extrude";
 
 export function registerAtlasCommand(program: Command) {
   const cmd = program
     .command("atlas <inputs...>")
     .description("Pack multiple sprites into a single PNG atlas + JSON manifest.")
     .option("--padding <n>", "gutter between packed sprites", (v) => parseIntArg("padding", v), 2)
+    .option(
+      "--extrude <n>",
+      "bleed sprite edge pixels into the gutter (clamped to padding)",
+      (v) => parseIntArg("extrude", v),
+      1,
+    )
     .option("--pow2", "round atlas size up to power of 2", false)
     .option("--no-trim", "don't auto-trim transparent borders (default: trim)")
     .option("-o, --output <file>", "output atlas PNG file", "atlas.png")
@@ -20,6 +27,8 @@ export function registerAtlasCommand(program: Command) {
       "sprite-tools atlas sprites/*.png",
       "sprite-tools atlas sprites/*.png --padding 4 --pow2 -o game.png --json game.json",
       "sprite-tools atlas sprites/*.png --no-trim   # keep original canvas sizes",
+      "sprite-tools atlas sprites/*.png --padding 4 --extrude 2   # wider bleed, no seams at scale",
+      "sprite-tools atlas sprites/*.png --extrude 0   # opt out of edge bleed (default: 1)",
     ],
     output: [
       "PNG atlas + TexturePacker-style JSON manifest:",
@@ -34,6 +43,7 @@ export function registerAtlasCommand(program: Command) {
       inputs: string[],
       opts: {
         padding: number;
+        extrude: number;
         pow2: boolean;
         trim: boolean;
         output: string;
@@ -101,6 +111,9 @@ export function registerAtlasCommand(program: Command) {
           if (!s) continue;
           blit(s.content, out, f.x, f.y);
         }
+
+        const bleed = effectiveExtrude(opts.extrude, opts.padding);
+        if (bleed > 0) extrudeFrames(out, atlas.frames, bleed);
 
         writeFileSync(opts.output, imageToPngBuffer(out));
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Boxes, Copy, Download, Loader2, Palette, Trash2, Upload } from "lucide-react";
 
@@ -17,6 +17,7 @@ import { track } from "@/lib/analytics";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { computeTrimRect, packAtlas, type PackInput, type PackedAtlas } from "@/lib/atlas/pack";
+import { effectiveExtrude, extrudeFrames } from "@/lib/atlas/extrude";
 import { TutorialStrip, type TutorialStep } from "@/components/tutorial-strip";
 import { useTutorial } from "@/hooks/use-tutorial";
 
@@ -70,6 +71,7 @@ function trimImageData(
 export default function AtlasPage() {
   const [sprites, setSprites] = useState<AtlasSprite[]>([]);
   const [padding, setPadding] = useState(2);
+  const [extrude, setExtrude] = useState(1);
   const [pow2, setPow2] = useState(false);
   const [autoTrim, setAutoTrim] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -172,34 +174,58 @@ export default function AtlasPage() {
   // -----------------------------------------------------------------
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  /**
+   * Paint the packed atlas into `canvas`. `outlines` draws the green frame
+   * guides — a preview affordance only. The exported PNG is rendered with
+   * outlines off, otherwise every sprite's outermost pixel row ships tinted
+   * green, which is exactly the edge corruption extrusion exists to avoid.
+   */
+  const renderAtlasTo = useCallback(
+    (canvas: HTMLCanvasElement, outlines: boolean) => {
+      if (!atlas) return;
+      canvas.width = atlas.width || 1;
+      canvas.height = atlas.height || 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const f of atlas.frames) {
+        const s = sprites.find((x) => x.id === f.id);
+        if (!s) continue;
+        const tmp = document.createElement("canvas");
+        tmp.width = s.content.width;
+        tmp.height = s.content.height;
+        const tctx = tmp.getContext("2d");
+        if (!tctx) continue;
+        tctx.putImageData(s.content, 0, 0);
+        ctx.drawImage(tmp, f.x, f.y);
+      }
+
+      // Edge extrusion (bleed) — repeat each frame's border pixels into the
+      // gutter so bilinear filtering / mipmaps never sample transparent black.
+      // Clamped to padding: the gutter is exactly `padding` px on every side.
+      const bleed = effectiveExtrude(extrude, padding);
+      if (bleed > 0) {
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        extrudeFrames(data, atlas.frames, bleed);
+        ctx.putImageData(data, 0, 0);
+      }
+
+      if (!outlines) return;
+      ctx.strokeStyle = "rgba(74, 222, 128, 0.5)";
+      ctx.lineWidth = 1;
+      for (const f of atlas.frames) {
+        ctx.strokeRect(f.x + 0.5, f.y + 0.5, f.width - 1, f.height - 1);
+      }
+    },
+    [atlas, sprites, extrude, padding],
+  );
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !atlas) return;
-    canvas.width = atlas.width || 1;
-    canvas.height = atlas.height || 1;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    for (const f of atlas.frames) {
-      const s = sprites.find((x) => x.id === f.id);
-      if (!s) continue;
-      const tmp = document.createElement("canvas");
-      tmp.width = s.content.width;
-      tmp.height = s.content.height;
-      const tctx = tmp.getContext("2d");
-      if (!tctx) continue;
-      tctx.putImageData(s.content, 0, 0);
-      ctx.drawImage(tmp, f.x, f.y);
-    }
-
-    // Optional frame outlines
-    ctx.strokeStyle = "rgba(74, 222, 128, 0.5)";
-    ctx.lineWidth = 1;
-    for (const f of atlas.frames) {
-      ctx.strokeRect(f.x + 0.5, f.y + 0.5, f.width - 1, f.height - 1);
-    }
-  }, [atlas, sprites]);
+    renderAtlasTo(canvas, true);
+  }, [atlas, renderAtlasTo]);
 
   // Auto-fit viewport
   useEffect(() => {
@@ -259,8 +285,10 @@ export default function AtlasPage() {
   }, [atlas, sprites]);
 
   const downloadAtlas = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!atlas) return;
+    // Render a clean copy: same pixels as the preview, minus the frame guides.
+    const canvas = document.createElement("canvas");
+    renderAtlasTo(canvas, false);
     canvas.toBlob((blob) => {
       if (!blob) return;
       const a = document.createElement("a");
@@ -463,6 +491,22 @@ export default function AtlasPage() {
                 />
                 <p className="text-[10px] text-muted-foreground">
                   Gutter between sprites (prevents bleeding).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <Label className="text-xs">Extrude</Label>
+                  <span className="text-[10px] font-mono">{extrude}px</span>
+                </div>
+                <Slider
+                  value={[extrude]}
+                  min={0}
+                  max={4}
+                  step={1}
+                  onValueChange={(v) => setExtrude(Array.isArray(v) ? v[0] : v)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Repeat edge pixels into the gutter — clamped to padding.
                 </p>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/5">
