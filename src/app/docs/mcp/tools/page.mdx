@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 14 MCP tools.
+Full input/output schema for each of the 16 MCP tools.
 
 ## `sprite_info`
 
@@ -234,6 +234,61 @@ Inputs:
 ```
 
 Writes PNG.
+
+## `sprite_add_outline`
+
+Draws an outer or inner outline around the sprite, or around every cell of a sheet.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,            // auto-detected if omitted
+  style?: "outer" | "inner",               // default "outer"
+  width?: number,                          // 0..64, default 1
+  color?: "#rrggbb",                       // default "#000000"
+  opacity?: number,                        // 0..1, default 1
+  connectivity?: 4 | 8,                    // default 8
+  alpha_threshold?: number,                // 0..255, default 8
+  overflow?: "expand" | "clip"             // default "expand"
+}
+```
+
+Writes PNG. Returns `{ source, output_path, grid, output_width, output_height, margin, options }`.
+
+## `sprite_add_shadow`
+
+Drops a blurred, offset silhouette underneath the sprite, or underneath every cell of a sheet.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_path: string,
+  cols?: number, rows?: number,
+  offset_x?: number,                       // -256..256, default 2
+  offset_y?: number,                       // -256..256, default 2
+  color?: "#rrggbb",                       // default "#000000"
+  opacity?: number,                        // 0..1, default 0.5
+  blur?: number,                           // 0..64 px box blur, default 0
+  alpha_threshold?: number,                // 0..255, default 8
+  overflow?: "expand" | "clip"             // default "expand"
+}
+```
+
+Writes PNG. Returns the same shape as `sprite_add_outline`.
+
+Notes for both tools:
+
+- A pixel counts as sprite when its alpha is above `alpha_threshold`. The sprite is composited on top of the outline, so anti-aliased edges blend over it instead of being cut.
+- `connectivity: 8` grows diagonally (square corners); `4` grows in Manhattan steps (mitred corners). They differ visibly on diagonal edges.
+- `overflow: "expand"` pads the canvas by the margin the effect needs so nothing is cropped; `"clip"` keeps the source dimensions. The returned `margin` is `{left, top, right, bottom}` and is all zeros under `"clip"`.
+- On a sheet the margin is computed once from the options — never from the pixels — and applied to every cell, so the output grid stays uniform.
+- The two tools are separate passes. Chaining `sprite_add_outline` into `sprite_add_shadow` works and casts the shadow from the outlined silhouette, but each pass expands the canvas on its own, so the result is padded twice. The web app applies both in a single pass with one margin.
+- See the [Outline & Shadow page](/docs/web/outline) for what each control does.
 
 ## `sprite_pack_atlas`
 

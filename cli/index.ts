@@ -17,6 +17,7 @@ import { getCliVersion } from "./lib/version";
 import { registerCollisionCommand } from "./commands/collision";
 import { registerPixelateCommand } from "./commands/pixelate";
 import { registerNormalMapCommand } from "./commands/normal-map";
+import { registerOutlineCommand } from "./commands/outline";
 import { registerPaletteCommand } from "./commands/palette";
 import { registerAtlasCommand } from "./commands/atlas";
 import { registerPivotCommand } from "./commands/pivot";
@@ -60,6 +61,7 @@ program.addHelpText(
     "  chroma     chroma-key background removal (alias: remove-bg)      (PNG)",
     "  pixelate   downscale + quantize + dither + palette-snap           (PNG)",
     "  normal-map alpha/luminance → tangent-space normals               (PNG)",
+    "  outline    add an outer/inner outline and/or drop shadow            (PNG)",
     "  gif        animated GIF from sheet                               (GIF)",
     "",
     "Any <input> may be '-' to read PNG bytes from stdin. Any -o target may be '-'",
@@ -95,6 +97,7 @@ registerPaletteCommand(program);
 registerChromaCommand(program);
 registerPixelateCommand(program);
 registerNormalMapCommand(program);
+registerOutlineCommand(program);
 registerAtlasCommand(program);
 registerGifCommand(program);
 

@@ -32,6 +32,7 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/tags", label: "Animation tags" },
       { href: "/docs/web/pixelate", label: "Pixelate" },
       { href: "/docs/web/normal-map", label: "Normal map" },
+      { href: "/docs/web/outline", label: "Outline & shadow" },
       { href: "/docs/web/palette", label: "Palette" },
       { href: "/docs/web/atlas", label: "Atlas packer" },
       { href: "/docs/web/gif", label: "GIF export" },

@@ -6,12 +6,12 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, palette swaps, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, outlines and drop shadows, palette swaps, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
 - **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 14 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **CLI (`sprite-tools`)** — 15 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -26,6 +26,7 @@ Good starting points:
 - [Background Removal](https://sprites.trebeljahr.com/background-removal) — chroma-key a flat background out of every frame.
 - [Collision](https://sprites.trebeljahr.com/collision) — trace tight polygons for physics engines.
 - [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art.
+- [Outline & Shadow](https://sprites.trebeljahr.com/outline) — add an outline and a drop shadow to a sprite or a sheet.
 - [Atlas](https://sprites.trebeljahr.com/atlas) — pack loose sprites into one PNG plus JSON.
 - [Docs](https://sprites.trebeljahr.com/docs) — quickstart, CLI reference, MCP setup, schemas, and algorithm notes.
 
@@ -50,6 +51,9 @@ sprite-tools chroma hero.png --color '#00ff00' --trim -o hero-cut.png
 
 # Turn any sprite into Game Boy pixel art
 sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero-gb.png
+
+# Add a 2px outline and a soft drop shadow
+sprite-tools outline hero.png --width 2 --shadow --shadow-blur 2 -o hero-fx.png
 
 # Derive a normal map for 2D lighting
 sprite-tools normal-map hero.png -o hero-normal.png
@@ -88,15 +92,15 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 14 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 16 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `atlas`, `gif`.
+**CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
 
-**MCP**: same 14 tools with typed Zod input schemas.
+**MCP**: 16 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`).
 
 ## Docs
 

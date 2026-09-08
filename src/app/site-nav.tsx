@@ -65,6 +65,7 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
     items: [
       { href: "/pixelate", label: "Pixelate", hint: "downscale + quantize" },
       { href: "/normal-map", label: "Normals", hint: "tangent-space normal map" },
+      { href: "/outline", label: "Outline", hint: "outline + drop shadow" },
       { href: "/palette", label: "Palette", hint: "extract + swap colors" },
     ],
   },

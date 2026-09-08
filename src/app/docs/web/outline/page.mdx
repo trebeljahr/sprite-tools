@@ -1,0 +1,88 @@
+export const metadata = {
+  title: "Outline & shadow — sprite-tools",
+  description:
+    "Add a pixel-exact outer or inner outline and a drop shadow to a sprite or a whole sheet in the browser, with control over thickness, connectivity, alpha threshold, and canvas overflow.",
+};
+
+# Outline & Shadow
+
+[Open Outline & Shadow](/outline)
+
+Outline & Shadow adds two of the most common sprite effects — a border around the silhouette and a shadow underneath it — in one pass. Both read the same alpha data, so an outline and a shadow can be enabled together and the shadow is cast from the outlined shape rather than from the bare sprite.
+
+## How it works
+
+Every pixel is classified as **sprite** or **not sprite** by a single test: alpha above the **alpha threshold**. A bounded breadth-first search then measures how many steps each pixel is from the nearest sprite pixel. The outer band, the inner band, and the shadow silhouette are all read off that one distance field.
+
+This is a raster measurement, not a traced polygon. It covers every disconnected island and every interior hole at exact pixel distances — a sprite with a gap in the middle gets an outline around the gap too.
+
+## Outer vs inner
+
+- **Outer** grows past the silhouette. Pixels 1 to *width* steps outside the sprite are painted with the outline colour, and the sprite is composited on top. The sprite gets bigger, so the canvas has to grow (see [overflow](#overflow-expand-vs-clip)).
+- **Inner** eats into the silhouette. Pixels 1 to *width* steps inside the sprite are replaced with the outline colour. The bounding box never changes and no margin is ever needed. Use it for a rim light, a bevel edge, or a border on a sprite that has to stay exactly one cell wide.
+
+## Connectivity: 4 vs 8
+
+Connectivity is how the distance field counts a step, and it is the only control that changes the *shape* of a corner.
+
+- **8** (default) counts diagonal neighbours as one step, so the band grows in squares — Chebyshev distance. Corners come out square and diagonal edges get a visually thicker band, because a diagonal run of pixels grows in both directions at once.
+- **4** counts only up/down/left/right, so the band grows in diamonds — Manhattan distance. Corners come out mitred and diagonal edges get a *thinner* band, because a diagonal run only grows one axis at a time.
+
+On a straight horizontal or vertical edge the two are identical — a width of 3 measures 3px either way. On a 45° edge they diverge in opposite directions: measured perpendicular to the edge, 8 overshoots to roughly `width`×√2 and 4 undershoots to roughly `width`/√2. Neither is the "even thickness" option, so pick by look rather than by number: at width 3, connectivity 8 fills the whole square block past a corner while connectivity 4 leaves the corner pixels empty. For pixel art, 4 usually reads as the lighter, more hand-drawn outline; 8 is the heavier, more uniform-looking one.
+
+## Alpha threshold and anti-aliased edges
+
+The **alpha threshold** (0–255, default 8) is the cutoff for mask membership: a pixel is sprite when its alpha is strictly above it. It exists because most non-pixel-art sprites have a fringe of partially transparent pixels around the edge, and where the outline starts depends entirely on where you decide that fringe stops being sprite.
+
+The order in which things are drawn matters here. The outline band is painted **first**, and the original sprite is composited over it source-over. So a soft edge pixel with alpha 40 does not get erased and does not punch a hole — it blends over the outline colour underneath it. The result is a smooth transition from sprite to outline instead of a hard aliased cut or a dark halo.
+
+- **Raise the threshold** to pull the outline inward, past the soft pixels. At a high threshold only solidly opaque pixels count as sprite, so the band starts under the fringe and the AA pixels sit on top of it.
+- **Lower the threshold** to hug the visible edge. At 1, almost any non-zero pixel counts, so the band starts outside the entire fringe.
+
+The default of 8 ignores near-invisible pixels while treating anything meaningfully visible as sprite. For pixel art with hard edges the threshold makes no visible difference at all — there are no in-between pixels for it to catch.
+
+## Drop shadow
+
+The shadow silhouette is the **final opaque footprint** — the sprite mask, grown by the outer outline width when an outer outline is enabled — so a shadow under an outlined sprite matches the outlined shape, not the shape inside it.
+
+That silhouette is then translated by the offset, blurred, tinted, and drawn underneath everything. Composite order, bottom to top: **shadow, outer outline, sprite, inner outline**. An inner band is drawn last, over the sprite edge — so at a reduced opacity it blends with the sprite pixels underneath rather than disappearing behind them.
+
+- **Offset X / Y** — where the shadow lands, in pixels. Negative values move it left and up.
+- **Colour** and **opacity** (default 0.5) — flat tint. A shadow is usually better slightly transparent than fully black.
+- **Blur** — box-blur radius in pixels. Three separable passes approximate a gaussian; the total spread is exactly the radius you ask for, so the reserved margin fits it precisely. 0 gives a hard-edged silhouette, which is the right look for pixel art.
+
+The shadow can be used on its own: turn the outline off and only the shadow is drawn.
+
+## Overflow: expand vs clip
+
+An outer outline and a drop shadow both make the sprite bigger than its source canvas. There are two ways to handle that:
+
+- **Expand** (default) pads the canvas by exactly the margin the effect needs, so nothing is cropped. Silently cutting off part of someone's art is not an acceptable default, so this is what happens unless you ask otherwise. The margin is reported alongside the export, along with where the source sprite's origin ended up.
+- **Clip** keeps the original dimensions and lets the effect run off the edge. Pick it when the frame size is fixed — a sheet that has to keep matching an engine's cell size, an atlas slot, a tile that must stay 32×32. You will lose whatever falls outside.
+
+The margin is computed **from the options only**, never from the pixels. An outer outline contributes its width on all four sides; a shadow contributes the outline footprint plus its blur plus its offset on the side it moves toward; an inner outline contributes nothing. Because that calculation ignores the image content, every frame of a sheet expands by the same amount — the grid stays uniform and the cells stay aligned.
+
+## Sheets
+
+In sheet mode the source is split into cells, the margin is computed once, and every frame is rendered with that shared margin before being stitched back together. Columns and rows are auto-detected from the image and shown as a hint; correct them if the guess is off.
+
+Both effects run synchronously on the main thread — they are a distance transform and a blur over one frame, fast enough that the preview updates as you drag a slider.
+
+## Limits
+
+- The outline is a flat colour band, not a stroke with a gradient or a texture.
+- Width is measured in output pixels. On an upscaled pixel-art sprite, a width of 1 is one *screen* pixel, not one art pixel — scale the width to match, or apply the outline before upscaling.
+- The shadow is a silhouette, not a projection. There is no perspective, skew, or height falloff.
+- A sprite that already touches the edge of its cell and an inner outline will get a band along that edge, since the canvas boundary counts as outside.
+
+## CLI and MCP equivalents
+
+The same code runs in the CLI on a single image or a whole sheet:
+
+```bash
+sprite-tools outline hero.png --width 2 --color '#1a1a2e' -o hero-outlined.png
+sprite-tools outline hero.png --style inner --width 1 --color '#ffffff' -o hero-rim.png
+sprite-tools outline hero.png --no-outline --shadow --shadow-offset 3,4 --shadow-blur 2 -o hero-shadow.png
+```
+
+See the [CLI reference](/docs/cli/reference) for every flag. Over MCP the two effects are split into `sprite_add_outline` and `sprite_add_shadow` — see the [tool catalog](/docs/mcp/tools). The defaults match this page's defaults exactly.

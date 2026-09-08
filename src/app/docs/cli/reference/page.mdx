@@ -186,6 +186,55 @@ sprite-tools normal-map <input>
   [-o FILE]                        # PNG
 ```
 
+## `outline`
+
+```
+sprite-tools outline <input>
+  [--cols N] [--rows N]            # auto-detected if omitted
+  [--style outer|inner]            # default: outer
+  [--width N]                      # outline thickness in px, default 1
+  [--color #RRGGBB]                # default: #000000
+  [--opacity N]                    # 0..1, default 1
+  [--connectivity 4|8]             # growth neighbourhood, default 8
+  [--alpha-threshold N]            # 0..255, default 8
+  [--overflow expand|clip]         # default: expand
+  [--no-outline]                   # skip the outline (shadow only)
+  [--shadow]                       # enable the drop shadow
+  [--shadow-offset X,Y]            # default: 2,2
+  [--shadow-color #RRGGBB]         # default: #000000
+  [--shadow-opacity N]             # 0..1, default 0.5
+  [--shadow-blur N]                # box-blur radius in px, default 0
+  [--json FILE]                    # optional metadata JSON
+  [-o FILE]                        # output PNG (default: stdout)
+```
+
+Adds an outline and/or a drop shadow. Both come from the same pass: a bounded multi-source breadth-first search over the alpha mask gives the distance of every pixel from the sprite, and the outer band, the inner band, and the shadow silhouette are all read off it.
+
+A pixel counts as sprite when its alpha is **above** `--alpha-threshold`. `--style outer` colours the pixels 1..`--width` steps outside that mask and composites the sprite back on top, so anti-aliased edge pixels blend over the outline instead of being cut. `--style inner` replaces the pixels 1..`--width` steps inside the mask and never changes the canvas size. `--connectivity 8` grows diagonally (square corners); `4` grows in Manhattan steps (mitred corners).
+
+The shadow is the final opaque footprint — the sprite grown by the outer outline, when one is enabled — translated by `--shadow-offset`, box-blurred by `--shadow-blur`, tinted, and drawn underneath everything. Composite order is shadow, outer outline, sprite, inner outline — an inner band is drawn last, over the sprite edge.
+
+`--overflow expand` (the default) grows the canvas by exactly the margin the effect needs so nothing is cropped; `--overflow clip` keeps the source dimensions and lets the effect run off the edge. For a sheet the margin is computed once from the options and applied to every cell, so the grid stays uniform.
+
+JSON shape:
+
+```json
+{ "source", "sourceWidth", "sourceHeight",
+  "grid": {cols,rows},
+  "frameWidth", "frameHeight", "outputWidth", "outputHeight",
+  "margin": {left,top,right,bottom},
+  "options": {...} }
+```
+
+```bash
+sprite-tools outline hero.png --width 2 --color '#1a1a2e' -o hero-outlined.png
+sprite-tools outline hero.png --style inner --width 1 --color '#ffffff' -o hero-rim.png
+sprite-tools outline hero.png --no-outline --shadow --shadow-offset 3,4 --shadow-blur 2 -o hero-shadow.png
+sprite-tools outline sheet.png --cols 8 --rows 4 --width 1 --shadow --overflow clip -o sheet-fx.png
+```
+
+Defaults match the web app's [Outline & Shadow](/docs/web/outline) page.
+
 ## `atlas`
 
 ```

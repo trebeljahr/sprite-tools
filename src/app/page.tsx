@@ -14,6 +14,7 @@ import {
   Layers,
   Palette as PaletteIcon,
   Package,
+  PenTool,
   Scissors,
   Sparkles,
   Terminal,
@@ -59,6 +60,12 @@ const TOOLS = [
     label: "Normals",
     icon: Compass,
     blurb: "Alpha/luminance → tangent-space normal map for 2D dynamic lighting.",
+  },
+  {
+    href: "/outline",
+    label: "Outline",
+    icon: PenTool,
+    blurb: "Add an outer or inner outline and a drop shadow in one pass.",
   },
   {
     href: "/palette",
@@ -155,7 +162,7 @@ export default function HomePage() {
             <div>
               <CardTitle className="text-base">CLI</CardTitle>
               <CardDescription className="text-xs">
-                14 composable subcommands. Pipe-friendly.
+                15 composable subcommands. Pipe-friendly.
               </CardDescription>
             </div>
           </CardHeader>

@@ -25,6 +25,13 @@ import { pixelate, hexToRgb } from "../src/lib/pixel-art/pixelate";
 import { paletteById, PALETTES } from "../src/lib/pixel-art/palettes";
 import { generateNormalMap } from "../src/lib/normal-map/normal-map";
 import {
+  applyOutlineFx,
+  requiredMargin,
+  type Connectivity,
+  type Margin,
+  type OutlineFxConfig,
+} from "../src/lib/outline/outline-fx";
+import {
   extractPalette,
   applyPaletteSwap,
   rgbToHex,
@@ -49,6 +56,8 @@ const PIVOT_PRESETS: Record<string, { nx: number; ny: number }> = {
 const PRESET_IDS = Object.keys(PIVOT_PRESETS) as (keyof typeof PIVOT_PRESETS)[];
 
 const HEX_COLOR = /^#?[0-9a-fA-F]{6}$/;
+
+const ZERO_FX_MARGIN: Margin = { left: 0, top: 0, right: 0, bottom: 0 };
 
 function jsonResult(payload: unknown) {
   return {
@@ -699,6 +708,169 @@ export function registerAllTools(server: McpServer) {
     },
   );
 
+  // ------- outline -------
+  server.registerTool(
+    "sprite_add_outline",
+    {
+      description:
+        "Add a pixel-exact outer or inner outline to a sprite or every cell of a sheet. 'outer' grows a band of `width` pixels around the silhouette and composites the sprite on top, so anti-aliased edges blend over it instead of being cut; 'inner' recolors the band just inside the edge and never changes the size. Connectivity 4 gives mitred corners, 8 gives square ones. Every interior hole and disconnected island is outlined, not just the outer contour.",
+      inputSchema: {
+        input_path: z.string(),
+        output_path: z.string(),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        style: z
+          .enum(["outer", "inner"])
+          .default("outer")
+          .describe("'outer' draws around the silhouette; 'inner' draws inside it"),
+        width: z.number().int().min(0).max(64).default(1).describe("Band thickness in pixels"),
+        color: z.string().regex(HEX_COLOR, "expected a hex colour like #000000").default("#000000"),
+        opacity: z.number().min(0).max(1).default(1),
+        connectivity: z
+          .union([z.literal(4), z.literal(8)])
+          .default(8)
+          .describe("4 = Manhattan growth (mitred corners), 8 = Chebyshev (square corners)"),
+        alpha_threshold: z
+          .number()
+          .int()
+          .min(0)
+          .max(255)
+          .default(8)
+          .describe("Alpha above which a pixel counts as sprite; raise it to skip soft edges"),
+        overflow: z
+          .enum(["expand", "clip"])
+          .default("expand")
+          .describe("'expand' grows the canvas so nothing is cropped; 'clip' keeps the cell size"),
+      },
+    },
+    ({
+      input_path,
+      output_path,
+      cols,
+      rows,
+      style,
+      width,
+      color,
+      opacity,
+      connectivity,
+      alpha_threshold,
+      overflow,
+    }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const cfg: OutlineFxConfig = {
+        outline: {
+          style,
+          width,
+          color,
+          opacity,
+          connectivity: connectivity as Connectivity,
+          alphaThreshold: alpha_threshold,
+        },
+        overflow,
+      };
+      // One margin for the whole sheet: per-frame margins would produce
+      // differently sized cells that no longer stitch back into a grid.
+      const shared = requiredMargin(cfg);
+      const results = frames.map((f) => applyOutlineFx(f, { ...cfg, margin: shared }));
+      const processed = results.map(fxToImageData);
+
+      const out =
+        processed.length === 1 ? processed[0] : stitchSheet(processed, grid.cols, grid.rows);
+      mkdirSync(dirname(output_path), { recursive: true });
+      savePng(out, output_path);
+      return jsonResult({
+        source: input_path,
+        output_path,
+        grid,
+        output_width: out.width,
+        output_height: out.height,
+        margin: results[0]?.margin ?? ZERO_FX_MARGIN,
+        options: { style, width, color, opacity, connectivity, alpha_threshold, overflow },
+      });
+    },
+  );
+
+  // ------- shadow -------
+  server.registerTool(
+    "sprite_add_shadow",
+    {
+      description:
+        "Drop a shadow behind a sprite or every cell of a sheet. The silhouette is translated by (offset_x, offset_y), box-blurred by `blur`, tinted and composited beneath the sprite. Positive offsets move right and down.",
+      inputSchema: {
+        input_path: z.string(),
+        output_path: z.string(),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        offset_x: z.number().int().min(-256).max(256).default(2),
+        offset_y: z.number().int().min(-256).max(256).default(2),
+        color: z.string().regex(HEX_COLOR, "expected a hex colour like #000000").default("#000000"),
+        opacity: z.number().min(0).max(1).default(0.5),
+        blur: z
+          .number()
+          .int()
+          .min(0)
+          .max(64)
+          .default(0)
+          .describe("Blur radius in pixels; 0 = hard"),
+        alpha_threshold: z
+          .number()
+          .int()
+          .min(0)
+          .max(255)
+          .default(8)
+          .describe("Alpha above which a pixel counts as sprite"),
+        overflow: z
+          .enum(["expand", "clip"])
+          .default("expand")
+          .describe("'expand' grows the canvas so nothing is cropped; 'clip' keeps the cell size"),
+      },
+    },
+    ({
+      input_path,
+      output_path,
+      cols,
+      rows,
+      offset_x,
+      offset_y,
+      color,
+      opacity,
+      blur,
+      alpha_threshold,
+      overflow,
+    }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const cfg: OutlineFxConfig = {
+        shadow: {
+          offsetX: offset_x,
+          offsetY: offset_y,
+          color,
+          opacity,
+          blur,
+          alphaThreshold: alpha_threshold,
+        },
+        overflow,
+      };
+      // Same shared margin as the outline tool, for the same reason.
+      const shared = requiredMargin(cfg);
+      const results = frames.map((f) => applyOutlineFx(f, { ...cfg, margin: shared }));
+      const processed = results.map(fxToImageData);
+
+      const out =
+        processed.length === 1 ? processed[0] : stitchSheet(processed, grid.cols, grid.rows);
+      mkdirSync(dirname(output_path), { recursive: true });
+      savePng(out, output_path);
+      return jsonResult({
+        source: input_path,
+        output_path,
+        grid,
+        output_width: out.width,
+        output_height: out.height,
+        margin: results[0]?.margin ?? ZERO_FX_MARGIN,
+        options: { offset_x, offset_y, color, opacity, blur, alpha_threshold, overflow },
+      });
+    },
+  );
+
   // ------- atlas -------
   server.registerTool(
     "sprite_pack_atlas",
@@ -914,6 +1086,13 @@ function formatPattern(pattern: string, n: number): string {
     if (pad) return s.padStart(parseInt(pad, 10), " ");
     return s;
   });
+}
+
+// applyOutlineFx returns a bare buffer; the rest of the pipeline speaks ImageData.
+function fxToImageData(res: { width: number; height: number; data: Uint8ClampedArray }): ImageData {
+  const out = new ImageData(res.width, res.height);
+  out.data.set(res.data);
+  return out;
 }
 
 function sliceRect(
