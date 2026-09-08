@@ -1,7 +1,7 @@
 export const metadata = {
   title: "GIF export — sprite-tools",
   description:
-    "Export sprite sheet animations as animated GIF or WebM previews with scaling, alpha cutoff, and playback controls.",
+    "Export sprite sheet animations as animated GIF or WebM previews with scaling, alpha cutoff, per-frame timing, and playback controls.",
 };
 
 # GIF export
@@ -25,6 +25,22 @@ GIF is encoded client-side via [`gifenc`](https://github.com/mattdesl/gifenc) �
 - **Alpha cutoff** — pixels with alpha above this stay opaque; below become fully transparent.
 - **Reverse** — play frames last-to-first.
 - **Pingpong** — forward then reverse (without duplicating endpoints).
+- **Per-frame timing** — **Load tags JSON** reads per-frame hold times out of a `tags` or `meta` JSON; **Drop** goes back to uniform FPS.
+
+## Per-frame timing
+
+**FPS** gives every frame the same delay. If the sheet was timed in the [Tags tool](/docs/web/tags) — key poses held longer than in-betweens — export it with those timings instead: **Load tags JSON** reads the `frameDurations` array out of the exported `tags` (or `meta`) JSON and applies it to this sheet.
+
+- Frames with an explicit hold use it. Frames with `null` — and every frame if the JSON has no `frameDurations` at all — use the **FPS** control, so FPS keeps working as the fallback rate.
+- Durations are indexed by sheet frame, so the JSON has to come from the same sheet. Loading a file whose frame count differs pads or truncates the array, which is almost never what you want.
+- **Reverse** and **pingpong** reorder the frames but do not change any frame's hold: a frame held 250 ms is held 250 ms again on the way back.
+- The panel names the loaded file and reports how many frames hold for their own time, so you can tell at a glance whether it took effect. **Drop** removes the timings and returns every frame to **FPS**.
+
+### Timing is rounded
+
+GIF stores frame delay in hundredths of a second. Every duration is rounded to the nearest **10 ms** and floored at **20 ms**, because browsers clamp shorter delays up to roughly 100 ms. A 125 ms hold is written as 130 ms; a 5 ms hold becomes 20 ms.
+
+That is a property of the GIF format, not of this exporter — the timing is close, not exact. The tags JSON remains the precise record; export it alongside the GIF if the exact numbers matter.
 
 ## WebM alternative
 
@@ -37,3 +53,4 @@ Use whichever your target platform prefers.
 - For a smooth loop, use **pingpong** on an idle animation — no hard snap at the end.
 - If the GIF looks washed out, alpha binarization is probably eating soft edges. Lower **Alpha cutoff** (try 64) to keep more of the anti-aliasing.
 - Scale 2× or 3× for social media; 1× for in-game preview captures.
+- Same thing on the command line: `sprite-tools gif hero.png --tags-json hero-tags.json`. See the [CLI reference](/docs/cli/reference#gif).

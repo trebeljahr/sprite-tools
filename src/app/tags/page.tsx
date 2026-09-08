@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Tags as TagsIcon,
+  Timer,
   Trash2,
   Upload,
   Wand2,
@@ -27,6 +28,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import {
+  type FrameDurations,
+  fpsToDurationMs,
+  normalizeFrameDurations,
+  resolveFrameDurationMs,
+  resolveSequenceDurationsMs,
+  totalDurationMs,
+} from "@/lib/animation/durations";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
@@ -75,6 +84,27 @@ function newTagId(): string {
   return `t${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// Frame indices a tag plays, in order. Shared by playback and the per-tag
+// total-duration readout so both agree on what pingpong actually costs.
+function tagSequence(tag: Tag, frameCount: number): number[] {
+  if (frameCount === 0) return [];
+  const lo = Math.max(0, Math.min(tag.from, tag.to));
+  const hi = Math.min(frameCount - 1, Math.max(tag.from, tag.to));
+  if (hi < lo) return [];
+  const fwd = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  if (tag.direction === "reverse") return [...fwd].reverse();
+  if (tag.direction === "pingpong") return [...fwd, ...fwd.slice(1, -1).reverse()];
+  return fwd;
+}
+
+// Durations are stored one-per-frame globally, so the array has to track the
+// frame count: pad with `null` (inherit the tag's fps), truncate what is gone.
+function resizeDurations(prev: FrameDurations, frameCount: number): FrameDurations {
+  const next: FrameDurations = new Array(frameCount).fill(null);
+  for (let i = 0; i < Math.min(prev.length, frameCount); i++) next[i] = prev[i];
+  return next;
+}
+
 export default function TagsPage() {
   const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("sheet");
@@ -84,6 +114,8 @@ export default function TagsPage() {
 
   const [frames, setFrames] = useState<TagFrame[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  // One entry per frame; `null` = inherit the playing tag's fps.
+  const [frameDurations, setFrameDurations] = useState<FrameDurations>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +147,7 @@ export default function TagsPage() {
       await setSharedSource(file);
       setCurrentIndex(0);
       setTags([]);
+      setFrameDurations([]);
       hasAutoFittedRef.current = false;
 
       try {
@@ -212,6 +245,57 @@ export default function TagsPage() {
   }, [sourceFile, effectiveCols, effectiveRows]);
 
   // -----------------------------------------------------------------
+  // Frame durations
+  // -----------------------------------------------------------------
+  // Re-slicing the sheet (different cols/rows) changes the frame count; keep
+  // the durations array the same length so index i always means frame i.
+  useEffect(() => {
+    setFrameDurations((prev) =>
+      prev.length === frames.length ? prev : resizeDurations(prev, frames.length),
+    );
+  }, [frames.length]);
+
+  // A re-slice can shrink the sheet under existing tags; clamp their ranges so
+  // no tag points past the last frame.
+  useEffect(() => {
+    if (frames.length === 0) return;
+    const last = frames.length - 1;
+    setTags((prev) => {
+      let changed = false;
+      const next = prev.map((t) => {
+        const from = Math.max(0, Math.min(last, t.from));
+        const to = Math.max(0, Math.min(last, t.to));
+        if (from === t.from && to === t.to) return t;
+        changed = true;
+        return { ...t, from, to };
+      });
+      return changed ? next : prev;
+    });
+  }, [frames.length]);
+
+  const setRangeDuration = useCallback(
+    (from: number, to: number, ms: number | null) => {
+      setFrameDurations((prev) => {
+        const next = resizeDurations(prev, frames.length);
+        const lo = Math.max(0, Math.min(from, to));
+        const hi = Math.min(frames.length - 1, Math.max(from, to));
+        // Round first: a sub-millisecond hold rounds to 0, which is not a
+        // duration — store it as null (auto) rather than a bogus explicit 0.
+        const rounded = ms !== null && Number.isFinite(ms) ? Math.round(ms) : null;
+        const value = rounded !== null && rounded > 0 ? rounded : null;
+        for (let i = lo; i <= hi; i++) next[i] = value;
+        return next;
+      });
+    },
+    [frames.length],
+  );
+
+  const setFrameDuration = useCallback(
+    (index: number, ms: number | null) => setRangeDuration(index, index, ms),
+    [setRangeDuration],
+  );
+
+  // -----------------------------------------------------------------
   // Canvas render
   // -----------------------------------------------------------------
   const currentFrame = frames[currentIndex];
@@ -237,17 +321,8 @@ export default function TagsPage() {
     }
     if (playingTagId) {
       const t = tags.find((x) => x.id === playingTagId);
-      if (!t || frames.length === 0) return [];
-      const lo = Math.max(0, Math.min(t.from, t.to));
-      const hi = Math.min(frames.length - 1, Math.max(t.from, t.to));
-      if (t.direction === "reverse") {
-        return Array.from({ length: hi - lo + 1 }, (_, i) => hi - i);
-      } else if (t.direction === "pingpong") {
-        const fwd = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-        const rev = fwd.slice(1, -1).reverse();
-        return [...fwd, ...rev];
-      }
-      return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+      if (!t) return [];
+      return tagSequence(t, frames.length);
     }
     return [];
   }, [isPlayingAll, playingTagId, tags, frames.length]);
@@ -258,37 +333,63 @@ export default function TagsPage() {
     return t?.fps ?? globalFps;
   }, [isPlayingAll, playingTagId, tags, globalFps]);
 
+  // Hold time for every step of the sequence. With no explicit durations every
+  // entry is fpsToDurationMs(playbackFps), i.e. the old uniform interval.
+  const playbackDelays = useMemo(
+    () => resolveSequenceDurationsMs(playbackSequence, frameDurations, playbackFps),
+    [playbackSequence, frameDurations, playbackFps],
+  );
+
   useEffect(() => {
     if (playbackSequence.length === 0) {
-      if (playbackRef.current) {
-        window.clearInterval(playbackRef.current);
+      if (playbackRef.current !== null) {
+        window.clearTimeout(playbackRef.current);
         playbackRef.current = null;
       }
       return;
     }
-    // Step through the sequence. Keep currentIndex in sync.
+    // Step through the sequence, scheduling each step by the hold time of the
+    // frame currently on screen. Keep currentIndex in sync.
     let step = 0;
     // Start from where the tag begins rather than continuing a stale index
     setCurrentIndex(playbackSequence[0]);
-    playbackRef.current = window.setInterval(
-      () => {
+    const schedule = () => {
+      const delay = Math.max(16, Math.round(playbackDelays[step] ?? 100));
+      playbackRef.current = window.setTimeout(() => {
         step = (step + 1) % playbackSequence.length;
         setCurrentIndex(playbackSequence[step]);
-      },
-      Math.max(16, Math.round(1000 / Math.max(1, playbackFps))),
-    );
+        schedule();
+      }, delay);
+    };
+    schedule();
     return () => {
-      if (playbackRef.current) {
-        window.clearInterval(playbackRef.current);
+      if (playbackRef.current !== null) {
+        window.clearTimeout(playbackRef.current);
         playbackRef.current = null;
       }
     };
-  }, [playbackSequence, playbackFps]);
+  }, [playbackSequence, playbackDelays]);
 
   const stopPlayback = () => {
     setPlayingTagId(null);
     setIsPlayingAll(false);
   };
+
+  // Which rate an "auto" frame inherits right now: the playing tag, else the
+  // first tag whose range covers the current frame, else the global default.
+  const timingTag = useMemo(() => {
+    if (playingTagId) return tags.find((t) => t.id === playingTagId) ?? null;
+    return (
+      tags.find(
+        (t) => currentIndex >= Math.min(t.from, t.to) && currentIndex <= Math.max(t.from, t.to),
+      ) ?? null
+    );
+  }, [playingTagId, tags, currentIndex]);
+  const timingFps = timingTag?.fps ?? globalFps;
+  const timingBaseMs = fpsToDurationMs(timingFps);
+  const currentDurationMs = resolveFrameDurationMs(frameDurations, currentIndex, timingFps);
+  const currentExplicitMs = frameDurations[currentIndex] ?? null;
+  const heldCount = frameDurations.reduce<number>((n, d) => (d === null ? n : n + 1), 0);
 
   // -----------------------------------------------------------------
   // Viewport
@@ -354,12 +455,16 @@ export default function TagsPage() {
   const jsonPayload = useMemo(() => {
     if (frames.length === 0 || !sourceFile) return null;
     const f0 = frames[0];
+    // Omitted entirely when no frame has an explicit hold, so a sheet that
+    // never touches durations exports byte-identical JSON to before.
+    const durations = normalizeFrameDurations(frameDurations, frames.length);
     return {
       source: sourceFile.name,
       frameWidth: f0.width,
       frameHeight: f0.height,
       grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
       frameCount: frames.length,
+      ...(durations ? { frameDurations: durations } : {}),
       tags: tags.map((t) => ({
         name: t.name,
         from: t.from,
@@ -368,7 +473,7 @@ export default function TagsPage() {
         fps: t.fps,
       })),
     };
-  }, [frames, tags, sourceFile, sourceMode, sheetCols, sheetRows]);
+  }, [frames, tags, frameDurations, sourceFile, sourceMode, sheetCols, sheetRows]);
 
   const downloadJson = () => {
     if (!jsonPayload || !sourceFile) return;
@@ -409,12 +514,17 @@ export default function TagsPage() {
         done: tags.length > 0,
       },
       {
+        label: "Hold your key poses",
+        hint: "Give a frame its own hold in ms — the rest inherit the tag's FPS.",
+        done: heldCount > 0,
+      },
+      {
         label: "Download tags JSON",
         hint: "Save the Aseprite-compatible tags JSON.",
         done: hasDownloaded,
       },
     ],
-    [sourceUrl, tags.length, hasDownloaded],
+    [sourceUrl, tags.length, heldCount, hasDownloaded],
   );
   const tutorial = useTutorial({ id: "tags", steps: tutorialSteps });
 
@@ -746,6 +856,135 @@ export default function TagsPage() {
             </CardContent>
           </Card>
 
+          {frames.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Timer className="w-4 h-4" /> Timing
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Hold times are stored per frame for the whole sheet. A frame left on{" "}
+                  <span className="italic">auto</span> inherits the FPS of whichever tag plays it —
+                  right now {timingTag ? `“${timingTag.name}”` : "the global default"} at{" "}
+                  {timingFps} FPS ({timingBaseMs}ms). Cell width shows the rhythm.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {frames.map((f, i) => {
+                    const explicit = frameDurations[i] ?? null;
+                    const ms = resolveFrameDurationMs(frameDurations, i, timingFps);
+                    const width = Math.round(
+                      Math.max(26, Math.min(88, (26 * ms) / Math.max(1, timingBaseMs))),
+                    );
+                    return (
+                      <button
+                        type="button"
+                        key={f.index}
+                        style={{ width }}
+                        title={
+                          explicit === null
+                            ? `Frame ${i} — auto (${ms}ms at ${timingFps} FPS)`
+                            : `Frame ${i} — held ${explicit}ms`
+                        }
+                        onClick={() => {
+                          stopPlayback();
+                          setCurrentIndex(i);
+                        }}
+                        className={cn(
+                          "shrink-0 h-12 rounded-sm border flex flex-col items-center justify-center gap-1 px-0.5 transition-colors",
+                          i === currentIndex
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <span className="text-[10px] font-mono leading-none">{i}</span>
+                        <span
+                          className={cn(
+                            "text-[9px] font-mono leading-none",
+                            explicit === null && "italic opacity-60",
+                          )}
+                        >
+                          {explicit === null ? "auto" : explicit}
+                        </span>
+                        <span
+                          className={cn(
+                            "block h-0.5 w-4/5 rounded-full",
+                            explicit === null ? "bg-transparent" : "bg-primary",
+                          )}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label className="text-xs">Frame #{currentIndex}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={currentExplicitMs ?? ""}
+                    placeholder={`${currentDurationMs} (auto)`}
+                    // Playback moves currentIndex every tick, which would send
+                    // keystrokes to whichever frame is on screen and reset the
+                    // field mid-typing. Pin the frame the moment it is focused.
+                    onFocus={stopPlayback}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      if (raw === "") {
+                        setFrameDuration(currentIndex, null);
+                        return;
+                      }
+                      const n = Number(raw);
+                      if (Number.isFinite(n) && n > 0) {
+                        setFrameDuration(currentIndex, Math.min(60000, n));
+                      }
+                    }}
+                    className="h-8 text-xs w-24"
+                  />
+                  <span className="text-[10px] text-muted-foreground">ms</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[10px]"
+                    disabled={currentExplicitMs === null}
+                    onClick={() => setFrameDuration(currentIndex, null)}
+                  >
+                    Auto
+                  </Button>
+                  <div className="flex-1" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[10px]"
+                    title={`Hold every frame for ${currentDurationMs}ms`}
+                    onClick={() => setRangeDuration(0, frames.length - 1, currentDurationMs)}
+                  >
+                    Apply to all
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[10px]"
+                    disabled={heldCount === 0}
+                    onClick={() => setRangeDuration(0, frames.length - 1, null)}
+                  >
+                    Clear all
+                  </Button>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground">
+                  {heldCount === 0
+                    ? "No explicit holds — the export omits frameDurations entirely."
+                    : `${heldCount} of ${frames.length} frame${
+                        frames.length === 1 ? "" : "s"
+                      } hold an explicit duration.`}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
               <div>
@@ -772,8 +1011,10 @@ export default function TagsPage() {
                       tag={t}
                       frameCount={frames.length}
                       currentIndex={currentIndex}
+                      durations={frameDurations}
                       isPlaying={playingTagId === t.id}
                       onChange={(patch) => updateTag(t.id, patch)}
+                      onSetRangeDuration={(ms) => setRangeDuration(t.from, t.to, ms)}
                       onDelete={() => deleteTag(t.id)}
                       onSetFromCurrent={(which) => setRangeFromCurrent(t.id, which)}
                       onTogglePlay={() => {
@@ -808,8 +1049,10 @@ function TagRow({
   tag,
   frameCount,
   currentIndex,
+  durations,
   isPlaying,
   onChange,
+  onSetRangeDuration,
   onDelete,
   onSetFromCurrent,
   onTogglePlay,
@@ -817,12 +1060,30 @@ function TagRow({
   tag: Tag;
   frameCount: number;
   currentIndex: number;
+  durations: FrameDurations;
   isPlaying: boolean;
   onChange: (patch: Partial<Tag>) => void;
+  onSetRangeDuration: (ms: number | null) => void;
   onDelete: () => void;
   onSetFromCurrent: (which: "from" | "to") => void;
   onTogglePlay: () => void;
 }) {
+  // Blank means "whatever this tag's FPS implies", so the Apply button always
+  // has something sensible to write even before the user types a number.
+  const [holdDraft, setHoldDraft] = useState("");
+  const fpsMs = fpsToDurationMs(tag.fps);
+  const draftMs = holdDraft.trim() === "" ? fpsMs : Number(holdDraft);
+  const canApply = Number.isFinite(draftMs) && draftMs > 0;
+
+  const lo = Math.max(0, Math.min(tag.from, tag.to));
+  const hi = Math.min(Math.max(0, frameCount - 1), Math.max(tag.from, tag.to));
+  const totalMs = useMemo(
+    () => totalDurationMs(tagSequence(tag, frameCount), durations, tag.fps),
+    [tag, frameCount, durations],
+  );
+  let heldInRange = 0;
+  for (let i = lo; i <= hi; i++) if ((durations[i] ?? null) !== null) heldInRange++;
+
   return (
     <div
       className={cn(
@@ -926,6 +1187,45 @@ function TagRow({
       >
         <Trash2 className="w-3.5 h-3.5" />
       </Button>
+
+      {/* Hold times for the whole from..to range in one action. */}
+      <div className="w-full flex flex-wrap items-center gap-2 pt-2 mt-1 border-t">
+        <Label className="text-[10px] text-muted-foreground">Hold</Label>
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          value={holdDraft}
+          placeholder={`${fpsMs}`}
+          onChange={(e) => setHoldDraft(e.target.value)}
+          className="h-8 text-xs w-16"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-[10px]"
+          disabled={!canApply || frameCount === 0}
+          title={`Hold frames ${lo}–${hi} for ${canApply ? Math.round(draftMs) : fpsMs}ms each`}
+          onClick={() => canApply && onSetRangeDuration(Math.round(draftMs))}
+        >
+          Apply {lo}–{hi}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-[10px]"
+          disabled={heldInRange === 0}
+          title={`Clear explicit holds on frames ${lo}–${hi}`}
+          onClick={() => onSetRangeDuration(null)}
+        >
+          Auto
+        </Button>
+        <div className="flex-1" />
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {heldInRange > 0 && `${heldInRange} held · `}
+          {(totalMs / 1000).toFixed(2)}s
+        </span>
+      </div>
     </div>
   );
 }

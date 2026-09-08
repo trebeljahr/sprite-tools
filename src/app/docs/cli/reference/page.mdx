@@ -106,6 +106,7 @@ sprite-tools tags <input>
   [--cols N] [--rows N]
   [--tag "name=from-to[:fps[:direction]]"]  # repeatable
   [--fps N]                        # default FPS
+  [--duration "index=ms"]          # repeatable; also "from-to=ms"
   [-o FILE]
 ```
 
@@ -116,6 +117,16 @@ Direction is `forward` (default), `reverse`, or `pingpong`. Example:
 --tag run=6-11:12:pingpong
 --tag attack=12-18:24
 ```
+
+`--duration` gives one frame an explicit hold time in milliseconds — `--duration 3=250` for a single frame, `--duration 2-5=250` for an inclusive range. Indices are **sheet** frame indices, not offsets within a tag: durations live globally per frame (see [JSON schemas](/docs/reference/json-schemas#framedurations)). The flag is repeatable and later specs win where ranges overlap.
+
+Frames you never name keep no explicit hold and play at the `fps` of whichever tag is running them, so `--duration` and `--fps` compose:
+
+```bash
+sprite-tools tags hero.png --tag idle=0-5 --fps 12 --duration 0=250 --duration 3-4=180
+```
+
+The output grows a top-level `frameDurations` array (one entry per frame, `null` where unset) only when at least one frame has an explicit hold. Without any `--duration`, the JSON is exactly what it was before the flag existed.
 
 ## `nine-slice`
 
@@ -157,7 +168,7 @@ sprite-tools meta <input>
   [--cols N] [--rows N]
   [--collision] [--alpha N] [--tolerance N] [--convex-hull]
   [--pivot PRESET] [--pivot-x N] [--pivot-y N]
-  [--tag SPEC ...] [--fps N]
+  [--tag SPEC ...] [--fps N] [--duration SPEC ...]
   [--nine-slice]
   [--nine-slice-left N] [--nine-slice-right N]
   [--nine-slice-top N] [--nine-slice-bottom N]
@@ -167,6 +178,8 @@ sprite-tools meta <input>
 One-shot: emits a single JSON with whichever sections (`collision`, `pivots`, `tags`, `nineSlice`) you opted into.
 
 `--nine-slice` adds the `nineSlice` section. The `--nine-slice-*` flags pin individual insets; sides you leave out are guessed the same way the `nine-slice` command guesses them, with the same limits, at the default alpha threshold, tolerance, and minimum middle. Use the `nine-slice` command directly when you need to tune those, render a `--preview`, or read a `.9.png`.
+
+`--duration` behaves exactly as it does on [`tags`](#tags) and adds the same top-level `frameDurations` array to the combined document.
 
 ## `palette`
 
@@ -370,8 +383,21 @@ sprite-tools gif <input>
   [--scale N]                      # integer nearest-neighbor upscale
   [--alpha-threshold N]
   [--reverse] [--pingpong]
+  [--tags-json FILE]               # read frameDurations from a tags/meta JSON
+  [--duration "index=ms"]          # repeatable; also "from-to=ms"
   [-o FILE]                        # GIF
 ```
+
+`--tags-json` reads the `frameDurations` array out of a `tags` or `meta` JSON, so a sheet timed once exports with the same holds. `--duration` sets holds inline with the same `index=ms` / `from-to=ms` syntax as the [`tags`](#tags) command, and wins over `--tags-json` for the frames it names. Frames with no explicit hold use `--fps`.
+
+```bash
+sprite-tools tags hero.png --tag idle=0-5 --duration 0=250 -o hero-tags.json
+sprite-tools gif  hero.png --tags-json hero-tags.json --scale 3 -o hero.gif
+```
+
+### GIF timing resolution
+
+GIF stores frame delay in hundredths of a second, so every duration is rounded to the nearest **10 ms** and floored at **20 ms** (browsers clamp shorter delays up to roughly 100 ms). A 125 ms hold is written as 130 ms; a 5 ms hold becomes 20 ms. The result is close to the authored timing, not exact — the tags JSON stays the precise record.
 
 ## Grid padding (margins and gutters)
 

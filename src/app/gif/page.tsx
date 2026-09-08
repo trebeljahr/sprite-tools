@@ -15,6 +15,8 @@ import {
   Palette,
   Pause,
   Play,
+  Timer,
+  Trash2,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -28,6 +30,13 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
+import {
+  type FrameDurations,
+  normalizeFrameDurations,
+  quantizeGifDelayMs,
+  resolveSequenceDurationsMs,
+  totalDurationMs,
+} from "@/lib/animation/durations";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { useSharedProjectSource } from "@/lib/project/store";
@@ -90,6 +99,13 @@ export default function GifPage() {
   const [hasDownloaded, setHasDownloaded] = useState(false);
   const playbackRef = useRef<number | null>(null);
 
+  // Per-frame hold times loaded from a tags JSON. The raw array is kept as it
+  // came off disk and re-normalised whenever the frame count changes (the user
+  // can re-slice the sheet under us).
+  const [rawDurations, setRawDurations] = useState<unknown[] | null>(null);
+  const [durationsSource, setDurationsSource] = useState<string | null>(null);
+  const timingsInputRef = useRef<HTMLInputElement>(null);
+
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,6 +125,9 @@ export default function GifPage() {
       }
       await setSharedSource(file);
       setCurrentIndex(0);
+      // Timings belong to the sheet they were authored for.
+      setRawDurations(null);
+      setDurationsSource(null);
       hasAutoFittedRef.current = false;
       try {
         const det = await detectSheetGrid(file);
@@ -209,6 +228,82 @@ export default function GifPage() {
     return [...base, ...base.slice(1, -1).reverse()];
   }, [frames.length, reverse, pingpong]);
 
+  // Resolved timing. `frameDurations` is null when no timings are loaded, in
+  // which case every helper below falls back to the uniform FPS slider.
+  const frameDurations = useMemo<FrameDurations | null>(
+    () => (rawDurations ? (normalizeFrameDurations(rawDurations, frames.length) ?? null) : null),
+    [rawDurations, frames.length],
+  );
+  const hasDurations = frameDurations !== null;
+  const heldFrames = frameDurations?.filter((d) => d !== null).length ?? 0;
+  const sequenceDelays = useMemo(
+    () => resolveSequenceDurationsMs(sequence, frameDurations, fps),
+    [sequence, frameDurations, fps],
+  );
+  // Wall-clock length of one loop. Without timings this stays the plain
+  // frames ÷ fps it has always been.
+  const totalSeconds = hasDurations
+    ? totalDurationMs(sequence, frameDurations, fps) / 1000
+    : sequence.length / fps;
+
+  const loadTimings = useCallback(
+    async (file: File) => {
+      if (frames.length === 0) {
+        toast.error("Upload a sprite sheet first.");
+        return;
+      }
+      try {
+        const doc = JSON.parse(await file.text()) as {
+          frameCount?: unknown;
+          frameDurations?: unknown;
+        };
+        if (!Array.isArray(doc.frameDurations)) {
+          toast.error("No frameDurations in that JSON — it only carries uniform tag FPS.");
+          return;
+        }
+        if (!normalizeFrameDurations(doc.frameDurations, frames.length)) {
+          // Nothing lands on this sheet. Distinguish a file with no holds at
+          // all from one whose holds all sit past the last sliced frame.
+          const holdsSomewhere = normalizeFrameDurations(
+            doc.frameDurations,
+            doc.frameDurations.length,
+          );
+          toast.error(
+            holdsSomewhere
+              ? `Those holds are all on frames past #${frames.length - 1} — this sheet is sliced to ${frames.length} frames.`
+              : "Every frameDurations entry is null — nothing to hold.",
+          );
+          return;
+        }
+        setRawDurations(doc.frameDurations);
+        setDurationsSource(file.name);
+        const declared = doc.frameCount;
+        if (typeof declared === "number" && declared !== frames.length) {
+          toast.warning(
+            `JSON covers ${declared} frames, this sheet has ${frames.length} — timings trimmed/padded.`,
+          );
+        } else {
+          toast.success(`Per-frame timing loaded from ${file.name}`);
+        }
+      } catch (e) {
+        toast.error(`Couldn't read timings: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+    [frames.length],
+  );
+
+  const onTimingsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) void loadTimings(f);
+    e.target.value = "";
+  };
+
+  const dropTimings = () => {
+    setRawDurations(null);
+    setDurationsSource(null);
+    toast.success("Back to uniform FPS");
+  };
+
   // Preview canvas
   const current = frames[sequence[currentIndex] ?? 0];
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -223,28 +318,43 @@ export default function GifPage() {
     ctx.putImageData(current.imageData, 0, 0);
   }, [current]);
 
-  // Playback
+  // Where playback resumes from: the frame on screen, kept in a ref so the
+  // loop below never has to depend on `currentIndex`.
+  const stepRef = useRef(0);
+  useEffect(() => {
+    stepRef.current = currentIndex;
+  }, [currentIndex]);
+
+  // Playback. One timeout per frame rather than a fixed interval, so a frame
+  // with its own hold time is shown for exactly as long as the export holds it.
+  // The loop reschedules itself instead of waiting on a React render, so the
+  // period stays the requested hold time and does not drift with render cost.
   useEffect(() => {
     if (!isPlaying || sequence.length === 0) {
       if (playbackRef.current) {
-        window.clearInterval(playbackRef.current);
+        window.clearTimeout(playbackRef.current);
         playbackRef.current = null;
       }
       return;
     }
-    playbackRef.current = window.setInterval(
-      () => {
-        setCurrentIndex((i) => (i + 1) % sequence.length);
-      },
-      Math.max(16, Math.round(1000 / Math.max(1, fps))),
-    );
+    let step = stepRef.current % sequence.length;
+    const schedule = () => {
+      const hold = Math.max(16, sequenceDelays[step] ?? 100);
+      playbackRef.current = window.setTimeout(() => {
+        step = (step + 1) % sequence.length;
+        stepRef.current = step;
+        setCurrentIndex(step);
+        schedule();
+      }, hold);
+    };
+    schedule();
     return () => {
       if (playbackRef.current) {
-        window.clearInterval(playbackRef.current);
+        window.clearTimeout(playbackRef.current);
         playbackRef.current = null;
       }
     };
-  }, [isPlaying, fps, sequence.length]);
+  }, [isPlaying, sequence.length, sequenceDelays]);
 
   // Viewport
   useEffect(() => {
@@ -281,13 +391,22 @@ export default function GifPage() {
         orderedFrames.push(frames[sequence[i]].imageData);
       }
 
+      // Per-frame delays in sequence order, snapped to what a GIF can store.
+      const delaysMs = sequenceDelays.map(quantizeGifDelayMs);
+
       // Drip progress based on frame processing.
       let processed = 0;
       const total = orderedFrames.length;
-      const bytes = await encodeGifWithProgress(orderedFrames, fps, scale, alphaThreshold, () => {
-        processed += 1;
-        setEncodeProgress((processed / total) * 100);
-      });
+      const bytes = await encodeGifWithProgress(
+        orderedFrames,
+        delaysMs,
+        scale,
+        alphaThreshold,
+        () => {
+          processed += 1;
+          setEncodeProgress((processed / total) * 100);
+        },
+      );
 
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: "image/gif" });
       const a = document.createElement("a");
@@ -296,7 +415,13 @@ export default function GifPage() {
       a.download = `${base}.gif`;
       a.click();
       URL.revokeObjectURL(a.href);
-      track("export", { tool: "gif", format: "gif", frames: sequence.length, fps });
+      track("export", {
+        tool: "gif",
+        format: "gif",
+        frames: sequence.length,
+        fps,
+        perFrameTiming: hasDurations,
+      });
       toast.success("GIF downloaded");
       setHasDownloaded(true);
     } catch (e) {
@@ -307,10 +432,11 @@ export default function GifPage() {
     }
   };
 
-  // Same as encodeGif but with a per-frame callback for progress.
+  // Same as encodeGif but with a per-frame callback for progress. `delaysMs`
+  // is one already-quantised delay per frame, in the same order as `framesIn`.
   const encodeGifWithProgress = async (
     framesIn: ImageData[],
-    fps: number,
+    delaysMs: number[],
     scale: number,
     alphaThresh: number,
     onFrame: () => void,
@@ -319,7 +445,6 @@ export default function GifPage() {
     const src0 = framesIn[0];
     const W = src0.width * scale;
     const H = src0.height * scale;
-    const delay = Math.max(20, Math.round(1000 / Math.max(1, fps)));
     const enc = GIFEncoder();
     const canvas = document.createElement("canvas");
     canvas.width = W;
@@ -328,7 +453,8 @@ export default function GifPage() {
     if (!ctx) throw new Error("2D context unavailable");
     ctx.imageSmoothingEnabled = false;
 
-    for (const f of framesIn) {
+    for (let fi = 0; fi < framesIn.length; fi++) {
+      const f = framesIn[fi];
       const tmp = document.createElement("canvas");
       tmp.width = f.width;
       tmp.height = f.height;
@@ -346,7 +472,7 @@ export default function GifPage() {
       const index = applyPalette(d, palette, "rgba4444");
       enc.writeFrame(index, W, H, {
         palette,
-        delay,
+        delay: delaysMs[fi],
         transparent: true,
         transparentIndex: findTransparentIndex(palette),
         dispose: 2,
@@ -374,7 +500,13 @@ export default function GifPage() {
       const cx = cv.getContext("2d")!;
       cx.imageSmoothingEnabled = false;
 
-      const stream = cv.captureStream(fps);
+      // captureStream's rate caps how often a redraw can be picked up, so with
+      // per-frame timing it has to clear the shortest hold, not the slider FPS.
+      const shortest = sequenceDelays.length > 0 ? Math.min(...sequenceDelays) : 1000 / fps;
+      const captureFps = hasDurations
+        ? Math.min(60, Math.max(1, Math.round(1000 / Math.max(1, shortest))))
+        : fps;
+      const stream = cv.captureStream(captureFps);
       const chunks: Blob[] = [];
       const mimes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
       const mime = mimes.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
@@ -387,7 +519,6 @@ export default function GifPage() {
       });
       recorder.start();
 
-      const delay = 1000 / Math.max(1, fps);
       for (let i = 0; i < sequence.length; i++) {
         const f = frames[sequence[i]].imageData;
         const tmp = document.createElement("canvas");
@@ -396,7 +527,9 @@ export default function GifPage() {
         tmp.getContext("2d")!.putImageData(f, 0, 0);
         cx.clearRect(0, 0, w, h);
         cx.drawImage(tmp, 0, 0, w, h);
-        await new Promise((r) => setTimeout(r, delay));
+        // Real-time recording: each frame is held on the canvas for its own
+        // duration, so WebM and GIF agree on pacing (to wall-clock accuracy).
+        await new Promise((r) => setTimeout(r, sequenceDelays[i] ?? 1000 / Math.max(1, fps)));
       }
       recorder.stop();
       await done;
@@ -426,7 +559,7 @@ export default function GifPage() {
       },
       {
         label: "Configure animation",
-        hint: "Set FPS, scale, and ordering (forward / reverse / ping-pong).",
+        hint: "Set FPS, scale, ordering — or load a tags JSON for per-frame holds.",
         done: frames.length > 0,
       },
       {
@@ -595,6 +728,54 @@ export default function GifPage() {
                   onValueChange={(v) => setFps(Array.isArray(v) ? v[0] : v)}
                 />
               </div>
+              {frames.length > 0 && (
+                <div className="space-y-1.5 rounded-lg border bg-muted/5 p-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5" /> Per-frame timing
+                    </Label>
+                    {hasDurations ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={dropTimings}
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" /> Drop
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() => timingsInputRef.current?.click()}
+                      >
+                        <Upload className="w-3 h-3 mr-1" /> Load tags JSON
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {hasDurations ? (
+                      <>
+                        <span className="font-mono">{durationsSource}</span> — {heldFrames} of{" "}
+                        {frames.length} frames hold for their own time; the rest run at {fps} FPS.
+                      </>
+                    ) : (
+                      <>
+                        Uniform {fps} FPS. Load a tags JSON with{" "}
+                        <span className="font-mono">frameDurations</span> to hold key poses longer.
+                      </>
+                    )}
+                  </p>
+                  <Input
+                    ref={timingsInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={onTimingsInputChange}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <Label className="text-xs">Scale</Label>
@@ -682,7 +863,11 @@ export default function GifPage() {
                   <Film className="w-4 h-4 mr-2" /> Download WebM
                 </Button>
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  {sequence.length} frames • {fps} FPS • {(sequence.length / fps).toFixed(2)}s
+                  {sequence.length} frames • {hasDurations ? "per-frame timing" : `${fps} FPS`} •{" "}
+                  {totalSeconds.toFixed(2)}s
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  GIF stores delays in 10ms steps (min 20ms) — a 125ms hold exports as 130ms.
                 </p>
               </CardContent>
             </Card>

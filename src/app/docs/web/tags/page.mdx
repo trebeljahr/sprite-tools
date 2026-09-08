@@ -1,7 +1,7 @@
 export const metadata = {
   title: "Animation tags — sprite-tools",
   description:
-    "Split sprite sheets into named animation clips with frame ranges, playback direction, and per-tag FPS.",
+    "Split sprite sheets into named animation clips with frame ranges, playback direction, per-tag FPS, and per-frame hold times.",
 };
 
 # Animation tags
@@ -25,6 +25,22 @@ Multiple tags can overlap (e.g. "full-cycle" from 0-11 containing "idle" 0-3 and
 - **Play all frames** on the global toolbar previews the whole sheet top-to-bottom at the global FPS.
 - **Per-tag play** previews just that clip with its own direction + FPS.
 
+Preview always plays at the real timings: a frame with an explicit hold is shown for that many milliseconds, and every other frame for `1000 / fps` of whichever tag is running.
+
+## Frame durations
+
+FPS gives a clip one uniform frame time. Hand-authored animation rarely works that way — a key pose sits, the in-betweens flick past. The **Timing** card gives an individual frame its own **hold**, in milliseconds.
+
+The frame strip across the top is the sheet, one cell per frame. Cell width is proportional to hold time, so the rhythm is visible at a glance; a cell reading *auto* has no explicit hold. Click a cell to jump the canvas to that frame.
+
+- **Frame #N** — type a hold in ms for the frame currently in the canvas. **Auto** clears it again.
+- **Apply to all** / **Clear all** — set or clear the hold on every frame of the sheet in one action.
+- **Hold** on a tag row — type a value and hit the apply button, labelled with that tag's range (**Apply 4–7**), to hold every frame in it; **Auto** clears the holds in that range. The row reports how many of its frames are held.
+
+Holds are stored **per frame of the sheet**, not per frame-within-a-tag. Frame 3 has one hold time, and every tag that includes frame 3 uses it — applying a hold from a tag row is a shortcut for "these frame indices", not a per-tag setting. Frames you never touch stay *auto*: they have no hold at all rather than a made-up number, so a 40-frame sheet can hold two key poses and leave the other 38 on their tag's FPS.
+
+The consequence is worth knowing up front: the same frame cannot be held for 250 ms in one tag and 80 ms in another. If you need that, duplicate the frame in the sheet so each clip has its own index. The [JSON schemas page](/docs/reference/json-schemas#why-durations-are-per-frame-not-per-frame-per-tag) explains why the format is built this way.
+
 ## Output
 
 ```json
@@ -39,14 +55,20 @@ Multiple tags can overlap (e.g. "full-cycle" from 0-11 containing "idle" 0-3 and
     { "name": "run",    "from": 4,  "to": 7,  "direction": "forward",  "fps": 12 },
     { "name": "attack", "from": 8,  "to": 11, "direction": "forward",  "fps": 18 },
     { "name": "idle2",  "from": 0,  "to": 3,  "direction": "pingpong", "fps": 6  }
-  ]
+  ],
+  "frameDurations": [250, null, null, null, null, null, null, null,
+                     null, 300, null, null, null, null, null, null]
 }
 ```
 
-Aseprite uses `frameTags`; many engines accept either. The shape here is intentionally close to Aseprite's for easy interop.
+Aseprite uses `frameTags`; many engines accept either. The shape here is intentionally close to Aseprite's for easy interop — Aseprite also stores duration on the frame, so `frameDurations` maps across directly.
+
+`frameDurations` is written only when at least one frame has a hold; a sheet you never time exports exactly the JSON it did before the field existed. `null` means "no hold — use the tag's FPS". Full field notes are on the [JSON schemas page](/docs/reference/json-schemas#framedurations).
 
 ## Tips
 
 - Feed this JSON into any engine's animator; the shape is intentionally close to Aseprite's export so most importers accept it as-is.
 - Use **pingpong** for idle animations where you want a soft back-and-forth without a hard reset.
 - Per-tag FPS matters when animation speed differs — an attack is usually faster than idle.
+- Reach for FPS first and holds second: set the clip's overall rate, then hold only the frames that need to breathe.
+- The [GIF tab](/gif) can load this JSON and export with the same holds, though GIF rounds every delay to the nearest 10 ms.

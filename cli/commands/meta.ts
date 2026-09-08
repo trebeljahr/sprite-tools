@@ -17,6 +17,7 @@ import {
   DEFAULT_MIN_MIDDLE,
   DEFAULT_TOLERANCE,
 } from "../../src/lib/nine-slice/nine-slice";
+import { applyDurationSpecs } from "../../src/lib/animation/durations";
 
 // Unified metadata emitter. One pass over the sheet produces collision +
 // pivot + tag + 9-slice info in a single merged JSON, so agents don't have to
@@ -75,6 +76,12 @@ export function registerMetaCommand(program: Command) {
       [],
     )
     .option("--fps <n>", "[tags] default FPS", (v) => parseIntArg("fps", v), 10)
+    .option(
+      "--duration <spec>",
+      '[tags] repeatable per-frame hold "index=ms" or "from-to=ms"',
+      collect,
+      [],
+    )
     // Nine-slice
     .option("--nine-slice", "include 9-slice insets + stretch regions", false)
     .option("--nine-slice-left <n>", "[nine-slice] explicit left inset in px", (v) =>
@@ -104,9 +111,13 @@ export function registerMetaCommand(program: Command) {
       "",
       "# 9-slice insets: detected per frame, or pinned side by side",
       "sprite-tools meta panel.png --nine-slice --nine-slice-left 8 --nine-slice-right 8",
+      "# hold the key pose; --duration is per sheet frame, not per tag",
+      "sprite-tools meta hero.png --tag idle=0-5 --duration 0=250 --duration 1-4=80",
     ],
     output: [
       "{ source, frameWidth, frameHeight, grid, frameCount,",
+      "  frameDurations?: [ms | null, ...]  (if --duration; one entry per",
+      "                                      frame, null = use tag fps)",
       "  collision?: [...]   (if --collision)",
       "  pivots?:    [...]   (if --pivot)",
       "  tags?:      [...]   (if --tag)",
@@ -134,6 +145,7 @@ export function registerMetaCommand(program: Command) {
         nineSliceRight?: number;
         nineSliceTop?: number;
         nineSliceBottom?: number;
+        duration: string[];
         output?: string;
       } & GridPaddingOpts,
     ) => {
@@ -146,6 +158,12 @@ export function registerMetaCommand(program: Command) {
           grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
           frameCount: frames.length,
         };
+
+        // Durations are a property of the frames themselves, so they sit next
+        // to frameCount rather than inside the tags section. undefined when
+        // nothing was held, so an all-null array is never emitted.
+        const frameDurations = applyDurationSpecs(opts.duration, frames.length);
+        if (frameDurations) base.frameDurations = frameDurations;
 
         if (opts.collision) {
           base.collision = frames.map((f, i) => {

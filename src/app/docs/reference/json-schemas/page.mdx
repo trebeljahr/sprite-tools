@@ -69,8 +69,45 @@ interface TagsOutput extends Header {
     direction: "forward" | "reverse" | "pingpong";
     fps: number;
   }>;
+  frameDurations?: Array<number | null>;   // ms per frame; null = use the tag's fps
 }
 ```
+
+### `frameDurations`
+
+Optional. One entry per frame of the sheet, in **milliseconds**; when the field is present its length equals `frameCount`. `null` at index `i` means "frame `i` has no explicit hold" — whichever tag is playing it falls back to that tag's `fps`.
+
+The key is omitted entirely when no frame has an explicit hold. An all-`null` array is never written, so a sheet can put a 250 ms hold on 2 frames of 40 without inventing numbers for the other 38.
+
+**Backward compatible.** A document without `frameDurations` behaves exactly as it did before the field existed: every frame of a tag lasts `1000 / fps` ms, and every existing tags JSON keeps producing byte-for-byte identical output.
+
+`fps` and `frameDurations` are not alternatives. `fps` stays the per-tag fallback rate for every frame in that tag with no explicit duration, which is what gives per-tag speed control without a duration array per tag.
+
+```json
+{
+  "frameCount": 6,
+  "tags": [
+    { "name": "idle", "from": 0, "to": 5, "direction": "forward", "fps": 12 }
+  ],
+  "frameDurations": [250, null, null, 250, null, null]
+}
+```
+
+Frames 0 and 3 are held for 250 ms. Frames 1, 2, 4, and 5 have no explicit hold, so they run at the tag's 12 fps — 83 ms each.
+
+### Why durations are per frame, not per frame-per-tag
+
+1. A frame is one drawing, and how long it wants to be on screen is a property of that drawing, not of whichever clip happens to include it. [Aseprite](https://www.aseprite.org/) — the tool this format interoperates with — stores duration on the frame for the same reason.
+2. This document already models tags as ranges (`from`/`to`) over **one** global frame sequence. Two overlapping tags would each need their own copy of the durations for the shared frames, and the format has no way to express which copy wins when they disagree.
+3. Tag-level `fps` already covers the per-clip case: it is the fallback rate for every frame in that tag without an explicit hold.
+
+**Known limitation.** The same frame cannot be held for different lengths in two different tags — frame 3 is 250 ms whether "idle" or "full-cycle" is playing it. Workaround: duplicate the frame in the sheet so each clip gets its own index, and give the two indices different durations.
+
+### Consuming durations
+
+GIF export applies these durations per frame, but GIF stores delay in 10 ms units: a 125 ms hold is written as 130 ms, and anything under 20 ms is floored at 20 ms. See [GIF export](/docs/web/gif) for the details — the timing is close, not exact.
+
+No engine-native exporter (Aseprite JSON, Godot `SpriteFrames`) ships yet. When one lands, `frameDurations` is the field it maps to Aseprite's per-frame `duration` and to a Godot animation's per-frame timing; the format is designed so that mapping is a lookup, not a conversion.
 
 ## Nine-slice
 
@@ -120,8 +157,11 @@ interface MetaOutput extends Header {
   pivots?:     PivotOutput["pivots"];          // present if --pivot
   tags?:       TagsOutput["tags"];             // present if --tag was passed
   nineSlice?:  NineSliceOutput["nineSlice"];   // present if --nine-slice
+  frameDurations?: TagsOutput["frameDurations"];   // present if any frame has an explicit hold
 }
 ```
+
+`frameDurations` mirrors the [Tags](#tags) shape exactly — global per frame, milliseconds, `null` for "use the tag's fps" — and sits at the top level next to `tags[]` rather than inside it. It is omitted when no frame has an explicit hold.
 
 ## Atlas manifest
 

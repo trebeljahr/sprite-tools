@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 

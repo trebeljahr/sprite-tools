@@ -233,11 +233,26 @@ Inputs:
     to: number,
     direction?: "forward" | "reverse" | "pingpong",   // default "forward"
     fps?: number   // default 10
+  }>,
+  frame_durations?: Array<{
+    from: number,    // first frame index of the hold (0-based)
+    to?: number,     // last frame index, inclusive; omit to hold only `from`
+    ms: number       // hold time in milliseconds
   }>
 }
 ```
 
 Returns JSON with the tags array echoed.
+
+### `frame_durations`
+
+Optional. Holds individual frames longer than their tag's uniform `fps` — the key-pose-longer-than-in-between case. Ranges are inclusive and later entries win where they overlap. Indices are **sheet** frame indices, not offsets within a tag.
+
+```json
+[{ "from": 0, "ms": 250 }, { "from": 3, "to": 4, "ms": 180 }]
+```
+
+It is emitted as the document's global `frameDurations` array — one entry per frame, `null` where nothing was set — so uncovered frames fall back to the fps of whichever tag plays them. Omit the input for uniform fps timing; the `frameDurations` key is then absent and the output is unchanged from before the input existed. See [JSON schemas](/docs/reference/json-schemas#framedurations) for why durations are global per frame rather than per tag.
 
 ## `sprite_generate_meta`
 
@@ -254,11 +269,14 @@ One-shot: combines collision + pivot + tags + nine-slice. Each sub-section is op
   nine_slice?: {
     left?, right?, top?, bottom?,
     alpha_threshold?, tolerance?, min_middle?
-  }
+  },
+  frame_durations?: Array<{ from: number, to?: number, ms: number }>
 }
 ```
 
 Passing `nine_slice` (even as an empty object) adds the `nineSlice` section, with the same guess-versus-explicit behaviour as `sprite_generate_nine_slice`. It does not do `.9.png` input or PNG output — use the dedicated tool for those.
+
+`frame_durations` works exactly as it does on `sprite_generate_tags` and adds the same top-level `frameDurations` array to the combined document.
 
 ## `sprite_extract_palette`
 

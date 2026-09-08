@@ -12,6 +12,7 @@ import { dirname, join, basename, resolve } from "node:path";
 
 import { loadPng, savePng, stitchSheet } from "../cli/lib/image-io";
 import { gridPaddingFromOpts, sheetFromImage } from "../cli/lib/common";
+import { applyDurationSpecs, type FrameDurations } from "../src/lib/animation/durations";
 import { detectGridFromImageData } from "../src/lib/pipeline/detect";
 import type { GridMargin, GridSpacing } from "../src/lib/pipeline/grid";
 import {
@@ -145,6 +146,44 @@ const VARIANT_SOURCE = z
 // that actually exist; the per-algorithm sentences are the core's own copy.
 const UPSCALE_ALGO_IDS = UPSCALE_ALGORITHMS.map((a) => a.id) as [string, ...string[]];
 const UPSCALE_ALGO_HELP = UPSCALE_ALGORITHMS.map((a) => `${a.id}: ${a.description}`).join(" ");
+
+// Per-frame hold times are authored as inclusive frame-index ranges — an
+// LLM caller gets that right far more often than a sparse array — and are
+// folded into the document-level `frameDurations` array before emitting.
+const FRAME_DURATIONS_SCHEMA = z
+  .array(
+    z.object({
+      from: z.number().int().min(0).describe("First frame index of the hold (0-based)"),
+      to: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Last frame index, inclusive; omit to hold only `from`"),
+      ms: z.number().int().positive().describe("Hold time in milliseconds"),
+    }),
+  )
+  .optional()
+  .describe(
+    "Per-frame hold times in milliseconds, e.g. [{ from: 2, to: 3, ms: 250 }]. Ranges are " +
+      "inclusive and later entries win where they overlap. Frames left uncovered fall back " +
+      "to the fps of whichever tag plays them, so you can hold two key poses without timing " +
+      "the other frames. Emitted as the document's global `frameDurations` array (one entry " +
+      "per frame, null where unset); omit this to keep uniform fps timing.",
+  );
+
+type FrameDurationSpec = { from: number; to?: number; ms: number };
+
+function resolveFrameDurations(
+  entries: FrameDurationSpec[] | undefined,
+  frameCount: number,
+): FrameDurations | undefined {
+  if (!entries || entries.length === 0) return undefined;
+  return applyDurationSpecs(
+    entries.map((e) => `${e.from}-${e.to ?? e.from}=${e.ms}`),
+    frameCount,
+  );
+}
 
 function jsonResult(payload: unknown) {
   return {
@@ -826,7 +865,10 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_generate_tags",
     {
-      description: "Emit Aseprite-style animation tag metadata (named frame ranges).",
+      description:
+        "Emit Aseprite-style animation tag metadata (named frame ranges). Each tag plays at " +
+        "its own uniform fps; `frame_durations` optionally holds individual frames longer " +
+        "(key poses) — omit it and every frame keeps the tag's uniform timing.",
       inputSchema: {
         input_path: z.string(),
         ...SHEET_GRID_ARGS,
@@ -841,16 +883,19 @@ export function registerAllTools(server: McpServer) {
             }),
           )
           .default([]),
+        frame_durations: FRAME_DURATIONS_SCHEMA,
       },
     },
-    ({ input_path, tags, ...gridArgs }) => {
+    ({ input_path, tags, frame_durations, ...gridArgs }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const frameDurations = resolveFrameDurations(frame_durations, frames.length);
       return jsonResult({
         source: input_path,
         frameWidth: frames[0]?.width ?? 0,
         frameHeight: frames[0]?.height ?? 0,
         grid,
         frameCount: frames.length,
+        ...(frameDurations ? { frameDurations } : {}),
         tags,
       });
     },
@@ -1532,7 +1577,7 @@ export function registerAllTools(server: McpServer) {
     "sprite_generate_meta",
     {
       description:
-        "One-shot: collision + pivot + nine-slice + tags in a single merged JSON. Pass a config object for each section you want — `{}` takes that section's defaults — and omit a section to skip it. The nine-slice section takes explicit insets and guesses any side you leave out — see sprite_generate_nine_slice for what that guess is worth, and use that tool for .9.png input or PNG output.",
+        "One-shot: collision + pivot + nine-slice + tags in a single merged JSON. Pass a config object for each section you want — `{}` takes that section's defaults — and omit a section to skip it. The nine-slice section takes explicit insets and guesses any side you leave out — see sprite_generate_nine_slice for what that guess is worth, and use that tool for .9.png input or PNG output. `frame_durations` optionally holds individual frames longer than their tag's uniform fps; omit it for uniform timing.",
       inputSchema: {
         input_path: z.string(),
         ...SHEET_GRID_ARGS,
@@ -1572,9 +1617,10 @@ export function registerAllTools(server: McpServer) {
             }),
           )
           .optional(),
+        frame_durations: FRAME_DURATIONS_SCHEMA,
       },
     },
-    ({ input_path, collision, pivot, nine_slice, tags, ...gridArgs }) => {
+    ({ input_path, collision, pivot, nine_slice, tags, frame_durations, ...gridArgs }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const out: Record<string, unknown> = {
         source: input_path,
@@ -1583,6 +1629,8 @@ export function registerAllTools(server: McpServer) {
         grid,
         frameCount: frames.length,
       };
+      const frameDurations = resolveFrameDurations(frame_durations, frames.length);
+      if (frameDurations) out.frameDurations = frameDurations;
       if (collision) {
         out.collision = frames.map((f, i) => {
           const o = generateOutline(f, {

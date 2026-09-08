@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Command } from "commander";
 import {
   writeBinaryOutput,
@@ -11,6 +12,13 @@ import {
 } from "../lib/common";
 import { upscaleNearest } from "../lib/image-io";
 import { GIFEncoder, applyPalette, quantize } from "gifenc";
+import {
+  applyDurationSpecs,
+  type FrameDurations,
+  normalizeFrameDurations,
+  quantizeGifDelayMs,
+  resolveSequenceDurationsMs,
+} from "../../src/lib/animation/durations";
 
 export function registerGifCommand(program: Command) {
   const cmd = program
@@ -28,6 +36,8 @@ export function registerGifCommand(program: Command) {
     )
     .option("--reverse", "play frames in reverse order", false)
     .option("--pingpong", "forward then reverse", false)
+    .option("--duration <spec>", 'repeatable: "index=ms" or "from-to=ms"', collect, [])
+    .option("--tags-json <file>", "read frameDurations from a `sprite-tools tags` document")
     .option("-o, --output <file>", "output GIF file (default: stdout)");
 
   addGridOptions(cmd);
@@ -37,10 +47,21 @@ export function registerGifCommand(program: Command) {
       "sprite-tools gif sheet.png -o anim.gif",
       "sprite-tools gif sheet.png --fps 24 --scale 2 --pingpong -o bounce.gif",
       "sprite-tools gif sheet.png --cols 8 --rows 1 --reverse -o rewind.gif",
+      "",
+      "# hold frame 0 for 250ms; every other frame stays at --fps",
+      "sprite-tools gif sheet.png --duration 0=250 -o idle.gif",
+      "# reuse holds already authored with `sprite-tools tags --duration`",
+      "sprite-tools gif sheet.png --tags-json hero-tags.json -o idle.gif",
+      "# --duration wins per frame over the values in --tags-json",
+      "sprite-tools gif sheet.png --tags-json hero-tags.json --duration 2-4=60 -o fast.gif",
     ],
     output: [
       "Animated GIF. Alpha binarized at --alpha-threshold since GIF has no",
       "partial transparency. Use --scale for nearest-neighbor pixel-art upscaling.",
+      "",
+      "GIF stores frame delays in 10ms units, so every duration is rounded to",
+      "the nearest 10ms and floored at 20ms (browsers stretch anything shorter",
+      "to 100ms). A 125ms hold is written as 130ms; a 5ms hold as 20ms.",
     ],
   });
 
@@ -55,6 +76,8 @@ export function registerGifCommand(program: Command) {
         alphaThreshold: number;
         reverse: boolean;
         pingpong: boolean;
+        duration: string[];
+        tagsJson?: string;
         output?: string;
       } & GridPaddingOpts,
     ) => {
@@ -71,10 +94,26 @@ export function registerGifCommand(program: Command) {
 
         const W = scaled[0].width;
         const H = scaled[0].height;
-        const delay = Math.max(20, Math.round(1000 / Math.max(1, opts.fps)));
+
+        // Per-frame holds: the tags document supplies the baseline, --duration
+        // overrides it frame by frame, and anything still null falls back to
+        // --fps. With neither flag every delay is round(1000 / fps) quantized
+        // to 10ms, which writes the same centisecond count into the Graphic
+        // Control Extension as the old uniform `Math.max(20, round(1000/fps))`
+        // — so a durationless encode is byte-identical to the previous one.
+        const fileDurations = readTagsJsonDurations(opts.tagsJson, frames.length);
+        const frameDurations =
+          opts.duration.length > 0
+            ? applyDurationSpecs(opts.duration, frames.length, fileDurations)
+            : fileDurations;
+        const delays = resolveSequenceDurationsMs(seq, frameDurations, opts.fps).map(
+          quantizeGifDelayMs,
+        );
+
         const enc = GIFEncoder();
 
-        for (const i of seq) {
+        for (let s = 0; s < seq.length; s++) {
+          const i = seq[s];
           const f = scaled[i];
           // Binarize alpha for GIF transparency.
           const d = new Uint8ClampedArray(f.data);
@@ -86,7 +125,7 @@ export function registerGifCommand(program: Command) {
           const transparentIndex = findTransparentIndex(palette);
           enc.writeFrame(idx, W, H, {
             palette,
-            delay,
+            delay: delays[s],
             transparent: true,
             transparentIndex,
             dispose: 2,
@@ -99,6 +138,38 @@ export function registerGifCommand(program: Command) {
       }
     },
   );
+}
+
+function collect(v: string, prev: string[]): string[] {
+  return [...prev, v];
+}
+
+/**
+ * Pull `frameDurations` out of a `sprite-tools tags` (or `meta`) document and
+ * fit it to this sheet. Missing file, unreadable file and malformed JSON are
+ * hard errors; a document that simply carries no durations is not.
+ */
+function readTagsJsonDurations(
+  path: string | undefined,
+  frameCount: number,
+): FrameDurations | undefined {
+  if (!path) return undefined;
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    throw new Error(`--tags-json: cannot read "${path}" (${e instanceof Error ? e.message : e})`);
+  }
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    throw new Error(
+      `--tags-json: "${path}" is not valid JSON (${e instanceof Error ? e.message : e})`,
+    );
+  }
+  const raw = typeof doc === "object" && doc !== null ? (doc as Record<string, unknown>) : {};
+  return normalizeFrameDurations(raw.frameDurations, frameCount);
 }
 
 function findTransparentIndex(palette: number[][]): number {
