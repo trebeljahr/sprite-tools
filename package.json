@@ -1,7 +1,7 @@
 {
   "name": "@trebeljahr/sprite-tools",
   "version": "0.1.0",
-  "description": "Toolkit for turning sprite sheets into game-ready assets — collision polygons, pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
+  "description": "Toolkit for turning sprite sheets into game-ready assets — background removal, collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
   "keywords": [
     "sprite",
     "spritesheet",

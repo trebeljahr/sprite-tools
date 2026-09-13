@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 18 MCP tools.
+Full input/output schema for each of the 19 MCP tools.
 
 ## `sprite_info`
 
@@ -141,6 +141,39 @@ Inputs:
 
 Returns JSON with `pivots` array.
 
+## `sprite_generate_nine_slice`
+
+Emits the four stretch insets of a panel sprite, plus the nine regions they imply.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,
+  left?: number, right?: number, top?: number, bottom?: number,   // explicit insets
+  alpha_threshold?: number,   // 0..255, default 8
+  tolerance?: number,         // 0..1, default 0.02
+  min_middle?: number,        // default 1
+  from_9patch?: boolean,      // default false — read the .9.png marker border instead
+  ninepatch_output_path?: string,   // also write frame 0 as a .9.png
+  preview_output_path?: string,     // also write frame 0 stretched, to eyeball
+  preview_width?: number,           // default 3x frame width
+  preview_height?: number           // default 3x frame height
+}
+```
+
+Returns JSON with `options` and a `nineSlice` array — `{index, cell, insets, detected, confidence, regions}` per frame, same shape as the CLI `nine-slice` command — plus `ninePatchPath` / `previewPath` when those writes were requested.
+
+Notes:
+
+- Sides you pass are used as-is; sides you omit are a **starting guess** derived from variance profiles, taking the longest run of near-identical adjacent columns and rows to be the stretchable middle. That holds up on panels with an obviously flat or repeated middle and falls apart on busy or gradient artwork, where it returns zeros with `confidence` 0. Setting `left`/`right`/`top`/`bottom` yourself is the real interface.
+- Check `confidence` before trusting a guessed result — it is how much of each axis the flat run covered, worse axis wins. `detected` is `false` and `confidence` is `0` when nothing had to be guessed, either because all four sides were supplied or because they came off a `.9.png` border.
+- `preview_output_path` is the closest thing to the web app's live preview: write it, look at it, and correct the insets rather than trusting the numbers alone.
+- `regions` is always nine entries, row-major from `top-left` to `bottom-right`, tiling the frame exactly.
+- `from_9patch: true` strips the 1 px Android marker border and reads the insets off it, which is exact. Exactly one contiguous run per edge is supported; multi-run or malformed files are rejected with a descriptive error.
+- See the [Nine-slice page](/docs/web/nine-slice) for what the insets mean and how to verify them.
+
 ## `sprite_generate_tags`
 
 Inputs:
@@ -163,7 +196,7 @@ Returns JSON with the tags array echoed.
 
 ## `sprite_generate_meta`
 
-One-shot: combines collision + pivot + tags. Each sub-section is optional; omitted sections are skipped in the output.
+One-shot: combines collision + pivot + tags + nine-slice. Each sub-section is optional; omitted sections are skipped in the output.
 
 ```ts
 {
@@ -171,9 +204,15 @@ One-shot: combines collision + pivot + tags. Each sub-section is optional; omitt
   cols?: number, rows?: number,
   collision?: { alpha_threshold?, simplify_tolerance?, convex_hull? },
   pivot?: { preset?, x?, y? },
-  tags?: Array<{name, from, to, direction?, fps?}>
+  tags?: Array<{name, from, to, direction?, fps?}>,
+  nine_slice?: {
+    left?, right?, top?, bottom?,
+    alpha_threshold?, tolerance?, min_middle?
+  }
 }
 ```
+
+Passing `nine_slice` (even as an empty object) adds the `nineSlice` section, with the same guess-versus-explicit behaviour as `sprite_generate_nine_slice`. It does not do `.9.png` input or PNG output — use the dedicated tool for those.
 
 ## `sprite_extract_palette`
 

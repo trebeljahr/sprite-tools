@@ -9,6 +9,7 @@ import {
   Crop,
   Eraser,
   Film,
+  Frame,
   Grid3x3,
   Hexagon,
   Layers,
@@ -91,6 +92,12 @@ const TOOLS = [
     icon: Layers,
     blurb: "Split a sheet into named animation clips — idle, run, attack.",
   },
+  {
+    href: "/nine-slice",
+    label: "Nine-slice",
+    icon: Frame,
+    blurb: "Set panel borders by hand, preview the stretch, read or write .9.png.",
+  },
 ];
 
 export default function HomePage() {
@@ -105,9 +112,9 @@ export default function HomePage() {
           <h1 className="text-5xl font-bold tracking-tight mb-4">sprite-tools</h1>
           <p className="text-lg text-muted-foreground max-w-xl">
             A batteries-included toolkit for turning AI-generated or hand-drawn sprites into{" "}
-            <strong className="text-foreground">game-ready assets</strong> — collision polygons,
-            pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing,
-            GIF export.
+            <strong className="text-foreground">game-ready assets</strong> — background removal,
+            collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion,
+            normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export.
           </p>
           <p className="text-sm text-muted-foreground mt-3 max-w-xl">
             Web app, CLI, and MCP server — all sharing the same algorithms and JSON contracts.
@@ -162,7 +169,7 @@ export default function HomePage() {
             <div>
               <CardTitle className="text-base">CLI</CardTitle>
               <CardDescription className="text-xs">
-                15 composable subcommands. Pipe-friendly.
+                16 composable subcommands. Pipe-friendly.
               </CardDescription>
             </div>
           </CardHeader>

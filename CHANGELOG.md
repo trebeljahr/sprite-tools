@@ -6,6 +6,9 @@ This project follows semantic versioning for the npm package.
 
 ## [Unreleased]
 
+- Add a Nine-slice tool at `/nine-slice` — set the four border insets by hand or start from a detected guess, then check them against a live stretched preview at any target size.
+- Add the `nine-slice` CLI command, the `sprite_generate_nine_slice` MCP tool, and a `nineSlice` section in `meta`, all emitting the same insets and nine region rects.
+- Add Android `.9.png` import and export, so a marker-border patch can be decoded into insets and insets can be written back out as a `.9.png`. One contiguous stretch run per edge is supported.
 - Add an Outline & Shadow tool at `/outline` — outer or inner outlines at an exact pixel width, with 4- or 8-neighbour growth, plus an offset, blurred drop shadow, on a single sprite or every cell of a sheet.
 - Add the `outline` CLI command and the `sprite_add_outline` / `sprite_add_shadow` MCP tools, sharing the web app's distance-transform pass and defaults.
 - Re-tint a whole shading ramp at once instead of swapping its shades one by one — the Palette tab now detects the ramps in a sprite's palette and remaps each one as a unit, preserving the lightness steps, the relative saturation, and the shadow-to-highlight hue drift that make the shading read.

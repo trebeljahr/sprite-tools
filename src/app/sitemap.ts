@@ -13,6 +13,7 @@ const TOOL_ROUTES = [
   "/collision",
   "/pivot",
   "/tags",
+  "/nine-slice",
   "/pixelate",
   "/normal-map",
   "/palette",

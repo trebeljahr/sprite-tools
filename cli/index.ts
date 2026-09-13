@@ -22,6 +22,7 @@ import { registerPaletteCommand } from "./commands/palette";
 import { registerAtlasCommand } from "./commands/atlas";
 import { registerPivotCommand } from "./commands/pivot";
 import { registerTagsCommand } from "./commands/tags";
+import { registerNineSliceCommand } from "./commands/nine-slice";
 import { registerGifCommand } from "./commands/gif";
 import { registerDetectCommand } from "./commands/detect";
 import { registerSliceCommand } from "./commands/slice";
@@ -53,7 +54,8 @@ program.addHelpText(
     "  collision  per-frame collision polygons                          (JSON)",
     "  pivot      anchor / origin metadata                              (JSON)",
     "  tags       named animation ranges                                (JSON)",
-    "  meta       collision + pivot + tags in one pass (merged JSON)    (JSON)",
+    "  nine-slice 9-slice insets + stretch regions                      (JSON)",
+    "  meta       collision + pivot + tags + 9-slice, one merged JSON   (JSON)",
     "  palette    dominant colors, ramps, swaps, variants               (JSON + PNG)",
     "  atlas      packed-atlas manifest                                 (JSON + PNG)",
     "",
@@ -92,6 +94,7 @@ registerTrimCommand(program);
 registerCollisionCommand(program);
 registerPivotCommand(program);
 registerTagsCommand(program);
+registerNineSliceCommand(program);
 registerMetaCommand(program);
 registerPaletteCommand(program);
 registerChromaCommand(program);

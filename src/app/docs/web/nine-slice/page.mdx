@@ -1,0 +1,153 @@
+export const metadata = {
+  title: "Nine-slice — sprite-tools",
+  description:
+    "Set the four nine-slice insets on a panel sprite, check them in a live stretch preview, and export them as JSON, a stretched PNG, or an Android .9.png.",
+};
+
+# Nine-slice
+
+[Open Nine-slice](/nine-slice)
+
+Nine-slice takes a panel sprite — a dialogue box, a button, a health-bar frame, an inventory slot — and pins down the four **inset** numbers an engine needs to redraw it at any size without smearing the corners.
+
+## What nine-slice is
+
+Four insets (`left`, `right`, `top`, `bottom`) cut the frame into nine regions, row-major:
+
+- **The four corners** are drawn 1:1. They never scale, so a 2 px bevel stays a 2 px bevel at every panel size.
+- **The four edges** stretch along one axis only. Top and bottom stretch across; left and right stretch down.
+- **The center** stretches both ways.
+
+One small source image, any target rectangle, corners intact. That is the whole idea.
+
+## Why an engine wants the four numbers
+
+Every engine with a nine-slice widget asks for exactly these four values, under a different name:
+
+- **Godot** — `NinePatchRect`, with `patch_margin_left` / `_right` / `_top` / `_bottom`.
+- **Unity** — the sprite **border** (L, B, R, T) set in the Sprite Editor, used when an `Image` component's type is **Sliced** or **Tiled**.
+- **CSS** — `border-image-slice`, with `border-image-width` deciding how thick the drawn border ends up.
+- **Android** — a `.9.png`, where the numbers are baked into a 1 px marker border instead of a config field.
+
+So this page does not exist to produce a stretched image. It exists to produce four correct numbers, and to let you prove they are correct before you paste them into an engine.
+
+## Setting the insets
+
+Drop a panel — or a sheet, in which case set **Columns** and **Rows** (a detected guess is shown as a hint) and step through the frames.
+
+Two controls, kept in sync:
+
+- **The guides.** Four draggable lines over the frame — two vertical, two horizontal. The nine regions are tinted underneath them: dark for the fixed corners, one colour for the edges that stretch across, another for the edges that stretch down, another for the middle that stretches both ways. A readout in the corner shows the current `l r t b` values.
+- **The Insets fields.** Four numeric inputs for exact pixel values. Type into these when you already know the border thickness — for a UI kit where every panel shares an 8 px frame, that is faster than dragging.
+
+Insets are clamped so the opposing pairs can never overlap or swallow the frame: `left + right` stays at or below the frame width minus the minimum middle, and `top + bottom` likewise for height. Negative and non-numeric input falls back to 0.
+
+For a sheet, **Lock to all frames** applies every guide change to every frame at once, and **Copy current insets to all** pushes the frame you are looking at onto the rest. Without either, insets are per frame and the JSON records one entry per cell.
+
+## The stretch preview is the real test
+
+Numbers that look right against the guides still go wrong in an engine. The **Stretched** panel renders the current frame through the current insets at four preset targets — **1:1**, **Wide bar**, **Tall column**, **Large panel** — plus a **Target width** / **Target height** pair for any size you want. Nearest-neighbour sampling throughout, so pixel art stays crisp. It updates while you drag a guide, which makes it the check that actually matters.
+
+What to look at:
+
+- **Corners** — should be pixel-identical to the source at every target size. If a bevel or a rivet distorts, a corner inset is a pixel or two short and part of the corner art is being stretched.
+- **Edges** — a repeating pattern along an edge should repeat, not smear. If it smears, the band you picked as stretchable is not actually uniform along that axis.
+- **Center** — a flat or evenly textured fill. A gradient or a distinctive detail in the middle will visibly distort.
+- **1:1** — should be indistinguishable from the source. If it is not, the insets are impossible for this frame.
+- **Small targets** — a panel can never be drawn narrower than `left + right` or shorter than `top + bottom`. Type a small target and find that floor yourself, before a UI layout finds it for you.
+
+## Guessing the insets, and what the guess is worth
+
+**Guess the insets** is a starting guess, not an answer. It reads how much each column differs from the column beside it and each row from the row above it, then takes the longest run of near-identical lines on each axis to be the stretchable middle; the insets are whatever is left on either side. Run it on **This frame** or on **All frames**.
+
+It lands close on artwork with an obviously flat or repeated middle — a solid fill, a plain panel body, a one-pixel repeat. It does badly on everything else:
+
+- **Busy or textured centers** — every column differs from its neighbour, no flat run exists, and you get zeros at 0% confidence.
+- **Gradients** — a slow gradient across the panel body reads as continuous variation, never as a flat middle.
+- **Asymmetric borders** — the guess finds one flat run and splits the remainder around it. It has no way to know your left border is deliberately thicker than your right.
+- **Borders that vary along both axes everywhere** — the border rows themselves destroy the flat run the detector is looking for.
+
+The **confidence** percentage is how much of each axis the flat run covered, worse axis wins. Read a low number as "look at this yourself", not as a quality score — and check the stretch previews either way, because a high number only means the detector found something flat, not that it found *your* border.
+
+Three knobs shift the guess:
+
+- **Alpha threshold** (0–64, default 8) — pixels under this alpha count as equal whatever their RGB, so the junk colour exporters leave beneath transparent pixels does not register as variation.
+- **Tolerance** (0–0.2, default 0.02) — how different two neighbouring lines may be and still count as the same. Raise it to let a slightly noisy middle read as flat; raise it too far and the guess swallows the border.
+- **Minimum middle** (default 1 px) — how much stretchable middle has to survive on each axis.
+
+The guides and the numeric fields are the real interface. The guess saves you the first drag on a cooperative panel; it does not replace looking at the preview.
+
+## Android .9.png
+
+A `.9.png` is Android's way of shipping the insets inside the image. The encoded file is the content image plus a 1 px border on all four sides, so a 48×48 panel is stored as 50×50. Marker pixels in that border are opaque black; every other border pixel is fully transparent, the four corner pixels included.
+
+- **Top border row** — a black run marks the horizontally stretchable X range.
+- **Left border column** — a black run marks the vertically stretchable Y range.
+- **Bottom border row** — optional, marks the horizontal padding (content) box.
+- **Right border column** — optional, marks the vertical padding box.
+
+**Import.** Upload a single image whose border looks like valid markers and the page offers to decode it. Nothing is stripped until you accept: decoding reads the insets off the top row and left column, drops the border, and leaves you the interior as the working image. The offer only appears when every border pixel is transparent or opaque black, the corners are empty, and the top row and left column both carry a marker. A file that misses any of those — one off-black border pixel is enough — gets no offer and loads as an ordinary image, border included. A border with several runs on one edge passes that check, and decoding it fails with an error naming the edge.
+
+**Export.** **Download .9.png** wraps the current frame in a fresh marker border encoding the current insets.
+
+### Limitation: one contiguous run per edge
+
+Android's own `aapt` allows several separate black runs on an edge, producing several independent stretchable bands. Four insets cannot describe that, so sprite-tools supports **exactly one contiguous run per edge**, in both directions. A multi-run `.9.png` is rejected on import rather than approximated, and export always writes a single run. Multi-band stretching is a different data model than the one this page — and every engine's nine-slice widget — uses.
+
+## Export
+
+- **Download JSON** / **Copy to Clipboard** — the metadata below.
+- **Download stretched PNG** — the current frame rendered at the custom target size, for a quick visual diff or a mockup.
+- **Download .9.png** — the current frame with the marker border.
+
+## Output
+
+```json
+{
+  "source": "panel.png",
+  "frameWidth": 48,
+  "frameHeight": 48,
+  "grid": { "cols": 1, "rows": 1, "detected": true },
+  "options": {
+    "auto": true,
+    "explicit": null,
+    "alphaThreshold": 8,
+    "tolerance": 0.02,
+    "minMiddle": 1
+  },
+  "nineSlice": [
+    {
+      "index": 0,
+      "cell": { "row": 0, "col": 0 },
+      "insets": { "left": 8, "right": 8, "top": 8, "bottom": 8 },
+      "detected": true,
+      "confidence": 0.6667,
+      "regions": [
+        { "name": "top-left", "x": 0, "y": 0, "width": 8, "height": 8,
+          "stretchX": false, "stretchY": false },
+        { "name": "top-center", "x": 8, "y": 0, "width": 32, "height": 8,
+          "stretchX": true, "stretchY": false },
+        ...
+      ]
+    }
+  ]
+}
+```
+
+`regions` is always nine entries, row-major from `top-left` to `bottom-right`, tiling the frame exactly — no gaps, no overlap — so a renderer can draw nine quads straight from it. `detected` is `false` and `confidence` is `0` for a frame whose insets you set by hand or decoded from a `.9.png`.
+
+The payload sits under `nineSlice`, so `jq -s 'add'` merges it with collision, pivot, and tag output — see the [JSON schemas](/docs/reference/json-schemas) page.
+
+## Elsewhere
+
+The same insets come out of the CLI:
+
+```bash
+sprite-tools nine-slice panel.png --left 8 --right 8 --top 8 --bottom 8 -o panel.json
+sprite-tools nine-slice panel.png --preview panel-192x96.png --preview-size 192x96
+sprite-tools nine-slice panel.9.png --from-9patch
+```
+
+`--preview` is the closest thing the CLI has to the Stretched panel: it writes the stretched PNG so you can open it and check. `sprite-tools meta --nine-slice` folds the section into a combined metadata pass, and the MCP server exposes `sprite_generate_nine_slice`. See the [CLI reference](/docs/cli/reference) and the [MCP tool catalog](/docs/mcp/tools).
+
+The guides, the live previews, and the `.9.png` import offer are browser-only.

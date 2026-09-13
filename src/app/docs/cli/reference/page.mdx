@@ -109,6 +109,39 @@ Direction is `forward` (default), `reverse`, or `pingpong`. Example:
 --tag attack=12-18:24
 ```
 
+## `nine-slice`
+
+```
+sprite-tools nine-slice <input>
+  [--cols N] [--rows N]
+  [--left N] [--right N] [--top N] [--bottom N]   # explicit insets
+  [--alpha N]                      # alpha threshold, default 8
+  [--tolerance N]                  # 0..1 adjacent-line difference, default 0.02
+  [--min-middle N]                 # smallest stretchable middle, default 1
+  [--from-9patch]                  # read the insets off an Android .9.png border
+  [--emit-9patch FILE]             # also write a .9.png carrying the insets
+  [--preview FILE]                 # also write a stretched PNG to eyeball
+  [--preview-size WxH]             # size for --preview (default: 3x the frame)
+  [-o FILE]                        # JSON (default: stdout)
+```
+
+Emits the four stretch insets plus the nine regions they imply, per frame. Sides you pass are used as-is; sides you leave out are guessed, so you can pin the one you know and let the rest be filled in.
+
+That guess is a starting point derived from variance profiles: it looks for the longest run of near-identical adjacent columns and rows and calls that the stretchable middle. It holds up on panels with an obviously flat or repeated middle and falls apart on busy or gradient artwork, where it reports zeros and a `confidence` of 0. Pass the insets yourself when that happens — `--left` / `--right` / `--top` / `--bottom` are the real interface.
+
+`--preview` is the check that actually matters: it writes the frame stretched through the current insets so you can open it and see whether the corners survived. `--from-9patch` skips guessing entirely and decodes the 1 px Android marker border instead, which is exact — one contiguous black run per edge is supported, and a multi-run `.9.png` is rejected rather than approximated. `--emit-9patch` and `--preview` operate on frame 0 of a multi-frame sheet.
+
+```bash
+sprite-tools nine-slice panel.png -o panel.json
+sprite-tools nine-slice panel.png --left 8 --right 8 --top 8 --bottom 8 -o panel.json
+sprite-tools nine-slice panel.png --top 12 --tolerance 0.05     # detect the other three sides
+sprite-tools nine-slice panel.png --preview panel-192x96.png --preview-size 192x96
+sprite-tools nine-slice panel.9.png --from-9patch -o panel.json
+sprite-tools nine-slice panel.png --left 8 --right 8 --top 8 --bottom 8 --emit-9patch panel.9.png
+```
+
+Output JSON has a `nineSlice` array with `{index, cell, insets, detected, confidence, regions}` per frame — see the [JSON schemas](/docs/reference/json-schemas) and the [Nine-slice page](/docs/web/nine-slice).
+
 ## `meta`
 
 ```
@@ -117,10 +150,15 @@ sprite-tools meta <input>
   [--collision] [--alpha N] [--tolerance N] [--convex-hull]
   [--pivot PRESET] [--pivot-x N] [--pivot-y N]
   [--tag SPEC ...] [--fps N]
+  [--nine-slice]
+  [--nine-slice-left N] [--nine-slice-right N]
+  [--nine-slice-top N] [--nine-slice-bottom N]
   [-o FILE]
 ```
 
-One-shot: emits a single JSON with whichever sections (`collision`, `pivots`, `tags`) you opted into.
+One-shot: emits a single JSON with whichever sections (`collision`, `pivots`, `tags`, `nineSlice`) you opted into.
+
+`--nine-slice` adds the `nineSlice` section. The `--nine-slice-*` flags pin individual insets; sides you leave out are guessed the same way the `nine-slice` command guesses them, with the same limits, at the default alpha threshold, tolerance, and minimum middle. Use the `nine-slice` command directly when you need to tune those, render a `--preview`, or read a `.9.png`.
 
 ## `palette`
 

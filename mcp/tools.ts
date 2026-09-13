@@ -52,6 +52,17 @@ import {
 } from "../src/lib/palette/variants";
 import { packAtlas, computeTrimRect, type PackInput } from "../src/lib/atlas/pack";
 import { effectiveExtrude, extrudeFrames } from "../src/lib/atlas/extrude";
+import {
+  clampInsets,
+  detectNineSlice,
+  nineSliceRegions,
+  stretchNineSlice,
+  DEFAULT_ALPHA_THRESHOLD,
+  DEFAULT_MIN_MIDDLE,
+  DEFAULT_TOLERANCE,
+  type NineSliceInsets,
+} from "../src/lib/nine-slice/nine-slice";
+import { decodeNinePatch, encodeNinePatch } from "../src/lib/nine-slice/ninepatch";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -137,7 +148,20 @@ function loadSheetFromArgs(
   grid: { cols: number; rows: number; detected: boolean };
   frames: ImageData[];
 } {
-  const image = loadPng(input);
+  return gridFromImage(loadPng(input), cols, rows);
+}
+
+// Same split, but starting from pixels that are already in memory — the
+// nine-slice tool has to strip a .9.png marker border before it can slice.
+function gridFromImage(
+  image: ImageData,
+  cols?: number,
+  rows?: number,
+): {
+  image: ImageData;
+  grid: { cols: number; rows: number; detected: boolean };
+  frames: ImageData[];
+} {
   let effectiveCols = cols;
   let effectiveRows = rows;
   let detected = false;
@@ -552,6 +576,153 @@ export function registerAllTools(server: McpServer) {
           explicit: x !== undefined || y !== undefined ? { x, y } : null,
         },
         pivots,
+      });
+    },
+  );
+
+  // ------- nine_slice -------
+  server.registerTool(
+    "sprite_generate_nine_slice",
+    {
+      description:
+        "Nine-slice (9-patch) insets plus the nine stretch regions for a sprite or every cell of a sheet. Setting `left`/`right`/`top`/`bottom` yourself is the real interface. Any side left out is filled in with a starting guess read off adjacent-line variance profiles: it holds up on panels with an obviously flat or repeated middle and falls apart on busy or gradient artwork, so check `confidence` and correct the numbers. `from_9patch` reads the insets off an Android .9.png marker border instead of guessing. Optionally also writes a .9.png (`ninepatch_output_path`) and a stretched preview PNG (`preview_output_path`), both built from the first frame.",
+      inputSchema: {
+        input_path: z.string(),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        left: z.number().int().min(0).optional().describe("Explicit left inset (pixels)"),
+        right: z.number().int().min(0).optional().describe("Explicit right inset (pixels)"),
+        top: z.number().int().min(0).optional().describe("Explicit top inset (pixels)"),
+        bottom: z.number().int().min(0).optional().describe("Explicit bottom inset (pixels)"),
+        alpha_threshold: z
+          .number()
+          .int()
+          .min(0)
+          .max(255)
+          .default(DEFAULT_ALPHA_THRESHOLD)
+          .describe("Pixels below this alpha count as equal to each other while guessing"),
+        tolerance: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(DEFAULT_TOLERANCE)
+          .describe("Adjacent-line difference below which two lines count as the same"),
+        min_middle: z
+          .number()
+          .int()
+          .min(0)
+          .default(DEFAULT_MIN_MIDDLE)
+          .describe("Pixels the stretchable middle must keep on each axis"),
+        from_9patch: z
+          .boolean()
+          .default(false)
+          .describe("Read the insets off the input's Android .9.png marker border"),
+        ninepatch_output_path: z
+          .string()
+          .optional()
+          .describe("Write the first frame as a .9.png carrying the resolved insets"),
+        preview_output_path: z
+          .string()
+          .optional()
+          .describe("Write the first frame stretched to the preview size"),
+        preview_width: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Defaults to 3x frame width"),
+        preview_height: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Defaults to 3x frame height"),
+      },
+    },
+    ({
+      input_path,
+      cols,
+      rows,
+      left,
+      right,
+      top,
+      bottom,
+      alpha_threshold,
+      tolerance,
+      min_middle,
+      from_9patch,
+      ninepatch_output_path,
+      preview_output_path,
+      preview_width,
+      preview_height,
+    }) => {
+      // A .9.png keeps its insets in a 1px marker border around the content,
+      // so the border has to come off before the sheet is cut into cells.
+      let border: NineSliceInsets | null = null;
+      let borderPadding: NineSliceInsets | null = null;
+      let sheet = loadPng(input_path);
+      if (from_9patch) {
+        const decoded = decodeNinePatch(sheet);
+        border = decoded.insets;
+        borderPadding = decoded.padding;
+        sheet = decoded.content;
+      }
+
+      const { frames, grid } = gridFromImage(sheet, cols, rows);
+      const nineSlice = nineSliceSection(frames, grid, {
+        left,
+        right,
+        top,
+        bottom,
+        alphaThreshold: alpha_threshold,
+        tolerance,
+        minMiddle: min_middle,
+        borderInsets: border,
+      });
+
+      const first = frames[0];
+      const firstInsets = nineSlice[0]?.insets;
+      let ninePatchPath: string | undefined;
+      let previewPath: string | undefined;
+      if (ninepatch_output_path || preview_output_path) {
+        if (!first || !firstInsets) throw new Error("no frames to export");
+        if (ninepatch_output_path) {
+          mkdirSync(dirname(ninepatch_output_path), { recursive: true });
+          savePng(encodeNinePatch(first, firstInsets, borderPadding), ninepatch_output_path);
+          ninePatchPath = ninepatch_output_path;
+        }
+        if (preview_output_path) {
+          // Same default as the CLI's --preview: 3x is big enough to see the
+          // corners stay 1:1 while the middle stretches.
+          const w = preview_width ?? first.width * 3;
+          const h = preview_height ?? first.height * 3;
+          mkdirSync(dirname(preview_output_path), { recursive: true });
+          savePng(stretchNineSlice(first, firstInsets, w, h), preview_output_path);
+          previewPath = preview_output_path;
+        }
+      }
+
+      const explicit =
+        left !== undefined || right !== undefined || top !== undefined || bottom !== undefined
+          ? { left, right, top, bottom }
+          : null;
+
+      return jsonResult({
+        source: input_path,
+        frameWidth: first?.width ?? 0,
+        frameHeight: first?.height ?? 0,
+        grid,
+        options: {
+          auto: nineSlice.some((n) => n.detected),
+          explicit,
+          alphaThreshold: alpha_threshold,
+          tolerance,
+          minMiddle: min_middle,
+          ...(from_9patch ? { ninePatch: true } : {}),
+        },
+        nineSlice,
+        ...(ninePatchPath ? { ninePatchPath } : {}),
+        ...(previewPath ? { previewPath } : {}),
       });
     },
   );
@@ -1230,7 +1401,7 @@ export function registerAllTools(server: McpServer) {
     "sprite_generate_meta",
     {
       description:
-        "One-shot: collision + pivot + tags in a single merged JSON. Pass `true` or config for each section you want; omit to skip.",
+        "One-shot: collision + pivot + nine-slice + tags in a single merged JSON. Pass a config object for each section you want — `{}` takes that section's defaults — and omit a section to skip it. The nine-slice section takes explicit insets and guesses any side you leave out — see sprite_generate_nine_slice for what that guess is worth, and use that tool for .9.png input or PNG output.",
       inputSchema: {
         input_path: z.string(),
         cols: z.number().int().positive().optional(),
@@ -1249,6 +1420,17 @@ export function registerAllTools(server: McpServer) {
             y: z.number().int().optional(),
           })
           .optional(),
+        nine_slice: z
+          .object({
+            left: z.number().int().min(0).optional(),
+            right: z.number().int().min(0).optional(),
+            top: z.number().int().min(0).optional(),
+            bottom: z.number().int().min(0).optional(),
+            alpha_threshold: z.number().int().min(0).max(255).default(DEFAULT_ALPHA_THRESHOLD),
+            tolerance: z.number().min(0).max(1).default(DEFAULT_TOLERANCE),
+            min_middle: z.number().int().min(0).default(DEFAULT_MIN_MIDDLE),
+          })
+          .optional(),
         tags: z
           .array(
             z.object({
@@ -1262,7 +1444,7 @@ export function registerAllTools(server: McpServer) {
           .optional(),
       },
     },
-    ({ input_path, cols, rows, collision, pivot, tags }) => {
+    ({ input_path, cols, rows, collision, pivot, nine_slice, tags }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
       const out: Record<string, unknown> = {
         source: input_path,
@@ -1298,6 +1480,17 @@ export function registerAllTools(server: McpServer) {
           },
         }));
       }
+      if (nine_slice) {
+        out.nineSlice = nineSliceSection(frames, grid, {
+          left: nine_slice.left,
+          right: nine_slice.right,
+          top: nine_slice.top,
+          bottom: nine_slice.bottom,
+          alphaThreshold: nine_slice.alpha_threshold,
+          tolerance: nine_slice.tolerance,
+          minMiddle: nine_slice.min_middle,
+        });
+      }
       if (tags && tags.length > 0) {
         out.tags = tags;
       }
@@ -1325,6 +1518,62 @@ function mergeFramePixels(frames: ImageData[]): ImageData {
     off += f.data.length;
   }
   return merged;
+}
+
+// Per-frame nine-slice payload shared by sprite_generate_nine_slice and the
+// merged meta tool. An explicitly given side always wins, then a .9.png
+// border, and only what is still missing is guessed off the variance
+// profiles — a frame with all four sides supplied is never even scanned.
+function nineSliceSection(
+  frames: ImageData[],
+  grid: { cols: number; rows: number },
+  opts: {
+    left?: number;
+    right?: number;
+    top?: number;
+    bottom?: number;
+    alphaThreshold: number;
+    tolerance: number;
+    minMiddle: number;
+    borderInsets?: NineSliceInsets | null;
+  },
+) {
+  const border = opts.borderInsets ?? null;
+  const allExplicit =
+    opts.left !== undefined &&
+    opts.right !== undefined &&
+    opts.top !== undefined &&
+    opts.bottom !== undefined;
+  return frames.map((f, i) => {
+    const guess =
+      allExplicit || border
+        ? null
+        : detectNineSlice(f, {
+            alphaThreshold: opts.alphaThreshold,
+            tolerance: opts.tolerance,
+            minMiddle: opts.minMiddle,
+          });
+    const base = border ?? guess?.insets ?? null;
+    const insets = clampInsets(
+      {
+        left: opts.left ?? base?.left ?? 0,
+        right: opts.right ?? base?.right ?? 0,
+        top: opts.top ?? base?.top ?? 0,
+        bottom: opts.bottom ?? base?.bottom ?? 0,
+      },
+      f.width,
+      f.height,
+      opts.minMiddle,
+    );
+    return {
+      index: i,
+      cell: { row: Math.floor(i / grid.cols), col: i % grid.cols },
+      insets,
+      detected: guess !== null,
+      confidence: guess?.confidence ?? 0,
+      regions: nineSliceRegions(insets, f.width, f.height),
+    };
+  });
 }
 
 function formatPattern(pattern: string, n: number): string {

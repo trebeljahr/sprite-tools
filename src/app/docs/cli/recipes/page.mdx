@@ -41,6 +41,34 @@ GRID=$(sprite-tools detect sheet.png | jq -r '.grid | "--cols \(.cols) --rows \(
 sprite-tools collision sheet.png $GRID --tolerance 4 -o c.json
 ```
 
+## Pin nine-slice borders on a folder of UI panels
+
+Every panel in a UI kit usually shares one border thickness, and you already know what it is. Pass it rather than letting the detector guess:
+
+```bash
+mkdir -p ui-meta
+for f in ui/panels/*.png; do
+  name=$(basename "$f" .png)
+  sprite-tools nine-slice "$f" \
+    --left 8 --right 8 --top 8 --bottom 8 \
+    -o "ui-meta/${name}.json"
+done
+```
+
+Drop the four flags to get a guess instead — it works on panels with a flat or repeated middle and not much else, so look at the numbers and at a rendered preview before shipping them:
+
+```bash
+sprite-tools nine-slice ui/panels/dialog.png \
+  --preview /tmp/dialog-stretched.png --preview-size 320x120 \
+  | jq '.nineSlice[0] | {insets, confidence}'
+```
+
+For an Android `.9.png`, read the marker border instead of guessing at all:
+
+```bash
+sprite-tools nine-slice ui/panels/button.9.png --from-9patch -o button.json
+```
+
 ## Convert a regular sprite to Game Boy style
 
 ```bash

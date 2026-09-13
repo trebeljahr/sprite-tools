@@ -8,10 +8,16 @@ import {
   addHelpExtras,
 } from "../lib/common";
 import { generateOutline } from "../../src/lib/collision/outline";
+import { computeNineSliceEntries } from "./nine-slice";
+import {
+  DEFAULT_ALPHA_THRESHOLD,
+  DEFAULT_MIN_MIDDLE,
+  DEFAULT_TOLERANCE,
+} from "../../src/lib/nine-slice/nine-slice";
 
 // Unified metadata emitter. One pass over the sheet produces collision +
-// pivot + tag info in a single merged JSON, so agents don't have to run
-// three subcommands and pipe through jq.
+// pivot + tag + 9-slice info in a single merged JSON, so agents don't have to
+// run four subcommands and pipe through jq.
 
 type Direction = "forward" | "reverse" | "pingpong";
 
@@ -33,7 +39,7 @@ const PRESETS: PivotPreset[] = [
 export function registerMetaCommand(program: Command) {
   const cmd = program
     .command("meta <input>")
-    .description("One-shot metadata pass: collision + pivot + tags in one merged JSON.")
+    .description("One-shot metadata pass: collision + pivot + tags + 9-slice in one merged JSON.")
     .option("--cols <n>", "columns", (v) => parseIntArg("cols", v))
     .option("--rows <n>", "rows", (v) => parseIntArg("rows", v))
     // Collision
@@ -66,6 +72,20 @@ export function registerMetaCommand(program: Command) {
       [],
     )
     .option("--fps <n>", "[tags] default FPS", (v) => parseIntArg("fps", v), 10)
+    // Nine-slice
+    .option("--nine-slice", "include 9-slice insets + stretch regions", false)
+    .option("--nine-slice-left <n>", "[nine-slice] explicit left inset in px", (v) =>
+      parseIntArg("nine-slice-left", v),
+    )
+    .option("--nine-slice-right <n>", "[nine-slice] explicit right inset in px", (v) =>
+      parseIntArg("nine-slice-right", v),
+    )
+    .option("--nine-slice-top <n>", "[nine-slice] explicit top inset in px", (v) =>
+      parseIntArg("nine-slice-top", v),
+    )
+    .option("--nine-slice-bottom <n>", "[nine-slice] explicit bottom inset in px", (v) =>
+      parseIntArg("nine-slice-bottom", v),
+    )
     // Output
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
@@ -76,12 +96,16 @@ export function registerMetaCommand(program: Command) {
       "",
       "# emit just what you ask for; unselected sections are omitted",
       "sprite-tools meta hero.png --pivot center   # only pivots",
+      "",
+      "# 9-slice insets: detected per frame, or pinned side by side",
+      "sprite-tools meta panel.png --nine-slice --nine-slice-left 8 --nine-slice-right 8",
     ],
     output: [
       "{ source, frameWidth, frameHeight, grid, frameCount,",
       "  collision?: [...]   (if --collision)",
       "  pivots?:    [...]   (if --pivot)",
-      "  tags?:      [...]   (if --tag)  }",
+      "  tags?:      [...]   (if --tag)",
+      "  nineSlice?: [...]   (if --nine-slice)  }",
     ],
   });
 
@@ -100,6 +124,11 @@ export function registerMetaCommand(program: Command) {
         pivotY?: number;
         tag: string[];
         fps: number;
+        nineSlice: boolean;
+        nineSliceLeft?: number;
+        nineSliceRight?: number;
+        nineSliceTop?: number;
+        nineSliceBottom?: number;
         output?: string;
       },
     ) => {
@@ -150,6 +179,27 @@ export function registerMetaCommand(program: Command) {
 
         if (opts.tag.length > 0) {
           base.tags = opts.tag.map((spec) => parseTag(spec, frames.length, opts.fps));
+        }
+
+        if (opts.nineSlice) {
+          // Sides left out are detected, which is a starting guess from per-axis
+          // variance — run `sprite-tools nine-slice --preview` to check it before
+          // trusting it on busy artwork.
+          base.nineSlice = computeNineSliceEntries(
+            frames,
+            grid.cols,
+            {
+              left: opts.nineSliceLeft,
+              right: opts.nineSliceRight,
+              top: opts.nineSliceTop,
+              bottom: opts.nineSliceBottom,
+            },
+            {
+              alphaThreshold: DEFAULT_ALPHA_THRESHOLD,
+              tolerance: DEFAULT_TOLERANCE,
+              minMiddle: DEFAULT_MIN_MIDDLE,
+            },
+          );
         }
 
         writeJsonOutput(base, opts.output);

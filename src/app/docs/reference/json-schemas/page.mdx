@@ -1,7 +1,7 @@
 export const metadata = {
   title: "JSON schemas — sprite-tools",
   description:
-    "Canonical JSON output schemas for sprite-tools collision, pivot, tags, palette, atlas, GIF, and combined metadata.",
+    "Canonical JSON output schemas for sprite-tools collision, pivot, tags, nine-slice, palette, atlas, GIF, and combined metadata.",
 };
 
 # JSON output schemas
@@ -19,7 +19,7 @@ interface Header {
 }
 ```
 
-Every `collision`, `pivot`, `tags`, `palette`, `meta` output starts with this.
+Every `collision`, `pivot`, `tags`, `nine-slice`, `palette`, `meta` output starts with this.
 
 ## Collision
 
@@ -70,6 +70,35 @@ interface TagsOutput extends Header {
 }
 ```
 
+## Nine-slice
+
+```ts
+interface NineSliceOutput extends Header {
+  options: {
+    auto: boolean;          // true when any inset was auto-detected
+    explicit: { left?: number; right?: number; top?: number; bottom?: number } | null;
+    alphaThreshold: number; // default 8
+    tolerance: number;      // default 0.02, normalized 0..1
+    minMiddle: number;      // default 1
+    ninePatch?: boolean;    // true when insets came from a .9.png marker border
+  };
+  nineSlice: Array<{
+    index: number;
+    cell: { row: number; col: number };
+    insets: { left: number; right: number; top: number; bottom: number };
+    detected: boolean;   // false when nothing was guessed (all sides given, or from a .9.png)
+    confidence: number;  // 0..1, 0 when nothing was guessed
+    regions: Array<{
+      name: string;      // "top-left" ... "bottom-right", row-major
+      x: number; y: number; width: number; height: number;
+      stretchX: boolean; stretchY: boolean;
+    }>;
+  }>;
+}
+```
+
+`regions` is always nine entries in row-major order, and they tile the frame exactly — no gaps, no overlap. Corners have both stretch flags `false`, edges have exactly one `true`, the center has both. `insets` are clamped so the opposing pairs can never overlap. See the [Nine-slice page](/docs/web/nine-slice) for what `confidence` is worth and where the detector gives up.
+
 ## Palette
 
 ```ts
@@ -85,9 +114,10 @@ interface PaletteOutput extends Header {
 ```ts
 interface MetaOutput extends Header {
   frameCount: number;
-  collision?: CollisionOutput["collision"];   // present if --collision
-  pivots?:    PivotOutput["pivots"];          // present if --pivot
-  tags?:      TagsOutput["tags"];             // present if --tag was passed
+  collision?:  CollisionOutput["collision"];   // present if --collision
+  pivots?:     PivotOutput["pivots"];          // present if --pivot
+  tags?:       TagsOutput["tags"];             // present if --tag was passed
+  nineSlice?:  NineSliceOutput["nineSlice"];   // present if --nine-slice
 }
 ```
 
@@ -147,3 +177,5 @@ jq -s 'add' c.json p.json t.json > hero.json
 ```
 
 `hero.json` ends up with `source`, `frameWidth`, `frameHeight`, `grid`, `options`, `frameCount`, `collision[]`, `pivots[]`, `tags[]` — a single sprite-metadata file ready for an engine.
+
+The payload keys never collide, but `options` is a shared top-level key: the last file in the `jq -s 'add'` list wins it. If you care which command's `options` survives, put that file last, or use `sprite-tools meta` for a single pass instead.

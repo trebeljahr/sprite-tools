@@ -6,12 +6,12 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
 - **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 15 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **CLI (`sprite-tools`)** — 16 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -48,6 +48,9 @@ sprite-tools meta hero.png \
 
 # Chroma-key a flat background out and crop to the content
 sprite-tools chroma hero.png --color '#00ff00' --trim -o hero-cut.png
+
+# Guess nine-slice borders for a UI panel, then check them with a stretched preview
+sprite-tools nine-slice panel.png --preview panel-stretched.png -o panel-9s.json
 
 # Turn any sprite into Game Boy pixel art
 sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero-gb.png
@@ -96,15 +99,15 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 18 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 19 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
+**CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
 
-**MCP**: 18 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
+**MCP**: 19 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
 
 ## Docs
 

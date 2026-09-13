@@ -58,6 +58,7 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
       { href: "/collision", label: "Collision", hint: "per-frame polygons" },
       { href: "/pivot", label: "Pivot", hint: "anchor points" },
       { href: "/tags", label: "Tags", hint: "named frame ranges" },
+      { href: "/nine-slice", label: "Nine-slice", hint: "stretchable panel borders" },
     ],
   },
   {

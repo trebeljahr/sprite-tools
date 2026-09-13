@@ -30,6 +30,7 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/collision", label: "Collision" },
       { href: "/docs/web/pivot", label: "Pivot" },
       { href: "/docs/web/tags", label: "Animation tags" },
+      { href: "/docs/web/nine-slice", label: "Nine-slice" },
       { href: "/docs/web/pixelate", label: "Pixelate" },
       { href: "/docs/web/normal-map", label: "Normal map" },
       { href: "/docs/web/outline", label: "Outline & shadow" },
