@@ -91,6 +91,30 @@ Deterministic, O(n²), tight packing for most sprite distributions. Not optimal 
 - **Extraction** returns the sprite's distinct colors verbatim (most-used first) when there are no more of them than requested, and otherwise falls back to the same median-cut from pixelation. Duplicate entries are dropped either way. It runs over the union of pixels across all frames of a sheet so the palette is consistent between frames.
 - **Swap** builds a lookup: for each palette index, the (possibly remapped) target color. For each source pixel, find the nearest palette entry by squared RGB distance, then output the target color at that index.
 
+## Duplicate frames (`findDuplicateFrames`)
+
+**Problem:** video extracted at a fixed FPS and AI-generated frames repeat the same pose. Find the repeats, keep one of each, and renumber everything that points at frame indices.
+
+**Metric:** mean absolute difference (MAE) over all four RGBA channels, on a 0-255 scale:
+
+```
+MAE(a, b) = sum(|a[i] - b[i]|) / (width × height × 4)
+```
+
+Alpha is compared as stored — no premultiply, no alpha weighting — so an alpha difference adds to the distance like any other channel. At threshold 0 an alpha-only change is never a duplicate; at a higher threshold it merges once its MAE is at or below the threshold. One normalisation applies before hashing and comparing: RGB under a pixel with alpha 0 reads as 0. The web app reads pixels through canvas, which zeroes that RGB anyway, so this keeps the web app, CLI, and MCP server in agreement. Frames of different sizes return `Infinity` and never match. MAE was picked over a perceptual hash because its value can be explained to a user:
+
+threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.
+
+**Pass 1, exact:** hash every frame's pixel buffer, with width and height mixed into the seed. Frames in the same hash bucket are then compared byte by byte, so a hash collision can never merge two different frames. Byte-identical frames always collapse here, before any fuzzy matching.
+
+**Pass 2, MAE (only when threshold > 0):** walk the pass-1 survivors in source order. Compare each one against the *representative* (first frame) of every group so far, and join the first group with `MAE <= threshold`. Otherwise start a new group.
+
+Comparing only against representatives is what prevents transitive chaining. If a matches b and b matches c, but a does not match c, a chaining approach would pull a and c together; here c is only ever measured against a and stays separate. The cost is order-dependence: which frame founds a group decides what joins it. Frames are never reordered, and the kept frame is always the lowest index in its group. Pass 2 is O(N × groups) MAE comparisons.
+
+**Partitions:** an optional id per frame. Frames only merge with frames that share an id. The CLI's `--respect-tags` and MCP's `respect_tags` build one id per tag (`buildTagPartitions`), so no frame merges across an animation boundary.
+
+**Tag remap (`remapTags`):** the result carries `remap[oldIndex] = newIndex of its kept frame`. For each tag, walk the old range from its lower to its higher index, map every index through `remap`, and collapse runs of the same new index. The result is the tag's ordered `frames`; `from`/`to` are its min and max. A range can come back non-contiguous for two reasons. A frame inside it matched a frame outside it — say `run` opens on a pose identical to one in `idle`, and now points back at idle's copy; partitions prevent this. Or the tag repeats one of its own poses non-adjacently (A B A B); partitions cannot prevent this. Frames are not reordered, not copied, and the range is not widened. The tag gets `contiguous: false` and a warning that names the cause, and `frames` is the authoritative play order. Warnings also cover tags that shrank, collapsed to one frame, or had a range partly outside the sheet (clamped). A range entirely outside the sheet gets an empty `frames`.
+
 ## GIF encoding
 
 Delegated to [`gifenc`](https://github.com/mattdesl/gifenc):

@@ -93,8 +93,8 @@ export function parsePixelArg(name: string, v: string): number {
 }
 
 /**
- * Register the margin/spacing flags. Declared once here so all nine grid
- * commands stay in sync — the flags are worthless if they mean different
+ * Register the margin/spacing flags. Declared once here so every grid
+ * command stays in sync — the flags are worthless if they mean different
  * things in `slice` and in `collision`.
  */
 export function addGridOptions(cmd: Command): Command {

@@ -163,6 +163,37 @@ interface MetaOutput extends Header {
 
 `frameDurations` mirrors the [Tags](#tags) shape exactly — global per frame, milliseconds, `null` for "use the tag's fps" — and sits at the top level next to `tags[]` rather than inside it. It is omitted when no frame has an explicit hold.
 
+## Dedupe
+
+```ts
+interface DedupeOutput extends Header {   // grid is the INPUT grid
+  frameCount: number;
+  method: "exact" | "mae";        // "exact" when threshold is 0
+  threshold: number;              // max mean RGBA difference, 0-255 scale, inclusive
+  uniqueCount: number;
+  removedCount: number;
+  keptIndices: number[];          // old indices kept, ascending
+  remap: number[];                // remap[oldIndex] = new index of its kept frame; length === frameCount
+  groups: Array<{                 // only groups with at least one duplicate
+    keep: number;                 // old index of the kept frame
+    duplicates: number[];         // old indices removed, ascending
+    distances: number[];          // distances[i] = MAE(duplicates[i], keep); 0 = byte-identical
+  }>;
+  tags?: Array<{                  // present when a tags file was passed
+    name: string;
+    from: number;                 // min(frames)
+    to: number;                   // max(frames)
+    direction?: string;           // copied from the input tag when present
+    fps?: number;                 // copied from the input tag when present
+    frames: number[];             // exact ordered new indices the tag plays — authoritative
+    contiguous: boolean;          // false when frames is not exactly from..to
+  }>;
+  warnings?: string[];            // present when a tags file was passed
+}
+```
+
+When `contiguous` is `false`, read `frames`, not `from`/`to`. threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing. See the [CLI reference](/docs/cli/reference#dedupe) for the full rules. The MCP tool returns the same fields plus `output`, `options`, and path fields, with `tags: null` and an always-present `warnings` array.
+
 ## Atlas manifest
 
 ```ts

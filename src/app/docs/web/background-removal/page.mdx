@@ -8,7 +8,7 @@ export const metadata = {
 
 [Open Background Removal](/background-removal)
 
-Background Removal is a browser-only tool that does one thing: key a background colour out of every frame, optionally crop to the content, and export. It is the background step of [Sheet Builder](/docs/web/spritesheet) on its own page, without the grid editing, frame selection, and playback around it.
+Background Removal is a browser-only tool that does one thing: key a background colour out of every frame, optionally crop to the content and drop duplicate frames, and export. It is the background step of [Sheet Builder](/docs/web/spritesheet) on its own page, without the grid editing, frame selection, and playback around it.
 
 ## When to use it
 
@@ -52,6 +52,28 @@ Every pixel is scored by its straight RGB distance to the detected background co
 
 In solid-fill mode only **Edge Softness (Feather)** is exposed — it is the same softness value, applied to the mask that composites the fill. Spill and choke do not apply there.
 
+## Duplicate frames
+
+Video extracted at a fixed FPS repeats every pose that lasts longer than one sample: at the default 10 FPS, a pose held for half a second arrives as five frames. The **Duplicate Frames** card removes the repeats before export.
+
+- **Remove duplicates** (off by default) adds a duplicate step after background removal and auto-crop. Turning it off removes the step again.
+- **Tolerance** (default 0) sets how different two frames may be and still count as duplicates. Changes apply 250 ms after you stop typing. Hover the box for the full definition.
+- The card then reads "N duplicate frames removed · M left" or "No duplicates found". The number is dimmed while the pipeline re-runs.
+
+Removed frames are gone from the preview and from every export: the ZIP, the stitched sheet, and the single PNG.
+
+**Tolerance** is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.
+
+How the comparison works:
+
+- Frames are compared after keying and cropping, so the pixels compared are the pixels you export.
+- A frame is a duplicate when its difference is at or below the tolerance.
+- Alpha counts. A difference in transparency adds to the difference like a difference in colour. At tolerance 0, two frames that differ only in transparency are never duplicates.
+- Each frame is compared with the first frame of every group found so far, never with other duplicates. So if frame A matches B and B matches C, but A does not match C, then A and C both stay.
+- Frame order never changes, and the earliest frame of each group is the one kept.
+
+Removing frames renumbers every frame after them. If you tag the export in [Tags](/docs/web/tags), tag the deduped sheet, not the original. To rewrite an existing tags file, use `sprite-tools dedupe --tags` on the sheet the tags were written for — see the [CLI reference](/docs/cli/reference#dedupe).
+
 ## Limits
 
 This is colour keying, not segmentation. There is no model and no subject detection:
@@ -74,5 +96,11 @@ sprite-tools chroma hero.png --softness 20 --spill 30 --choke 2 --trim -o hero-c
 ```
 
 `remove-bg` is an alias for `chroma`. The defaults match this page's defaults exactly. For sheets, the MCP tool `sprite_remove_background` keys every cell and restitches the grid — see the [tool catalog](/docs/mcp/tools).
+
+The duplicate step is `sprite-tools dedupe` in the CLI and `sprite_find_duplicates` in MCP. Both use the same comparison and the same tolerance scale:
+
+```bash
+sprite-tools dedupe hero-cut.png --threshold 1 --sheet hero-unique.png -o dedupe.json
+```
 
 Video extraction, live preview, and the before/after compare are browser-only.

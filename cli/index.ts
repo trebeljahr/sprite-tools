@@ -27,6 +27,7 @@ import { registerGifCommand } from "./commands/gif";
 import { registerDetectCommand } from "./commands/detect";
 import { registerSliceCommand } from "./commands/slice";
 import { registerTrimCommand } from "./commands/trim";
+import { registerDedupeCommand } from "./commands/dedupe";
 import { registerChromaCommand } from "./commands/chroma";
 import { registerInfoCommand } from "./commands/info";
 import { registerMetaCommand } from "./commands/meta";
@@ -49,6 +50,7 @@ program.addHelpText(
     "  detect     just the detected grid                                (JSON)",
     "  slice      split a sheet into per-cell PNGs on disk              (files)",
     "  trim       auto-crop transparent padding                         (PNG)",
+    "  dedupe     find + drop duplicate / near-duplicate frames         (JSON + PNG)",
     "",
     "Metadata (all share top-level {source, frameWidth, frameHeight, grid}):",
     "  collision  per-frame collision polygons                          (JSON)",
@@ -91,6 +93,7 @@ registerInfoCommand(program);
 registerDetectCommand(program);
 registerSliceCommand(program);
 registerTrimCommand(program);
+registerDedupeCommand(program);
 registerCollisionCommand(program);
 registerPivotCommand(program);
 registerTagsCommand(program);

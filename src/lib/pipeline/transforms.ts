@@ -2,6 +2,7 @@ import {
   type AutoCropConfig,
   type ChromaKeyConfig,
   computeStats,
+  type DedupeStepConfig,
   EMPTY_CROP,
   type FrameCrop,
   type Frames,
@@ -10,6 +11,7 @@ import {
   type Frame,
   type Progress,
 } from "./types";
+import { applyDedupe, findDuplicateFrames } from "./dedupe-core";
 import type { ChromaWorkerRequest, ChromaWorkerResponse } from "./chroma.worker";
 
 // Yield to the event loop without the setTimeout-4ms floor, so the browser
@@ -327,6 +329,53 @@ export function selectFrames(frames: Frames, indices: number[]): Frames {
   const set = new Set(indices);
   const out = frames.frames.filter((_, i) => set.has(i));
   return { frames: out, stats: computeStats(out) };
+}
+
+// -----------------------------------------------------------------
+// Dedupe — drop duplicate / near-duplicate frames
+// -----------------------------------------------------------------
+// Fixed-FPS video extraction and AI generation both emit the same pose many
+// times over. dedupe-core does the actual comparison on plain ImageData; all
+// this wrapper owes it is pixels, so the only real work here is pulling every
+// ImageBitmap back through a canvas.
+
+/**
+ * Read every frame's pixels back out of its ImageBitmap.
+ *
+ * Exported because the Sheet Builder needs the same rasterization to run
+ * findDuplicateFrames against the current pipeline output without adding a
+ * pipeline step — one rasterizer, one canvas helper, no second code path.
+ */
+export async function rasterizeFrames(frames: Frame[]): Promise<ImageData[]> {
+  const out: ImageData[] = [];
+  for (let i = 0; i < frames.length; i++) {
+    const { canvas, ctx } = await bitmapToCanvas(frames[i].bitmap);
+    out.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    // getImageData is synchronous and can stall a long sheet; breathe between
+    // batches so the browser can still paint, exactly like autoCrop's scan.
+    if (i % 4 === 3) await yieldToMain();
+  }
+  return out;
+}
+
+/**
+ * threshold is the mean absolute difference per RGBA channel on a 0-255 scale,
+ * averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the
+ * average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video
+ * compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels.
+ * Above ~8 visibly different poses start collapsing.
+ */
+export async function dedupe(frames: Frames, config: DedupeStepConfig): Promise<Frames> {
+  if (frames.frames.length === 0) return await cloneFrames(frames);
+
+  const images = await rasterizeFrames(frames.frames);
+  const result = findDuplicateFrames(images, { threshold: config.threshold });
+  const kept = applyDedupe(frames.frames, result);
+
+  // Clone even when nothing was removed. The surviving Frame objects still
+  // point at the previous step's bitmaps, and usePipeline disposes a cache
+  // entry when it is replaced — sharing them would strand this step's output.
+  return await cloneFrames({ frames: kept, stats: computeStats(kept) });
 }
 
 // -----------------------------------------------------------------

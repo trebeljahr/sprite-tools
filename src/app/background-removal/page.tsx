@@ -13,15 +13,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { useViewport } from "@/hooks/use-viewport";
 import { track } from "@/lib/analytics";
 import { exportAsZip, frameToPngBlob, stitchSheet } from "@/lib/pipeline/export";
 import { detectSheetGrid } from "@/lib/pipeline/import";
-import type { AutoCropConfig, BackgroundMode, ChromaKeyConfig, Frame } from "@/lib/pipeline/types";
+import {
+  type AutoCropConfig,
+  type BackgroundMode,
+  type ChromaKeyConfig,
+  DEDUPE_THRESHOLD_HELP,
+  type Frame,
+} from "@/lib/pipeline/types";
 import {
   buildAutoCropStep,
   buildChromaKeyStep,
+  buildDedupeStep,
   buildImportFilesStep,
   buildImportSheetStep,
   buildImportVideoStep,
@@ -203,6 +211,13 @@ export default function BackgroundRemovalPage() {
   const [detectedGrid, setDetectedGrid] = useState<{ cols: number; rows: number } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
+  // Duplicate removal is a real pipeline step here — this page has no frame
+  // grid to deselect things in, so the chain itself has to do the dropping.
+  // Off by default: it costs a full read-back of every frame's pixels.
+  const [dedupeEnabled, setDedupeEnabled] = useState(false);
+  const [dedupeThreshold, setDedupeThreshold] = useState(0);
+  const [appliedDedupeThreshold, setAppliedDedupeThreshold] = useState(0);
+
   const [brState, setBrState] = useState<BackgroundRemovalState>(DEFAULT_SETTINGS);
   // Debounced mirror of brState — sliders fire continuously while dragging
   // and every distinct value would kick off a full chroma pass.
@@ -378,23 +393,31 @@ export default function BackgroundRemovalPage() {
   const runFromSource = (tab: SourceTab) => {
     const chroma = buildChromaKeyStep(chromaConfigFrom(brState));
     const crop = buildAutoCropStep(autoCropConfigFrom(brState));
+    // Dedupe runs last: cropping first lines the sprites up, so two takes of
+    // the same pose compare as the same pixels rather than as shifted ones.
+    const tail = dedupeEnabled ? [crop, buildDedupeStep({ threshold: dedupeThreshold })] : [crop];
     if (tab === "video") {
       if (!videoFile) return;
       pipeline.setSource({ file: videoFile });
-      pipeline.setSteps([buildImportVideoStep({ fps }, videoFile.name), chroma, crop], false);
+      pipeline.setSteps([buildImportVideoStep({ fps }, videoFile.name), chroma, ...tail], false);
     } else if (tab === "sheet") {
       if (!sourceFile) return;
       pipeline.setSource({ file: sourceFile });
       pipeline.setSteps(
-        [buildImportSheetStep({ cols: sheetCols, rows: sheetRows }, sourceFile.name), chroma, crop],
+        [
+          buildImportSheetStep({ cols: sheetCols, rows: sheetRows }, sourceFile.name),
+          chroma,
+          ...tail,
+        ],
         false,
       );
     } else {
       if (imageFiles.length === 0) return;
       pipeline.setSource({ images: imageFiles });
-      pipeline.setSteps([buildImportFilesStep(imageFiles.length), chroma, crop], false);
+      pipeline.setSteps([buildImportFilesStep(imageFiles.length), chroma, ...tail], false);
     }
     setAppliedBr(brState);
+    setAppliedDedupeThreshold(dedupeThreshold);
     setRanTab(tab);
     setSelectedIndex(0);
     hasAutoFitted.current = false;
@@ -425,6 +448,39 @@ export default function BackgroundRemovalPage() {
       pipeline.updateStep(cropStep.id, cropCfg, true);
     }
   }, [appliedBr, pipeline.state.steps]);
+
+  // Same debounce for the tolerance box — every keystroke would otherwise
+  // re-read the pixels of every frame.
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedDedupeThreshold(dedupeThreshold), 250);
+    return () => clearTimeout(t);
+  }, [dedupeThreshold]);
+
+  // The dedupe step is added and removed rather than left in place disabled,
+  // so turning it off costs nothing at all.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `pipeline` is a fresh object every render; the presence/JSON guards below make re-entry a no-op
+  useEffect(() => {
+    const steps = pipeline.state.steps;
+    if (steps.length === 0) return;
+    const existing = steps.find((s) => s.kind === "dedupe");
+    if (!dedupeEnabled) {
+      if (existing) pipeline.removeStep(existing.id, false);
+      return;
+    }
+    const cfg = { threshold: appliedDedupeThreshold };
+    if (!existing) {
+      pipeline.setSteps([...steps, buildDedupeStep(cfg)], false);
+      return;
+    }
+    if (JSON.stringify(existing.config) !== JSON.stringify(cfg)) {
+      pipeline.updateStep(existing.id, cfg, false);
+    }
+  }, [dedupeEnabled, appliedDedupeThreshold, pipeline.state.steps]);
+
+  // How many frames the dedupe step actually dropped on the last run.
+  const dedupeStepId = pipeline.state.steps.find((s) => s.kind === "dedupe")?.id;
+  const dedupeCounts = dedupeStepId ? pipeline.state.stepFrameCounts[dedupeStepId] : undefined;
+  const dedupeRemoved = dedupeCounts ? dedupeCounts.input - dedupeCounts.output : 0;
 
   // ------- Preview bookkeeping -------
 
@@ -669,6 +725,57 @@ export default function BackgroundRemovalPage() {
             </CardHeader>
             <CardContent>
               <BackgroundRemovalSettings state={brState} setState={setBrState} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Duplicate Frames</CardTitle>
+              <CardDescription className="text-xs">
+                Fixed-FPS extraction and AI generation repeat the same pose. Drop the repeats before
+                export.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Remove duplicates</Label>
+                <Switch checked={dedupeEnabled} onCheckedChange={setDedupeEnabled} />
+              </div>
+
+              {dedupeEnabled && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="dedupe-tolerance" className="text-xs">
+                      Tolerance
+                    </Label>
+                    <Input
+                      id="dedupe-tolerance"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={dedupeThreshold}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n >= 0) setDedupeThreshold(n);
+                      }}
+                      className="h-9 w-24 text-sm"
+                      title={DEDUPE_THRESHOLD_HELP}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    Mean per-channel RGBA difference, 0–255. 0 = exact duplicates only.
+                  </p>
+                  {dedupeCounts && (
+                    // Counts come from the last *completed* run; dim them while a
+                    // re-run is in flight so a stale number doesn't read as final.
+                    <p className={cn("text-xs font-medium", running && "opacity-50")}>
+                      {dedupeRemoved > 0
+                        ? `${dedupeRemoved} duplicate frame${dedupeRemoved === 1 ? "" : "s"} removed · ${dedupeCounts.output} left`
+                        : "No duplicates found"}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

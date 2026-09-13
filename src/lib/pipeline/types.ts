@@ -82,6 +82,26 @@ export interface VideoImportConfig {
   fps: number;
 }
 
+// Named DedupeStepConfig, not DedupeConfig — dedupe-core.ts already owns that
+// name for the algorithm's own options (which also carry partitions).
+export interface DedupeStepConfig {
+  /**
+   * threshold is the mean absolute difference per RGBA channel on a 0-255 scale,
+   * averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the
+   * average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video
+   * compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels.
+   * Above ~8 visibly different poses start collapsing.
+   */
+  threshold: number;
+}
+
+// The same sentence, as a string, so every UI surface that exposes the
+// threshold (tooltips on the Sheet Builder and Background Removal pages)
+// shows the documented meaning verbatim instead of paraphrasing it. Those
+// pages label the field "Tolerance", so the tooltip uses that word too.
+export const DEDUPE_THRESHOLD_HELP =
+  "Tolerance is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.";
+
 // ---- Pipeline step model ----
 
 export type StepKind =
@@ -91,7 +111,8 @@ export type StepKind =
   | "chroma-key"
   | "auto-crop"
   | "manual-crop"
-  | "select";
+  | "select"
+  | "dedupe";
 
 export interface StepBase<K extends StepKind, C> {
   id: string;
@@ -107,7 +128,8 @@ export type PipelineStep =
   | StepBase<"chroma-key", ChromaKeyConfig>
   | StepBase<"auto-crop", AutoCropConfig>
   | StepBase<"manual-crop", { crop: FrameCrop }>
-  | StepBase<"select", { indices: number[] }>;
+  | StepBase<"select", { indices: number[] }>
+  | StepBase<"dedupe", DedupeStepConfig>;
 
 // ---- Progress events ----
 

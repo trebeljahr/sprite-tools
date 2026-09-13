@@ -6,12 +6,12 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
 - **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 16 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **CLI (`sprite-tools`)** — 17 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -54,6 +54,11 @@ sprite-tools chroma hero.png --color '#00ff00' --trim -o hero-cut.png
 
 # Guess nine-slice borders for a UI panel, then check them with a stretched preview
 sprite-tools nine-slice panel.png --preview panel-stretched.png -o panel-9s.json
+
+# Drop repeated frames from a video extraction and rewrite the tag ranges to match
+sprite-tools dedupe walk-sheet.png --cols 8 --rows 4 --threshold 1 \
+  --tags walk-tags.json --tags-out walk-tags-deduped.json \
+  --sheet walk-deduped.png -o dedupe.json
 
 # Turn any sprite into Game Boy pixel art
 sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero-gb.png
@@ -105,15 +110,15 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 19 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 20 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
 **Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
+**CLI**: `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
 
-**MCP**: 19 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
+**MCP**: 20 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
 
 ## Docs
 
@@ -124,7 +129,7 @@ Full docs live in the app at [sprites.trebeljahr.com/docs](https://sprites.trebe
 - **Web app guide** — Sheet Builder, Background Removal, Lasso, metadata tools, transforms, exports, and AI flows.
 - **CLI reference** — every flag + output shape.
 - **JSON schemas** — the canonical data contract shared across all surfaces.
-- **Algorithm notes** — how grid detection / contour tracing / bin packing work.
+- **Algorithm notes** — how grid detection / contour tracing / duplicate detection / bin packing work.
 - **Contributing** — how to add a new tool.
 
 Or run the app locally: `pnpm install && pnpm dev`, then open `http://localhost:3471/docs`.

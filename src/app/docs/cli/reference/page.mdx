@@ -181,6 +181,83 @@ One-shot: emits a single JSON with whichever sections (`collision`, `pivots`, `t
 
 `--duration` behaves exactly as it does on [`tags`](#tags) and adds the same top-level `frameDurations` array to the combined document.
 
+## `dedupe`
+
+```
+sprite-tools dedupe <input>
+  [--cols N] [--rows N]            # auto-detected if omitted
+  [--margin N] [--margin-x N] [--margin-y N]      # see Grid padding below
+  [--spacing N] [--spacing-x N] [--spacing-y N]
+  [--threshold N]                  # max mean RGBA difference, 0-255, default 0 (byte-identical only)
+  [--tags FILE]                    # tags JSON to rewrite through the remap
+  [--tags-out FILE]                # also write the rewritten tags as a standalone tags JSON
+  [--respect-tags]                 # never merge across a tag boundary (requires --tags)
+  [--sheet FILE]                   # also write the deduped sheet PNG ('-' for stdout)
+  [--sheet-cols N]                 # columns for --sheet, default: the input's columns
+  [-o FILE]                        # JSON (default: stdout)
+```
+
+Finds duplicate and near-duplicate frames in a sheet and, with `--sheet`, writes the sheet without them. Video extracted at a fixed FPS and AI-generated frames often repeat the same pose many times over.
+
+**Threshold.** threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.
+
+The comparison is inclusive: a frame merges when its distance is `<=` the threshold. Start at 0, then raise it one step at a time and read the `distances` in `groups` to see how close each merge was.
+
+**Matching rules.**
+
+- Alpha counts. An alpha difference adds to the distance like any other channel. At threshold 0 an alpha-only change is never a duplicate. At a higher threshold it merges once its distance is at or below the threshold. RGB under a fully transparent pixel is read as 0, so colour nobody can see never counts.
+- Frames of different sizes never match.
+- Byte-identical frames always merge first. Near-duplicates are matched after that, only when `--threshold` is above 0.
+- Matching is greedy, in source order. Each frame is compared with the first frame of every group found so far, and joins the first group within the threshold. It is never compared with the other members of a group. So if a matches b and b matches c, but a does not match c, then a and c stay apart.
+- Frames are never reordered. The frame kept for a group is always the one with the lowest index.
+
+**Tags.** Removing a frame renumbers every frame after it. Animation tags are frame ranges, so a tags file written for the old sheet points at the wrong frames after a dedupe. Pass `--tags` with the JSON that `sprite-tools tags` writes (or a bare array of `{name, from, to, direction?, fps?}`), and every range is rewritten through `remap`. `from` and `to` must be integers, and a tag needs a non-empty `name`; anything else is an error. The rewritten tags are always in the main JSON under `tags`. `--tags-out` also writes them on their own as `{ source, frameWidth, frameHeight, grid, frameCount, tags, frameDurations?, warnings }`, with `grid` and `frameCount` describing the deduped sheet, so the file works as input for other commands. `source` is the `--sheet` file, or the input sheet when `--sheet` names no file, and then a warning says the tags match no sheet on disk. `--tags-out` without `--tags` is an error.
+
+Each tag's old range is walked from its lower to its higher index. Every old index maps to the new index of its kept frame, and runs of the same new index collapse into one. That collapse is intended: adjacent duplicate frames make the animation shorter. Name, `direction`, and `fps` are kept. A top-level `frameDurations` array (milliseconds per old frame) is carried into `--tags-out`: each kept frame takes the first explicit hold in its group, lowest index first. Holds of collapsed frames are not added together.
+
+A rewritten range can come back non-contiguous, for two reasons. A frame inside the range matched a frame outside it: the neutral pose that opens `run` can be byte-identical to a frame in `idle`, so `run` now starts with idle's copy. Or the tag repeats one of its own poses non-adjacently, as a walk cycle filmed over two loops does. Frames are not reordered or copied to close the gap, and the range is not widened. Instead the tag gets:
+
+- `frames` — the exact ordered list of new indices the tag plays. This is the authoritative field.
+- `from` / `to` — the lowest and highest index in `frames`, for tools that only read ranges. They do not describe what the tag plays.
+- `contiguous: false`
+- a warning that names the tag and the cause.
+
+`--respect-tags` confines merging to within each tag, so a frame can never merge with a frame from another animation. Frames outside every tag share one group of their own. Where tags overlap, the overlapping frames belong to the first tag listed, and a warning says so. This removes the cross-tag cause of gaps. A tag can still come back non-contiguous when two non-adjacent frames inside it match each other, for example frames 0 and 2 identical and frame 1 different.
+
+`warnings` also reports a tag that shrank, a tag that collapsed to a single frame, and a tag whose range fell partly outside the sheet (the range is clamped). A tag whose range lies entirely outside the sheet comes back with an empty `frames` array and `contiguous: false`.
+
+**Sheet.** `--sheet` writes the kept frames in source order, `--sheet-cols` columns wide. Rows are `ceil(uniqueCount / cols)`. Cells after the last frame are fully transparent. `--sheet -` needs `-o FILE` for the JSON, so the PNG and the JSON do not both go to stdout.
+
+```json
+{ "source", "frameWidth", "frameHeight",
+  "grid": {cols,rows,detected},          // the input grid
+  "frameCount",
+  "method": "exact"|"mae",               // "exact" when threshold is 0
+  "threshold", "uniqueCount", "removedCount",
+  "keptIndices": [oldIndex, ...],        // ascending
+  "remap": [newIndex, ...],              // one entry per old frame: the new index of its kept frame
+  "groups": [{ "keep", "duplicates": [...], "distances": [...] }],   // groups with >= 1 duplicate
+  "tags": [{ "name", "from", "to", "direction"?, "fps"?,
+             "frames": [...], "contiguous" }],                    // only with --tags
+  "warnings": [string, ...] }            // only with --tags
+```
+
+`distances[i]` is the distance between `duplicates[i]` and `keep`. 0 means byte-identical. `--threshold` must be 0 or more.
+
+```bash
+# Report exact duplicates only
+sprite-tools dedupe sheet.png
+
+# Absorb faint noise, write the clean sheet
+sprite-tools dedupe sheet.png --threshold 1 --sheet clean.png -o dedupe.json
+
+# Rewrite a tags file for the deduped sheet, without merging across tags
+sprite-tools dedupe sheet.png --threshold 1 --tags hero-tags.json --respect-tags \
+  --tags-out hero-tags-deduped.json --sheet clean.png -o dedupe.json
+```
+
+The MCP tool is `sprite_find_duplicates`. In the web app, use **Select unique** in [Sheet Builder](/docs/web/spritesheet) or the duplicate step in [Background Removal](/docs/web/background-removal).
+
 ## `palette`
 
 ```

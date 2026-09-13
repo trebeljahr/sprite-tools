@@ -131,6 +131,42 @@ done
 sprite-tools atlas cut/*.png -o atlas.png --json atlas.json
 ```
 
+## Drop the repeated frames from a video extraction, then rewrite the tags
+
+Video sampled at a fixed FPS repeats every pose that lasts longer than one sample. At 10fps, a pose held for 0.4 s arrives as four copies of one frame. The copies are often byte-identical, and sometimes a few levels apart after video compression. Tile the frames into a sheet with ffmpeg, tag the sheet, then dedupe with the tags so the ranges follow the renumbered frames:
+
+```bash
+# 32 frames at 10fps, tiled 8x4
+ffmpeg -i walk.mp4 -vf "fps=10,tile=8x4" -frames:v 1 walk-sheet.png
+
+sprite-tools tags walk-sheet.png --cols 8 --rows 4 \
+  --tag idle=0-15 --tag walk=16-31:12:pingpong \
+  -o walk-tags.json
+
+sprite-tools dedupe walk-sheet.png --cols 8 --rows 4 --threshold 1 \
+  --tags walk-tags.json --tags-out walk-tags-deduped.json \
+  --sheet walk-deduped.png \
+  -o walk-dedupe.json
+
+jq '.removedCount, .warnings' walk-dedupe.json
+```
+
+`walk-tags-deduped.json` has the same shape as the tags file, with `grid` and `frameCount` set for `walk-deduped.png`. A clip with eight poses, each held for four samples, comes back as `idle` = frames 0-3 and `walk` = frames 4-7, each with a `shrank from 16 to 4` warning.
+
+Pass the new grid to the next command. Grid detection can guess wrong on an opaque sheet, or on one whose last row ends in transparent cells. This GIF plays the whole deduped sheet at one rate, `idle` and `walk` together; it does not play a tag on its own:
+
+```bash
+GRID=$(jq -r '.grid | "--cols \(.cols) --rows \(.rows)"' walk-tags-deduped.json)
+sprite-tools gif walk-deduped.png $GRID --fps 4 -o walk.gif
+```
+
+Notes:
+
+- `--threshold 1` absorbs faint noise, such as rounding from video compression. Raise it towards 2-4 only if `removedCount` is lower than you expect, and check `groups[].distances` first. Above ~8, different poses start to merge.
+- `--sheet` keeps `--sheet-cols` columns (default: the input's 8). When `uniqueCount` is not a multiple of that, the last row ends in transparent cells, and `gif` plays each of them as a blank frame. Run dedupe again with `--sheet-cols` set to `uniqueCount` to get a single row with no empty cells.
+- If the tile has more cells than the clip has frames, ffmpeg fills the rest with identical blank cells. Dedupe collapses them into one blank frame, and `gif` plays that frame too.
+- Check every tag for `"contiguous": false`, and play such a tag from its `frames` array. There are two causes. A frame in the tag matched an identical frame outside it, which `--respect-tags` prevents. Or the tag repeats one of its own poses non-adjacently, for example a walk cycle filmed over two loops, which `--respect-tags` cannot prevent. The warning names the cause.
+
 ## Trim then feed into collision (pipe chain)
 
 ```bash

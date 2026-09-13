@@ -37,6 +37,21 @@ The grid overlay on the preview honours the values. With padding set it draws bo
 
 Padding has to tile the sheet exactly. When it does not, the fit error appears under the fields with the actual pixel counts and **Split Sheet** stays disabled until you fix it. Leaving everything at zero keeps the old behaviour: the cell size is `floor(width / cols)` and a non-divisible sheet just loses the remainder off the right and bottom edges.
 
+## Duplicate frames
+
+Video extracted at a fixed FPS and AI-generated frames often repeat the same pose. **Select unique**, in the Frame Selection header, deselects every frame that duplicates an earlier one. Nothing is deleted: the duplicates stay in the grid, unselected, so you can see which frames go and select any of them again by hand. The preview, the stitched sheet, and the ZIP use the selected frames only.
+
+- Set **Tolerance** next to the button before you press it. Hover the box for the full definition.
+- The button replaces the current selection. Any frames you deselected by hand are selected again if they are not duplicates.
+- Frames are compared as the grid shows them, after background removal and crop. If you change those settings, press **Select unique** again.
+- The header then reads "N duplicates deselected" or "No duplicates found".
+
+**Tolerance** is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.
+
+A frame counts as a duplicate when its difference is at or below the tolerance. Alpha counts: a difference in transparency adds to the difference like a difference in colour, so at tolerance 0 two frames that differ only in transparency are never duplicates. Each frame is compared with the first frame of every group found so far, never with other duplicates, and the earliest frame of a group is the one kept.
+
+Removing frames renumbers every frame after them, and animation tags are frame ranges. Build the sheet first and tag it afterwards in [Tags](/docs/web/tags). If you already have a tags file for a sheet, dedupe that sheet with `sprite-tools dedupe --tags` instead, which rewrites the ranges for you — see the [CLI reference](/docs/cli/reference#dedupe).
+
 ## CLI equivalents
 
 Use the CLI for scriptable pieces of this workflow:
@@ -47,6 +62,7 @@ sprite-tools slice sheet.png --out-dir frames --json frames.json
 sprite-tools slice tileset.png --cols 8 --rows 6 --margin 1 --spacing 2 --out-dir tiles
 sprite-tools trim sprite.png --padding 1 -o tight.png
 sprite-tools atlas frames/*.png -o atlas.png --json atlas.json
+sprite-tools dedupe sheet.png --threshold 1 --tags tags.json --tags-out tags-deduped.json --sheet clean.png
 ```
 
 The browser tool is the best fit for manual frame selection, visual crop tuning, and video-to-sheet cleanup.

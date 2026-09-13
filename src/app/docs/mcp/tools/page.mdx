@@ -6,11 +6,11 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 19 MCP tools.
+Full input/output schema for each of the 20 MCP tools.
 
 ## Grid args on sheet tools
 
-Ten tools consume a sheet and accept the same grid block: `sprite_slice`, `sprite_remove_background`, `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags`, `sprite_extract_palette`, `sprite_palette_swap`, `sprite_pixelate`, `sprite_generate_normal_map`, and `sprite_generate_meta`.
+Sixteen tools consume a sheet and accept the same grid block: `sprite_slice`, `sprite_remove_background`, `sprite_find_duplicates`, `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags`, `sprite_generate_nine_slice`, `sprite_extract_palette`, `sprite_palette_swap`, `sprite_detect_ramps`, `sprite_palette_variants`, `sprite_pixelate`, `sprite_generate_normal_map`, `sprite_add_outline`, `sprite_add_shadow`, and `sprite_generate_meta`.
 
 ```ts
 {
@@ -277,6 +277,59 @@ One-shot: combines collision + pivot + tags + nine-slice. Each sub-section is op
 Passing `nine_slice` (even as an empty object) adds the `nineSlice` section, with the same guess-versus-explicit behaviour as `sprite_generate_nine_slice`. It does not do `.9.png` input or PNG output — use the dedicated tool for those.
 
 `frame_durations` works exactly as it does on `sprite_generate_tags` and adds the same top-level `frameDurations` array to the combined document.
+
+## `sprite_find_duplicates`
+
+Finds duplicate and near-duplicate frames in a sheet. Optionally writes the sheet without them, and rewrites a tags file so the ranges follow the renumbered frames.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  ...grid args,                   // cols/rows/margin/spacing — see above
+  threshold?: number,             // >= 0, default 0 (byte-identical only)
+  output_path?: string,           // write the deduped sheet PNG; omit to only report
+  sheet_cols?: number,            // columns in the written sheet; default: input cols, capped at frames kept
+  tags_path?: string,             // { tags: [...], frameDurations?: [...] } (as sprite_generate_tags emits) or a bare array
+  tags_output_path?: string,      // write the rewritten tags JSON; requires tags_path
+  respect_tags?: boolean          // default false; requires tags_path
+}
+```
+
+Returns JSON:
+
+```json
+{ "source", "output_path", "tags_source", "tags_output_path",
+  "sourceWidth", "sourceHeight",
+  "grid": {cols,rows,detected},
+  "frameWidth", "frameHeight",
+  "method": "exact"|"mae", "threshold",
+  "frameCount", "uniqueCount", "removedCount",
+  "groups": [{ "keep", "duplicates": [...], "distances": [...] }],
+  "keptIndices": [oldIndex, ...],
+  "remap": [newIndex, ...],
+  "output": {path,width,height,cols,rows}|null,
+  "tags": [{ "name", "from", "to", "direction"?, "fps"?, "frames": [...], "contiguous" }]|null,
+  "warnings": [string, ...],
+  "options": {threshold,respect_tags,sheet_cols,partitioned} }
+```
+
+`remap[oldIndex]` is the new index of the frame that stands in for that old frame. `distances[i]` is the distance between `duplicates[i]` and `keep`, rounded to 4 significant digits. 0 means byte-identical, and a non-zero distance never rounds to 0.
+
+`tags_output_path` gets `{ source, frameWidth, frameHeight, grid, frameCount, tags, frameDurations?, warnings }`, where `source` is `output_path` (or `input_path` when none is given), `frameCount` is the deduped count, and `grid` is the written sheet's grid (the input grid when no `output_path` is given). `frameDurations` is present when the input document had one: each kept frame takes the first explicit hold in its group, lowest index first.
+
+Notes:
+
+- **Threshold.** threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing. The comparison is inclusive: distance `<=` threshold merges.
+- **Alpha counts.** An alpha difference adds to the distance like any other channel. At threshold 0 an alpha-only change is never a duplicate. At a higher threshold it merges once its distance is at or below the threshold. RGB under a fully transparent pixel is read as 0. Frames of different sizes never match.
+- **Matching.** Byte-identical frames merge first. When `threshold` is above 0, each remaining frame is then compared, in source order, with the first frame of each group found so far, and joins the first group within the threshold. It is never compared with other duplicates, so if a matches b and b matches c, but a does not match c, then a and c stay apart. Frames are never reordered, and the kept frame is the lowest index in its group.
+- **Renumbering.** Removing a frame renumbers every frame after it, so tags written for the old sheet point at the wrong frames. Pass `tags_path` to rewrite them. Each tag's old range maps through `remap`, and runs of the same new index collapse into one, so a tag with adjacent duplicates gets shorter. Name, `direction`, and `fps` are kept. Tag `from`/`to` must be integers.
+- **Non-contiguous tags.** A range can come back with gaps when a frame inside it matched a frame outside it, or when the tag repeats one of its own poses non-adjacently. Frames are not reordered or copied to close the gap. The tag's `frames` array is the authoritative play order, `from`/`to` are only its lowest and highest index, `contiguous` is `false`, and a warning names the tag and the cause.
+- **`respect_tags`** confines merging to within each tag, so no range loses a frame to another animation. Untagged frames share one group; where tags overlap, the first tag listed wins and a warning says so. A tag can still come back non-contiguous when two non-adjacent frames inside it match each other.
+- Warnings also report tags that shrank, collapsed to one frame, or had a range partly outside the sheet (clamped). A range entirely outside the sheet comes back with empty `frames`. Warnings also add a note when duplicates were found but nothing was written, or when rewritten tags were saved without a deduped sheet to match them.
+- Call it without `output_path` first to see the groups and distances before you change anything.
+- The CLI equivalent is [`sprite-tools dedupe`](/docs/cli/reference#dedupe). The CLI keeps `--sheet-cols` even when fewer frames remain, and pads the last row with transparent cells.
 
 ## `sprite_extract_palette`
 

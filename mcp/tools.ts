@@ -7,7 +7,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
 
 import { loadPng, savePng, stitchSheet } from "../cli/lib/image-io";
@@ -72,6 +72,15 @@ import {
   type NineSliceInsets,
 } from "../src/lib/nine-slice/nine-slice";
 import { decodeNinePatch, encodeNinePatch } from "../src/lib/nine-slice/ninepatch";
+import {
+  applyDedupe,
+  buildTagPartitions,
+  findDuplicateFrames,
+  parseTagsDocument,
+  remapFrameDurations,
+  remapTags,
+  type ParsedTagsDocument,
+} from "../src/lib/pipeline/dedupe-core";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -185,6 +194,12 @@ function resolveFrameDurations(
   );
 }
 
+// The one explanation of the dedupe threshold. Shared between the tool
+// description and the parameter description so the two can never drift, and
+// worded identically to the CLI --help and the docs.
+const MAE_THRESHOLD_DOC =
+  "threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.";
+
 function jsonResult(payload: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
@@ -193,7 +208,7 @@ function jsonResult(payload: unknown) {
 
 /**
  * The grid knobs every sheet-consuming tool accepts. One shared block so the
- * ten tools cannot drift, and so an agent that learns them on `sprite_slice`
+ * sheet tools cannot drift, and so an agent that learns them on `sprite_slice`
  * can use the same words everywhere.
  */
 const SHEET_GRID_ARGS = {
@@ -897,6 +912,204 @@ export function registerAllTools(server: McpServer) {
         frameCount: frames.length,
         ...(frameDurations ? { frameDurations } : {}),
         tags,
+      });
+    },
+  );
+
+  // ------- find_duplicates -------
+  server.registerTool(
+    "sprite_find_duplicates",
+    {
+      description:
+        "Find duplicate and near-duplicate frames in a sprite sheet, optionally write the deduplicated sheet, and rewrite the animation tags that pointed at the removed frames. " +
+        "Why this exists: extracting frames from video at a fixed FPS (10fps over a four-pose animation yields dozens of frames) and AI frame generation both produce long runs of identical frames. Nothing else in the pipeline notices, so sheets get packed, keyed and shipped mostly redundant. " +
+        `THRESHOLD: ${MAE_THRESHOLD_DOC} The comparison is inclusive (distance <= threshold merges). ` +
+        "ALPHA PARTICIPATES: all four RGBA channels are compared straight, with no premultiply and no alpha weighting, so an alpha difference adds to the distance like any other channel. At threshold 0 an alpha-only change is never a duplicate; at a higher threshold it merges once its distance is at or below the threshold. RGB under a fully transparent pixel is ignored (read as 0), so invisible colour never counts. Frames of different dimensions never match. " +
+        "MATCHING: byte-identical frames always merge first (an exact hash pass confirmed by a real byte comparison), then, only when threshold > 0, each survivor is compared in source order against the representatives of the groups established so far and joins the first one within threshold. Comparing against representatives only prevents transitive chaining: if a~b and b~c but a!~c, a and c stay apart. Frames are never reordered, and the kept frame of a group is always its lowest index. " +
+        "TAGS: removing frames RENUMBERS every frame after them, so an animation tag — a named frame RANGE — is silently invalidated unless it is rewritten through the remap. Pass tags_path and the rewrite is done for you. A rewritten range can legitimately become non-contiguous (a frame inside it deduped against an identical frame outside it, or two non-adjacent frames inside it merging with each other); when that happens the tag's `frames` array is the authoritative playback order, from/to are only min/max and are MEANINGLESS, `contiguous` is false, and a warning names the tag. Never feed from/to to an exporter without checking `contiguous` first. Pass respect_tags:true to stop a range from losing frames to a different animation — that removes the cross-tag cause of non-contiguity, but a tag whose own frames 2 and 4 are duplicates still comes back non-contiguous. " +
+        "Call it with no output_path first to survey a sheet: the response reports every duplicate group with its per-frame distances, which is enough to decide whether deduping is worth doing at all.",
+      inputSchema: {
+        input_path: z.string().describe("Absolute path to the sprite sheet PNG"),
+        ...SHEET_GRID_ARGS,
+        threshold: z
+          .number()
+          .min(0)
+          .default(0)
+          .describe(
+            `${MAE_THRESHOLD_DOC} The comparison is inclusive (distance <= threshold merges).`,
+          ),
+        output_path: z
+          .string()
+          .optional()
+          .describe(
+            "Where to write the deduplicated sheet PNG. Omit to only report what would be removed.",
+          ),
+        sheet_cols: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "Columns in the written sheet; rows follow from the surviving frame count. Defaults to the input's column count. Capped at the number of frames kept (the CLI instead keeps --sheet-cols and pads).",
+          ),
+        tags_path: z
+          .string()
+          .optional()
+          .describe(
+            "Absolute path to a tags JSON to rewrite — either a { tags: [...], frameDurations?: [...] } document (as emitted by sprite_generate_tags) or a bare array of { name, from, to, direction?, fps? }. from/to must be integers. A frameDurations array is carried into tags_output_path: each kept frame takes the first explicit hold in its duplicate group.",
+          ),
+        tags_output_path: z
+          .string()
+          .optional()
+          .describe(
+            "Where to write the rewritten tags JSON. Requires tags_path. Omit to get the rewritten tags in the response only.",
+          ),
+        respect_tags: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Confine merging to within each tag, so no range can lose a frame to an identical frame in another animation. Requires tags_path. This removes the cross-tag cause of non-contiguous ranges, but does not guarantee contiguity: two non-adjacent frames inside the same tag can still merge with each other. Frames covered by no tag form one partition of their own; where tags overlap, the first tag listed wins.",
+          ),
+      },
+    },
+    ({
+      input_path,
+      threshold,
+      output_path,
+      sheet_cols,
+      tags_path,
+      tags_output_path,
+      respect_tags,
+      ...gridArgs
+    }) => {
+      if (tags_output_path && !tags_path) {
+        throw new Error("tags_output_path requires tags_path — there are no tags to rewrite");
+      }
+      if (respect_tags && !tags_path) {
+        throw new Error(
+          "respect_tags requires tags_path — tag ranges are what the partitions are built from",
+        );
+      }
+
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const doc = tags_path ? readTagsFile(tags_path) : null;
+      const tags = doc ? doc.tags : null;
+      const warnings: string[] = [];
+
+      // respect_tags is a caller-side concern: the core only knows partition
+      // ids, so the tag ranges get flattened into one id per frame here.
+      let partitions: number[] | undefined;
+      if (respect_tags && tags) {
+        const built = buildTagPartitions(tags, frames.length);
+        partitions = built.partitions;
+        warnings.push(...built.warnings.map((w) => `respect_tags: ${w}`));
+      }
+
+      const result = findDuplicateFrames(frames, { threshold, partitions });
+
+      let written: {
+        path: string;
+        width: number;
+        height: number;
+        cols: number;
+        rows: number;
+      } | null = null;
+      if (output_path) {
+        const kept = applyDedupe(frames, result);
+        if (kept.length === 0) {
+          throw new Error(
+            `nothing to write: the grid ${grid.cols}x${grid.rows} yielded no frames for ${input_path}`,
+          );
+        }
+        // Never widen the sheet past the surviving frame count, and let the row
+        // count follow from it — a dedupe that keeps 5 of 12 frames should not
+        // emit a mostly empty 4x3 grid.
+        const outCols = Math.max(1, Math.min(sheet_cols ?? grid.cols, kept.length));
+        const outRows = Math.ceil(kept.length / outCols);
+        const sheet =
+          kept.length === 1 && outCols === 1 && outRows === 1
+            ? kept[0]
+            : stitchSheet(kept, outCols, outRows);
+        mkdirSync(dirname(output_path), { recursive: true });
+        savePng(sheet, output_path);
+        written = {
+          path: output_path,
+          width: sheet.width,
+          height: sheet.height,
+          cols: outCols,
+          rows: outRows,
+        };
+      }
+
+      const remapped = tags ? remapTags(tags, result) : null;
+      if (remapped) {
+        warnings.push(...remapped.warnings);
+        if (tags_output_path && !output_path) {
+          warnings.push(
+            "tags were renumbered for the deduplicated frame order, but no deduplicated sheet was written — re-run with output_path, or the rewritten tags will not match any sheet on disk",
+          );
+        }
+      }
+      if (result.removedCount > 0 && !output_path && !tags_path) {
+        warnings.push(
+          `${result.removedCount} duplicate frame(s) found but nothing was written — pass output_path to write the deduplicated sheet, and tags_path so the tag ranges get renumbered with it`,
+        );
+      }
+
+      if (remapped && tags_output_path) {
+        const frameDurations = remapFrameDurations(doc?.frameDurations, result);
+        const tagsDoc = {
+          source: output_path ?? input_path,
+          frameWidth: frames[0]?.width ?? 0,
+          frameHeight: frames[0]?.height ?? 0,
+          grid: written
+            ? { cols: written.cols, rows: written.rows, detected: false }
+            : { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+          frameCount: result.uniqueCount,
+          tags: remapped.tags,
+          ...(frameDurations ? { frameDurations } : {}),
+          warnings,
+        };
+        mkdirSync(dirname(tags_output_path), { recursive: true });
+        writeFileSync(tags_output_path, `${JSON.stringify(tagsDoc, null, 2)}\n`);
+      }
+
+      return jsonResult({
+        source: input_path,
+        output_path: output_path ?? null,
+        tags_source: tags_path ?? null,
+        tags_output_path: tags_output_path ?? null,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
+        grid,
+        frameWidth: frames[0]?.width ?? 0,
+        frameHeight: frames[0]?.height ?? 0,
+        method: result.method,
+        threshold: result.threshold,
+        frameCount: result.frameCount,
+        uniqueCount: result.uniqueCount,
+        removedCount: result.removedCount,
+        // distances[i] is the MAE of duplicates[i] against keep; 0 means
+        // byte-identical. Significant digits rather than fixed decimals, so a
+        // genuinely tiny distance never rounds down to a bare 0 and reads as
+        // "identical" to whoever is looking at this.
+        groups: result.groups.map((g) => ({
+          keep: g.keep,
+          duplicates: g.duplicates,
+          distances: g.distances.map((d) => (d === 0 ? 0 : Number(d.toPrecision(4)))),
+        })),
+        keptIndices: result.keptIndices,
+        // remap[oldIndex] = new index of the frame that now stands in for it.
+        remap: result.remap,
+        output: written,
+        tags: remapped ? remapped.tags : null,
+        warnings,
+        options: {
+          threshold,
+          respect_tags,
+          sheet_cols: sheet_cols ?? null,
+          partitioned: partitions !== undefined,
+        },
       });
     },
   );
@@ -1752,6 +1965,22 @@ function nineSliceSection(
       regions: nineSliceRegions(insets, f.width, f.height),
     };
   });
+}
+
+// File I/O and error wrapping only; the validation (and buildTagPartitions)
+// lives in dedupe-core, shared with the CLI so the two accept the same input.
+function readTagsFile(path: string): ParsedTagsDocument {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (e) {
+    throw new Error(`could not read tags JSON at ${path}: ${e instanceof Error ? e.message : e}`);
+  }
+  try {
+    return parseTagsDocument(parsed);
+  } catch (e) {
+    throw new Error(`tags JSON at ${path}: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 function formatPattern(pattern: string, n: number): string {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -63,14 +63,16 @@ import {
   isZeroPadding,
   ZERO_PADDING,
 } from "@/lib/pipeline/grid";
-import type {
-  AutoCropConfig,
-  ChromaKeyConfig,
-  Frame,
-  BackgroundMode,
-  PipelineStep,
+import {
+  type AutoCropConfig,
+  type ChromaKeyConfig,
+  DEDUPE_THRESHOLD_HELP,
+  type Frame,
+  type BackgroundMode,
+  type PipelineStep,
 } from "@/lib/pipeline/types";
-import { composeCrops } from "@/lib/pipeline/transforms";
+import { composeCrops, rasterizeFrames } from "@/lib/pipeline/transforms";
+import { findDuplicateFrames } from "@/lib/pipeline/dedupe-core";
 import {
   describeGridPadding,
   FrameImg,
@@ -180,6 +182,17 @@ function SpritesheetContent() {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [dragAction, setDragAction] = useState<"select" | "deselect" | null>(null);
+
+  // ------- Duplicate detection -------
+  // Deliberately *not* a pipeline step here: this page already has a frame
+  // grid, so the honest affordance is to deselect the duplicates in place —
+  // the user sees exactly which frames are about to go and can put any of
+  // them back by hand before exporting.
+  const [dedupeTolerance, setDedupeTolerance] = useState(0);
+  const [dedupeNotice, setDedupeNotice] = useState<{ forOutput: unknown; text: string } | null>(
+    null,
+  );
+  const [isFindingDuplicates, setIsFindingDuplicates] = useState(false);
 
   // ------- Stitched sheet preview -------
   const [sheetPreviewUrl, setSheetPreviewUrl] = useState<string | null>(null);
@@ -664,6 +677,45 @@ function SpritesheetContent() {
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
   }, []);
+
+  // The notice carries the output it was measured against, so a re-run of the
+  // pipeline retires it on the next render instead of needing a reset effect.
+  const dedupeNoticeText = dedupeNotice?.forOutput === output ? dedupeNotice.text : null;
+
+  // rasterizeFrames yields to the main thread between batches, so the pipeline
+  // can finish a re-run (and dispose the bitmaps we were reading) mid-scan.
+  // This ref lets the scan notice that and drop its now-meaningless indices.
+  // Synced in a layout effect, not during render: the React Compiler is on,
+  // and a layout effect still lands in the same commit as the new output —
+  // well before the hook's deferred disposal of the old bitmaps.
+  const latestOutputRef = useRef(output);
+  useLayoutEffect(() => {
+    latestOutputRef.current = output;
+  }, [output]);
+
+  const selectUnique = async () => {
+    if (allFrames.length === 0 || isFindingDuplicates) return;
+    const scanned = output;
+    setIsFindingDuplicates(true);
+    try {
+      const images = await rasterizeFrames(allFrames);
+      if (latestOutputRef.current !== scanned) return;
+      const result = findDuplicateFrames(images, { threshold: dedupeTolerance });
+      setSelectedIndices(new Set(result.keptIndices));
+      setDedupeNotice({
+        forOutput: scanned,
+        text:
+          result.removedCount === 0
+            ? "No duplicates found"
+            : `${result.removedCount} duplicate${result.removedCount === 1 ? "" : "s"} deselected`,
+      });
+    } catch (e) {
+      if (latestOutputRef.current !== scanned) return;
+      toast.error(`Duplicate scan failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsFindingDuplicates(false);
+    }
+  };
 
   const handleFrameMouseDown = (index: number) => {
     const action = selectedIndices.has(index) ? "deselect" : "select";
@@ -1253,7 +1305,7 @@ function SpritesheetContent() {
               </div>
 
               <Card className="shadow-lg ring-1 ring-primary/10">
-                <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardHeader className="pb-3 flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
                   <div>
                     <CardTitle>
                       Frame Selection ({selectedIndices.size || allFrames.length} /{" "}
@@ -1261,7 +1313,36 @@ function SpritesheetContent() {
                     </CardTitle>
                     <CardDescription>Drag to toggle multiple frames.</CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="dedupe-tolerance" className="text-xs text-muted-foreground">
+                        Tolerance
+                      </Label>
+                      <Input
+                        id="dedupe-tolerance"
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="h-8 w-16 text-xs"
+                        title={DEDUPE_THRESHOLD_HELP}
+                        value={dedupeTolerance}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (Number.isFinite(n) && n >= 0) setDedupeTolerance(n);
+                        }}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs"
+                      onClick={() => void selectUnique()}
+                      disabled={allFrames.length === 0 || isFindingDuplicates}
+                      title="Deselect frames that duplicate an earlier one"
+                    >
+                      {isFindingDuplicates && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                      Select unique
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1281,6 +1362,12 @@ function SpritesheetContent() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <p className="text-[10px] text-muted-foreground mb-2 leading-tight">
+                    Tolerance: mean per-channel RGBA difference, 0–255. 0 = exact duplicates only.
+                    {dedupeNoticeText && (
+                      <span className="ml-1 font-medium text-foreground">{dedupeNoticeText}.</span>
+                    )}
+                  </p>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-87.5 overflow-y-auto p-1 border rounded-md select-none">
                     {allFrames.map((frame, i) => (
                       <FrameItem

@@ -5,6 +5,7 @@ import { importFromFiles, importFromSpriteSheet, importFromVideo } from "./impor
 import {
   autoCrop as runAutoCrop,
   chromaKey as runChromaKey,
+  dedupe as runDedupe,
   manualCrop as runManualCrop,
   selectFrames,
 } from "./transforms";
@@ -15,6 +16,7 @@ import {
   type Progress,
   type AutoCropConfig,
   type ChromaKeyConfig,
+  type DedupeStepConfig,
   type FrameCrop,
   type SheetSliceConfig,
   type VideoImportConfig,
@@ -27,10 +29,17 @@ interface Snapshot {
   steps: PipelineStep[];
 }
 
+// How many frames went into and came out of each step on the last completed
+// run, keyed by step id. Steps that only transform pixels have input ===
+// output; the ones that change the frame count (select, dedupe) are the reason
+// this exists — a UI cannot otherwise tell the user what a step removed.
+export type StepFrameCounts = Record<string, { input: number; output: number }>;
+
 interface PipelineState {
   source: { file?: File; url?: string; images?: File[] } | null;
   steps: PipelineStep[];
   output: Frames | null;
+  stepFrameCounts: StepFrameCounts;
   running: boolean;
   progress: Progress | null;
   history: Snapshot[]; // past snapshots for undo
@@ -44,6 +53,7 @@ type Action =
   | { type: "update-step"; stepId: string; config: PipelineStep["config"]; record: boolean }
   | { type: "remove-step"; stepId: string; record: boolean }
   | { type: "set-output"; output: Frames | null }
+  | { type: "set-step-frame-counts"; counts: StepFrameCounts }
   | { type: "set-running"; running: boolean }
   | { type: "set-progress"; progress: Progress | null }
   | { type: "undo" }
@@ -83,6 +93,7 @@ function reducer(state: PipelineState, action: Action): PipelineState {
         source: action.payload,
         steps: [],
         output: null,
+        stepFrameCounts: {},
         history: [],
         future: [],
         error: null,
@@ -127,6 +138,19 @@ function reducer(state: PipelineState, action: Action): PipelineState {
     }
     case "set-output":
       return { ...state, output: action.output };
+    case "set-step-frame-counts": {
+      // Keep the object identity stable when a re-run produced the same
+      // numbers, so consumers can safely put it in a dependency array.
+      const prev = state.stepFrameCounts;
+      const next = action.counts;
+      const keys = Object.keys(next);
+      const same =
+        keys.length === Object.keys(prev).length &&
+        keys.every(
+          (k) => prev[k] && prev[k].input === next[k].input && prev[k].output === next[k].output,
+        );
+      return same ? state : { ...state, stepFrameCounts: next };
+    }
     case "set-running":
       return { ...state, running: action.running };
     case "set-progress":
@@ -158,6 +182,7 @@ function reducer(state: PipelineState, action: Action): PipelineState {
         source: null,
         steps: [],
         output: null,
+        stepFrameCounts: {},
         running: false,
         progress: null,
         history: [],
@@ -171,6 +196,7 @@ const initial: PipelineState = {
   source: null,
   steps: [],
   output: null,
+  stepFrameCounts: {},
   running: false,
   progress: null,
   history: [],
@@ -196,6 +222,9 @@ export function buildManualCropStep(crop: FrameCrop): PipelineStep {
 }
 export function buildSelectStep(indices: number[]): PipelineStep {
   return { id: nextStepId(), kind: "select", config: { indices } };
+}
+export function buildDedupeStep(config: DedupeStepConfig): PipelineStep {
+  return { id: nextStepId(), kind: "dedupe", config };
 }
 export function buildImportVideoStep(config: VideoImportConfig, sourceName?: string): PipelineStep {
   return { id: nextStepId(), kind: "import-video", config: { ...config, sourceName } };
@@ -247,12 +276,9 @@ export function usePipeline() {
       cachedSourceRef.current = state.source;
     }
     (async () => {
-      if (!state.source) {
+      if (!state.source || state.steps.length === 0) {
         dispatch({ type: "set-output", output: null });
-        return;
-      }
-      if (state.steps.length === 0) {
-        dispatch({ type: "set-output", output: null });
+        dispatch({ type: "set-step-frame-counts", counts: {} });
         return;
       }
       dispatch({ type: "set-running", running: true });
@@ -266,14 +292,17 @@ export function usePipeline() {
       try {
         let current: Frames | null = null;
         const visited = new Set<string>();
+        const counts: StepFrameCounts = {};
 
         for (const step of state.steps) {
           visited.add(step.id);
           const configKey = JSON.stringify(step.config);
+          const inputCount = current ? current.frames.length : 0;
           const inputRef: unknown = isImportStep(step.kind) ? state.source : current;
           const cached = cacheRef.current.get(step.id);
           if (cached && cached.configKey === configKey && cached.inputRef === inputRef) {
             current = cached.output;
+            counts[step.id] = { input: inputCount, output: current.frames.length };
             continue;
           }
 
@@ -331,12 +360,21 @@ export function usePipeline() {
               produced = selectFrames(current, step.config.indices);
               break;
             }
+            case "dedupe": {
+              if (!current) throw new Error("Dedupe needs import step first");
+              produced = await runDedupe(current, step.config);
+              break;
+            }
           }
 
           if (runTokenRef.current !== token) {
             // Superseded by a newer run. The bitmaps we just produced
-            // aren't cached yet, so dispose them here.
-            toDispose.push(produced);
+            // aren't cached yet and nothing else references them, so dispose
+            // them now — pushing onto toDispose would leak them, because the
+            // deferred disposal below never runs on this early return.
+            // `select` is the exception: it reuses its input's bitmaps, which
+            // still belong to the previous step's cache entry.
+            if (step.kind !== "select") disposeFrames(produced);
             return;
           }
 
@@ -346,6 +384,7 @@ export function usePipeline() {
             inputRef,
             output: produced,
           });
+          counts[step.id] = { input: inputCount, output: produced.frames.length };
           current = produced;
         }
 
@@ -359,6 +398,7 @@ export function usePipeline() {
 
         if (runTokenRef.current !== token) return;
         dispatch({ type: "set-output", output: current });
+        dispatch({ type: "set-step-frame-counts", counts });
 
         // Defer disposal so React has a chance to commit the new output
         // before the old bitmaps get revoked.
