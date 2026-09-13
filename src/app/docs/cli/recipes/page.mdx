@@ -79,6 +79,49 @@ cat hero.png \
   > hero-collision.json
 ```
 
+## Team colors: one hero sheet → a set of recolored sheets
+
+Re-tint whole shading ramps instead of swapping colors one at a time, so the shading survives.
+
+```bash
+cat > teams.json <<'JSON'
+{
+  "version": 1,
+  "colors": 12,
+  "variants": [
+    { "name": "Team Red",  "ramps": [{ "base": "#4d7faf", "to": "#af4d4d" }] },
+    { "name": "Team Gold", "ramps": [{ "base": "#4d7faf", "to": "#c39b3a" }] },
+    { "name": "Referee",   "ramps": [{ "base": "#4d7faf", "to": "#3d3d3d" }],
+                           "swaps": { "#af4d4d": "#f2f2f2" } }
+  ]
+}
+JSON
+
+sprite-tools palette hero.png \
+  --variants teams.json \
+  --out-dir ./teams --name hero \
+  --manifest ./teams/hero.json
+```
+
+Writes `teams/hero_team-red.png`, `teams/hero_team-gold.png`, `teams/hero_referee.png`, each stitched back to the source grid. `base` can be any shade of the target ramp — run `--ramps` first to see them:
+
+```bash
+sprite-tools palette hero.png --colors 12 --ramps | jq '.ramps'
+```
+
+## Batch: N enemy tints per character, packed into one atlas
+
+```bash
+mkdir -p tints
+for f in characters/*.png; do
+  sprite-tools palette "$f" --hue-variants 6 --out-dir tints > /dev/null
+done
+
+sprite-tools atlas tints/*.png -o enemies.png --json enemies.json
+```
+
+`--hue-variants 6` includes the 0° original, so each character contributes 6 files named `<name>_hue000.png` … `<name>_hue300.png`.
+
 ## Pack a folder of sprites into an atlas + manifest
 
 ```bash

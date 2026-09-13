@@ -3,6 +3,18 @@
 // Extraction reuses the median-cut quantizer from the Pixelate module, so
 // behavior is consistent across the app. Swap remaps any pixel belonging to
 // a source palette bucket to a new color, with a tolerance threshold.
+//
+// One deliberate departure from plain median-cut: when a sprite has no more
+// distinct colors than the caller asked for, we return those colors verbatim
+// instead of quantizing. Median-cut splits boxes by PIXEL COUNT, so on flat
+// pixel art a large single-color region gets carved into several boxes that
+// all average back to the same hex, while a small but distinct color (a face,
+// a trim) never earns a box of its own and falls into a neighbour's bucket.
+// That is merely wasteful for a preview, but actively wrong for ramp
+// re-tinting: applyPaletteSwap keys every pixel on its nearest bucket, so a
+// skin tone sharing the shirt's bucket turns blue when the shirt is re-tinted.
+// Pixel art almost always lands in the exact-palette path, which makes
+// "colors outside the targeted ramp are unchanged" hold exactly.
 
 import { medianCut, type RGB, hexToRgb } from "../pixel-art/pixelate";
 
@@ -11,17 +23,48 @@ export interface SwapEntry {
   to: RGB;
 }
 
-/** Collect N dominant colors from all opaque pixels. */
+/**
+ * Collect up to N dominant colors from all opaque pixels, most-used first.
+ *
+ * Never returns duplicate entries: a duplicate wastes a palette slot, produces
+ * nonsense single-color "ramps", and silently shadows any swap targeting the
+ * second copy (nearest-bucket lookup always resolves to the first).
+ */
 export function extractPalette(src: ImageData, count: number): RGB[] {
   if (count <= 0) return [];
-  const pixels: RGB[] = [];
+
+  // Population per distinct color, so both paths can order by dominance.
+  const counts = new Map<number, number>();
   const d = src.data;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] > 0) {
-      pixels.push({ r: d[i], g: d[i + 1], b: d[i + 2] });
+      const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
-  return medianCut(pixels, count);
+  if (counts.size === 0) return [];
+
+  const unkey = (k: number): RGB => ({ r: (k >> 16) & 255, g: (k >> 8) & 255, b: k & 255 });
+  const byPopulation = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+
+  // Exact palette — the sprite has no more colors than were asked for, so
+  // quantizing could only lose information.
+  if (counts.size <= count) return byPopulation.map(([k]) => unkey(k));
+
+  const pixels: RGB[] = [];
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] > 0) pixels.push({ r: d[i], g: d[i + 1], b: d[i + 2] });
+  }
+
+  const seen = new Set<number>();
+  const out: RGB[] = [];
+  for (const c of medianCut(pixels, count)) {
+    const key = (c.r << 16) | (c.g << 8) | c.b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
 }
 
 /**

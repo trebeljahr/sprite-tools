@@ -8,7 +8,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, basename } from "node:path";
+import { dirname, join, basename, resolve } from "node:path";
 
 import { loadPng, savePng, sliceSheet, stitchSheet } from "../cli/lib/image-io";
 import { detectGridFromImageData } from "../src/lib/pipeline/detect";
@@ -37,6 +37,19 @@ import {
   rgbToHex,
   hexToRgb as paletteHexToRgb,
 } from "../src/lib/palette/extract";
+import { detectRamps, DEFAULT_HUE_TOLERANCE } from "../src/lib/palette/ramps";
+import {
+  describeRamps,
+  hueShiftVariants,
+  parseVariantSet,
+  resolveVariant,
+  slugifyVariantName,
+  variantFileName,
+  VARIANT_MANIFEST_VERSION,
+  VARIANT_SET_VERSION,
+  type VariantManifest,
+  type VariantManifestEntry,
+} from "../src/lib/palette/variants";
 import { packAtlas, computeTrimRect, type PackInput } from "../src/lib/atlas/pack";
 import { effectiveExtrude, extrudeFrames } from "../src/lib/atlas/extrude";
 
@@ -58,6 +71,56 @@ const PRESET_IDS = Object.keys(PIVOT_PRESETS) as (keyof typeof PIVOT_PRESETS)[];
 const HEX_COLOR = /^#?[0-9a-fA-F]{6}$/;
 
 const ZERO_FX_MARGIN: Margin = { left: 0, top: 0, right: 0, bottom: 0 };
+/** One variant recipe, in this surface's snake_case / array-of-pairs dialect. */
+const VARIANT_SPEC_INPUT = z.object({
+  name: z.string().min(1).describe("Display name; slugified into the output filename"),
+  swaps: z
+    .array(z.object({ from: z.string(), to: z.string() }))
+    .optional()
+    .describe(
+      "Literal per-colour substitutions, hex #rrggbb. Applied last, so they override ramps and hue_shift",
+    ),
+  ramps: z
+    .array(z.object({ base: z.string(), to: z.string() }))
+    .optional()
+    .describe(
+      "Re-tint whole ramps: `base` is ANY member hex of the ramp to move (see sprite_detect_ramps), `to` is its new base colour",
+    ),
+  hue_shift: z
+    .number()
+    .optional()
+    .describe("Degrees to rotate the hue of every palette entry; applied first"),
+});
+
+/**
+ * The two mutually exclusive ways to say which variants to build. Kept apart
+ * from the tool's input shape so the same fields can be both advertised to the
+ * client (as a raw shape, which is what the SDK turns into JSON Schema) and
+ * cross-validated by a zod refine — a refined object would come back as an
+ * empty schema in tools/list.
+ */
+const VARIANT_SOURCE_SHAPE = {
+  variants: z
+    .array(VARIANT_SPEC_INPUT)
+    .min(1)
+    .optional()
+    .describe("Explicit variant recipes. Mutually exclusive with hue_variants"),
+  hue_variants: z
+    .number()
+    .int()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe(
+      "Instead of `variants`: generate N evenly spaced hue rotations named hue000, hue045, … The 0-degree original counts as one of the N",
+    ),
+};
+
+const VARIANT_SOURCE = z
+  .object(VARIANT_SOURCE_SHAPE)
+  .refine((v) => (v.variants === undefined) !== (v.hue_variants === undefined), {
+    message: "supply exactly one of `variants` or `hue_variants`",
+  });
 
 function jsonResult(payload: unknown) {
   return {
@@ -614,6 +677,174 @@ export function registerAllTools(server: McpServer) {
     },
   );
 
+  // ------- palette_ramps -------
+  server.registerTool(
+    "sprite_detect_ramps",
+    {
+      description:
+        "Group a sprite's extracted palette into shading ramps — the light-to-dark runs of shades an artist painted for one material (skin, cloth, metal) — by clustering hue in the perceptual OKLCH space, with all near-greys in one achromatic ramp. Run this before sprite_palette_variants to see what is recolourable: every hex it reports for a ramp is a valid `ramps[].base` handle for re-tinting that whole ramp.",
+      inputSchema: {
+        input_path: z.string(),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        colors: z
+          .number()
+          .int()
+          .min(1)
+          .max(256)
+          .default(8)
+          .describe("Palette size to quantize to before grouping"),
+        hue_tolerance: z
+          .number()
+          .min(0)
+          .max(180)
+          .default(DEFAULT_HUE_TOLERANCE)
+          .describe(
+            "Degrees of hue slack for joining a ramp; raise it to merge neighbouring hues into one ramp, lower it to split them",
+          ),
+      },
+    },
+    ({ input_path, cols, rows, colors, hue_tolerance }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const palette = extractPalette(mergeFramePixels(frames), colors);
+      const ramps = detectRamps(palette, { hueTolerance: hue_tolerance });
+      return jsonResult({
+        source: input_path,
+        frameWidth: frames[0]?.width ?? 0,
+        frameHeight: frames[0]?.height ?? 0,
+        grid,
+        options: { colors, rampTolerance: hue_tolerance },
+        palette: palette.map(rgbToHex),
+        ramps: describeRamps(ramps),
+      });
+    },
+  );
+
+  // ------- palette_variants -------
+  server.registerTool(
+    "sprite_palette_variants",
+    {
+      description:
+        "Write a whole family of recoloured copies of a sprite or sheet — team colours, enemy tints, seasonal skins — as <name>_<slug>.png in output_dir, plus a manifest describing every palette, ramp and swap used. A variant is a recipe: a whole-palette `hue_shift`, per-ramp re-tints that move an entire shading ramp at once (preserving its lightness steps and the artist's shadow/highlight hue drift), and/or literal per-colour `swaps`. Reach for sprite_palette_swap instead when you want a single output from a handful of hand-picked colour substitutions.",
+      inputSchema: {
+        input_path: z.string(),
+        output_dir: z
+          .string()
+          .describe("Directory to write the variant PNGs into; created if missing"),
+        cols: z.number().int().positive().optional(),
+        rows: z.number().int().positive().optional(),
+        colors: z
+          .number()
+          .int()
+          .min(1)
+          .max(256)
+          .default(8)
+          .describe("Palette size to quantize to; the same palette is shared by every frame"),
+        hue_tolerance: z
+          .number()
+          .min(0)
+          .max(180)
+          .default(DEFAULT_HUE_TOLERANCE)
+          .describe("Degrees of hue slack for ramp detection, as in sprite_detect_ramps"),
+        name: z
+          .string()
+          .optional()
+          .describe("Filename base for the variants; defaults to the input file's basename"),
+        manifest_path: z
+          .string()
+          .optional()
+          .describe("Write the manifest JSON here as well as returning it"),
+        ...VARIANT_SOURCE_SHAPE,
+        hue_step: z
+          .number()
+          .optional()
+          .describe("Degrees between hue_variants entries; defaults to an even 360/N spacing"),
+      },
+    },
+    ({
+      input_path,
+      output_dir,
+      cols,
+      rows,
+      colors,
+      hue_tolerance,
+      name,
+      manifest_path,
+      variants,
+      hue_variants,
+      hue_step,
+    }) => {
+      const source = VARIANT_SOURCE.safeParse({ variants, hue_variants });
+      if (!source.success) {
+        throw new Error(source.error.issues[0]?.message ?? "invalid variant selection");
+      }
+
+      // This surface speaks snake_case with arrays of pairs; the shared variant
+      // format is camelCase with a swap map. Convert at the boundary, then run
+      // the result through the same validator the CLI's --variants file uses, so
+      // bad hex and duplicate names fail identically on both surfaces.
+      const specs = variants
+        ? parseVariantSet({
+            version: VARIANT_SET_VERSION,
+            variants: variants.map((v) => ({
+              name: v.name,
+              ...(v.swaps ? { swaps: Object.fromEntries(v.swaps.map((s) => [s.from, s.to])) } : {}),
+              ...(v.ramps ? { ramps: v.ramps } : {}),
+              ...(v.hue_shift !== undefined ? { hueShift: v.hue_shift } : {}),
+            })),
+          }).variants
+        : hueShiftVariants(hue_variants ?? 0, { stepDeg: hue_step });
+
+      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const palette = extractPalette(mergeFramePixels(frames), colors);
+      const ramps = detectRamps(palette, { hueTolerance: hue_tolerance });
+      const base = name ?? basename(input_path).replace(/\.[^.]+$/, "");
+
+      mkdirSync(output_dir, { recursive: true });
+      const files: string[] = [];
+      const entries: VariantManifestEntry[] = [];
+      for (const spec of specs) {
+        const swaps = resolveVariant(spec, palette, ramps);
+        const recolored = frames.map((f) => applyPaletteSwap(f, palette, swaps));
+        const out =
+          recolored.length === 1 ? recolored[0] : stitchSheet(recolored, grid.cols, grid.rows);
+        const file = variantFileName(base, spec.name);
+        // Absolute, so an agent can feed the path straight into the next tool.
+        const path = resolve(output_dir, file);
+        savePng(out, path);
+        files.push(path);
+        entries.push({
+          name: spec.name,
+          slug: slugifyVariantName(spec.name),
+          file,
+          ...(spec.hueShift !== undefined ? { hueShift: spec.hueShift } : {}),
+          swaps: swaps.map((s) => ({ from: rgbToHex(s.from), to: rgbToHex(s.to) })),
+        });
+      }
+
+      const manifest: VariantManifest = {
+        version: VARIANT_MANIFEST_VERSION,
+        source: input_path,
+        frameWidth: frames[0]?.width ?? 0,
+        frameHeight: frames[0]?.height ?? 0,
+        grid,
+        options: { colors, mode: variants ? "defs" : "hue", rampTolerance: hue_tolerance },
+        palette: palette.map(rgbToHex),
+        ramps: describeRamps(ramps),
+        variants: entries,
+      };
+      if (manifest_path) {
+        mkdirSync(dirname(manifest_path), { recursive: true });
+        writeFileSync(manifest_path, `${JSON.stringify(manifest, null, 2)}\n`);
+      }
+      return jsonResult({
+        ...manifest,
+        files,
+        ...(manifest_path ? { manifest_path } : {}),
+      });
+    },
+  );
+
   // ------- pixelate -------
   server.registerTool(
     "sprite_pixelate",
@@ -1078,6 +1309,23 @@ export function registerAllTools(server: McpServer) {
 // -----------------------------------------------------------------
 // Local helpers
 // -----------------------------------------------------------------
+
+/**
+ * Flatten every frame's pixels into one buffer. Palette work on a sheet has to
+ * quantize across all frames at once, or each frame gets its own palette and a
+ * swap that lands on frame 1 misses the same colour on frame 2.
+ */
+function mergeFramePixels(frames: ImageData[]): ImageData {
+  let total = 0;
+  for (const f of frames) total += f.width * f.height;
+  const merged = new ImageData(Math.max(1, total), 1);
+  let off = 0;
+  for (const f of frames) {
+    merged.data.set(f.data, off);
+    off += f.data.length;
+  }
+  return merged;
+}
 
 function formatPattern(pattern: string, n: number): string {
   return pattern.replace(/%(0?\d*)d/g, (_m, pad: string) => {

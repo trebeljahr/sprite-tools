@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, outlines and drop shadows, palette swaps, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, pixel-art conversion, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
@@ -58,6 +58,10 @@ sprite-tools outline hero.png --width 2 --shadow --shadow-blur 2 -o hero-fx.png
 # Derive a normal map for 2D lighting
 sprite-tools normal-map hero.png -o hero-normal.png
 
+# Re-tint a whole shading ramp, then spin out 8 enemy color variants + a manifest
+sprite-tools palette hero.png --ramp '#4d7faf=#af4d4d' --image hero-red.png
+sprite-tools palette hero.png --hue-variants 8 --out-dir variants --manifest variants/hero.json
+
 # Pack a folder of loose sprites into an atlas + TexturePacker manifest
 # (sprite edges are extruded 1px into the gutter by default — no filtering halos)
 sprite-tools atlas sprites/*.png -o atlas.png --json atlas.json
@@ -92,7 +96,7 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 16 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 18 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
@@ -100,7 +104,7 @@ Restart Claude Desktop — 16 tools appear under the MCP menu. If `sprite-tools-
 
 **CLI**: `info`, `detect`, `slice`, `trim`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
 
-**MCP**: 16 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`).
+**MCP**: 18 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
 
 ## Docs
 

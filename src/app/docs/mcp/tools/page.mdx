@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 16 MCP tools.
+Full input/output schema for each of the 18 MCP tools.
 
 ## `sprite_info`
 
@@ -196,6 +196,101 @@ Inputs:
 ```
 
 Writes recolored PNG. Returns `{ source, output_path, grid, palette, swaps }`.
+
+## `sprite_detect_ramps`
+
+Groups the extracted palette into **shading ramps** — the light-to-dark runs of shades an artist painted for one material. Clusters by hue in OKLCH; everything near-grey lands in a single achromatic ramp. Run it before `sprite_palette_variants` to see what is recolorable.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,
+  colors?: number,          // 1..256, default 8
+  hue_tolerance?: number    // 0..180 degrees, default 25
+}
+```
+
+Returns JSON:
+
+```json
+{ "source", "frameWidth", "frameHeight",
+  "grid": {cols,rows,detected},
+  "options": { "colors": 8, "rampTolerance": 25 },
+  "palette": ["#rrggbb", ...],
+  "ramps": [
+    { "index": 0,
+      "base": "#4d7faf",
+      "colors": ["#243b52", "#395f83", "#4d7faf", "#7ea6cf"],
+      "achromatic": false }
+  ] }
+```
+
+Notes:
+
+- `colors` in a ramp are sorted ascending by perceptual lightness. `base` is the ramp's most saturated shade — but **any** hex in `colors` is a valid `base` handle for re-tinting.
+- Every palette entry lands in exactly one ramp; the ramp lengths sum to the palette size.
+- Ramps come back largest-first, so `index` is stable for a given palette and palette size.
+- Raise `hue_tolerance` to merge neighbouring hues into one ramp, lower it to split a ramp that swallowed two materials.
+
+## `sprite_palette_variants`
+
+Writes a family of recolored copies — team colors, enemy tints, seasonal skins — plus a manifest. A variant is a recipe: a whole-palette `hue_shift`, per-ramp re-tints that move an entire shading ramp at once (preserving its lightness steps and the artist's shadow/highlight hue drift), and/or literal per-color `swaps`. For a single output from a handful of hand-picked substitutions, use `sprite_palette_swap` instead.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  output_dir: string,        // created if missing
+  cols?: number, rows?: number,
+  colors?: number,           // 1..256, default 8
+  hue_tolerance?: number,    // 0..180 degrees, default 25
+  name?: string,             // filename base, default: input basename
+  manifest_path?: string,    // also write the manifest JSON here
+
+  // exactly one of these two:
+  variants?: Array<{
+    name: string,
+    swaps?: Array<{ from: "#rrggbb", to: "#rrggbb" }>,
+    ramps?: Array<{ base: "#rrggbb", to: "#rrggbb" }>,   // base = ANY member hex
+    hue_shift?: number                                   // degrees
+  }>,
+  hue_variants?: number,     // 1..64 evenly spaced rotations
+  hue_step?: number          // override the 360/N spacing
+}
+```
+
+Writes `<output_dir>/<name>_<slug>.png` per variant, stitched back to the source grid for sheets. Returns the manifest plus the written paths:
+
+```json
+{ "version": 1,
+  "source", "frameWidth", "frameHeight",
+  "grid": {cols,rows,detected},
+  "options": { "colors": 12, "mode": "defs"|"hue", "rampTolerance": 25 },
+  "palette": ["#rrggbb", ...],
+  "ramps": [{ "index", "base", "colors", "achromatic" }, ...],
+  "variants": [
+    { "name": "Team Red",
+      "slug": "team-red",
+      "file": "hero_team-red.png",
+      "hueShift": 180,
+      "swaps": [{ "from": "#rrggbb", "to": "#rrggbb" }, ...] }
+  ],
+  "files": ["/abs/path/hero_team-red.png", ...],
+  "manifest_path": "/abs/path/hero.json" }
+```
+
+Notes:
+
+- Supply **exactly one** of `variants` / `hue_variants`; supplying both or neither is a validation error.
+- `hue_variants: 8` produces 8 files including the 0° original — `hue000`, `hue045`, … `hue315`, zero-padded so filenames sort in hue order.
+- Stages apply coarse-to-fine: `hue_shift` over the whole palette, then `ramps`, then `swaps`. A literal swap always wins for the same source color.
+- Names are slugified (lowercase, non-alphanumerics collapsed to `-`) and must be unique **after** slugification. Hex is accepted with or without `#` in any case; three-digit shorthand is rejected.
+- This surface takes `hue_shift` and arrays of `{from, to}` pairs; the CLI's `--variants` file uses `hueShift` and a `{"#from": "#to"}` map. Same semantics, converted at the boundary.
+- `hueShift` appears in a manifest entry only for variants that had one. `file` is a filename; `files` are absolute, so they can be piped straight into `sprite_pack_atlas`.
+- See the [Palette page](/docs/web/palette) for why this runs in OKLCH rather than HSL.
 
 ## `sprite_pixelate`
 

@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP server
 
-`sprite-tools-mcp` exposes all 16 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
+`sprite-tools-mcp` exposes all 18 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
 
 ## Why use it over the CLI
 
@@ -43,6 +43,8 @@ See the full [tool catalog](/docs/mcp/tools) for every tool's input schema and o
 | `sprite_generate_meta` | collision + pivot + tags in one pass |
 | `sprite_extract_palette` | Dominant colors |
 | `sprite_palette_swap` | Recolor via palette swaps |
+| `sprite_detect_ramps` | Group a palette into shading ramps |
+| `sprite_palette_variants` | Write a named or hue-rotated variant set + manifest |
 | `sprite_pixelate` | Pixel-art conversion |
 | `sprite_generate_normal_map` | Tangent-space normal map |
 | `sprite_add_outline` | Outer or inner pixel outline |

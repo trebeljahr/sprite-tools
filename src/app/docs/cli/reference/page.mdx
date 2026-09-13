@@ -129,9 +129,63 @@ sprite-tools palette <input>
   [--cols N] [--rows N]
   [--colors N]                     # default 8
   [--swap "#RRGGBB=#RRGGBB"]       # repeatable
+  [--ramps]                        # include detected shading ramps in the JSON
+  [--ramp-tolerance DEG]           # hue slack for ramp detection, default 25
+  [--ramp "#MEMBER=#NEWBASE"]      # repeatable: re-tint a whole ramp
+  [--variants FILE]                # variant-set JSON (version 1)
+  [--hue-variants N]               # instead: N evenly spaced hue rotations
+  [--hue-step DEG]                 # override the even spacing
+  [--out-dir DIR]                  # variant PNGs land here, default .
+  [--name BASE]                    # filename base, default: input basename
+  [--manifest FILE]                # write the variant manifest JSON
   [--image FILE]                   # also write recolored PNG
   [-o FILE]                        # JSON
 ```
+
+A **ramp** is a run of shades of one material — a shirt is four related colors, not one. `--ramp` moves all of them at once in OKLCH, preserving the lightness steps and the artist's hue drift, so it is not the same as four `--swap`s picked by eye. `<member>` may be **any** hex in the ramp, not just its most saturated entry. Ramp remaps and `--swap` merge into the same `swaps` output and the same `--image`; an explicit `--swap` wins for the same source color.
+
+`--variants` and `--hue-variants` are mutually exclusive. Either one writes `<out-dir>/<base>_<slug>.png` per variant, stitched back to the source grid for sheets. `--hue-variants 8` emits 8 files including the 0° original, named `hero_hue000.png` … `hero_hue315.png`. `--manifest` requires one of them. A variant set's optional `colors` pins the palette size it was authored against unless you pass `--colors` explicitly.
+
+The JSON gains `ramps` (and `options.rampTolerance`) with `--ramps` or any ramp/variant flag, and `variants` when variants were generated. Without those flags the output is byte-for-byte what it always was:
+
+```json
+{ "source", "frameWidth", "frameHeight", "grid",
+  "options": { "colors": 12, "rampTolerance": 25 },
+  "palette": ["#rrggbb", ...],
+  "swaps": [{ "from": "#rrggbb", "to": "#rrggbb" }, ...],
+  "ramps": [{ "index", "base", "colors": ["#rrggbb", ...], "achromatic" }, ...],
+  "variants": [{ "name", "slug", "file", "hueShift", "swaps" }, ...] }
+```
+
+Variant-set file shape (camelCase — the MCP tool takes the same fields in snake_case):
+
+```json
+{
+  "version": 1,
+  "colors": 12,
+  "variants": [
+    { "name": "Team Red", "ramps": [{ "base": "#4d7faf", "to": "#af4d4d" }] },
+    { "name": "Referee",  "ramps": [{ "base": "#4d7faf", "to": "#3d3d3d" }],
+                          "swaps": { "#af4d4d": "#f2f2f2" } },
+    { "name": "Ghost",    "hueShift": 180 }
+  ]
+}
+```
+
+Two worked examples:
+
+```bash
+# See the ramps first, then move the blue one to red across the whole sheet
+sprite-tools palette hero.png --colors 12 --ramps | jq '.ramps'
+sprite-tools palette hero.png --colors 12 \
+  --ramp '#4d7faf=#af4d4d' --image hero-red.png
+
+# 8 enemy tints + a manifest an importer can read
+sprite-tools palette hero.png --hue-variants 8 \
+  --out-dir ./variants --name hero --manifest ./variants/hero.json
+```
+
+See the [Palette page](/docs/web/palette) for why the math runs in OKLCH rather than HSL.
 
 ## `chroma`
 

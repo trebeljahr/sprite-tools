@@ -75,7 +75,7 @@ Deterministic, O(n²), tight packing for most sprite distributions. Not optimal 
 
 ## Palette extraction / swap
 
-- **Extraction** reuses the same median-cut from pixelation, run over the union of pixels across all frames of a sheet so the palette is consistent between frames.
+- **Extraction** returns the sprite's distinct colors verbatim (most-used first) when there are no more of them than requested, and otherwise falls back to the same median-cut from pixelation. Duplicate entries are dropped either way. It runs over the union of pixels across all frames of a sheet so the palette is consistent between frames.
 - **Swap** builds a lookup: for each palette index, the (possibly remapped) target color. For each source pixel, find the nearest palette entry by squared RGB distance, then output the target color at that index.
 
 ## GIF encoding

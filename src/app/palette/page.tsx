@@ -1,19 +1,25 @@
 "use client";
 
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import JSZip from "jszip";
 import {
   ChevronLeft,
   ChevronRight,
   Copy,
   Download,
   Droplet,
+  FileJson,
   Grid3x3,
   ImageIcon,
+  Layers,
   Loader2,
+  Package,
   Palette as PaletteIcon,
+  Plus,
   RotateCcw,
+  Trash2,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -28,8 +34,34 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls";
 import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
-import { applyPaletteSwap, extractPalette, hexToRgb, rgbToHex } from "@/lib/palette/extract";
+import {
+  applyPaletteSwap,
+  extractPalette,
+  hexToRgb,
+  rgbToHex,
+  type SwapEntry,
+} from "@/lib/palette/extract";
+import { rotateHue } from "@/lib/palette/oklab";
+import {
+  DEFAULT_HUE_TOLERANCE,
+  detectRamps,
+  type Ramp,
+  rampBaseColor,
+  remapRamp,
+} from "@/lib/palette/ramps";
+import {
+  describeRamps,
+  hueShiftVariants,
+  resolveVariant,
+  slugifyVariantName,
+  VARIANT_MANIFEST_VERSION,
+  type VariantManifest,
+  type VariantSpec,
+  variantFileName,
+} from "@/lib/palette/variants";
 import type { RGB } from "@/lib/pixel-art/pixelate";
+import { track } from "@/lib/analytics";
+import { VariantGrid, type VariantPreview } from "@/components/variant-grid";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
@@ -57,6 +89,52 @@ async function frameToImageData(frame: Frame): Promise<ImageData> {
   if (!ctx) throw new Error("2D context unavailable");
   ctx.drawImage(frame.bitmap, 0, 0);
   return ctx.getImageData(0, 0, frame.width, frame.height);
+}
+
+function sameRgb(a: RGB, b: RGB): boolean {
+  return a.r === b.r && a.g === b.g && a.b === b.b;
+}
+
+/** Stitch every frame back into the source grid with `swaps` applied. */
+async function renderSheetBlob(
+  frames: SourceFrame[],
+  palette: RGB[],
+  swaps: SwapEntry[],
+  cols: number,
+  rows: number,
+): Promise<Blob | null> {
+  if (frames.length === 0) return null;
+  const cellW = frames[0].width;
+  const cellH = frames[0].height;
+  const canvas = document.createElement("canvas");
+  canvas.width = cellW * cols;
+  canvas.height = cellH * rows;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const tmp = document.createElement("canvas");
+  tmp.width = cellW;
+  tmp.height = cellH;
+  const tctx = tmp.getContext("2d");
+  if (!tctx) return null;
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    const c = f.cellCol ?? i % cols;
+    const r = f.cellRow ?? Math.floor(i / cols);
+    const out = swaps.length > 0 ? applyPaletteSwap(f.imageData, palette, swaps) : f.imageData;
+    tctx.clearRect(0, 0, cellW, cellH);
+    tctx.putImageData(out, 0, 0);
+    ctx.drawImage(tmp, c * cellW, r * cellH);
+  }
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function imageDataToBlob(data: ImageData): Promise<Blob> {
@@ -88,6 +166,14 @@ export default function PalettePage() {
   const [palette, setPalette] = useState<RGB[]>([]);
   // swapHex[i] = hex string the user wants palette[i] to become.
   const [swapHex, setSwapHex] = useState<string[]>([]);
+
+  const [rampTolerance, setRampTolerance] = useState(DEFAULT_HUE_TOLERANCE);
+  const [variants, setVariants] = useState<VariantSpec[]>([]);
+  // "hue" once a hue set generated the list — recorded in the manifest so a
+  // consumer knows whether the variants came from rotations or hand-picked defs.
+  const [variantMode, setVariantMode] = useState<"defs" | "hue">("defs");
+  const [hueSetCount, setHueSetCount] = useState(6);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [gridTheme, setGridTheme] = useState<"light" | "dark">("light");
   const [isDragging, setIsDragging] = useState(false);
@@ -225,16 +311,27 @@ export default function PalettePage() {
     setSwapHex(pal.map(rgbToHex));
   }, [frames, colorCount]);
 
+  // Ramps: the palette grouped into shading runs. Recomputed whenever the
+  // palette or the hue tolerance changes; cheap (palette-sized, not pixel-sized).
+  const ramps = useMemo<Ramp[]>(
+    () => detectRamps(palette, { hueTolerance: rampTolerance }),
+    [palette, rampTolerance],
+  );
+
+  const currentSwaps = useMemo<SwapEntry[]>(
+    () =>
+      palette
+        .map((p, i) => ({ from: p, to: hexToRgb(swapHex[i] ?? rgbToHex(p)) }))
+        .filter((s) => !sameRgb(s.from, s.to)),
+    [palette, swapHex],
+  );
+
   // Derived: recolored frame (applies to current frame for preview).
   const swappedCurrent = useMemo<ImageData | null>(() => {
     const f = frames[currentIndex];
-    if (!f || palette.length === 0) return null;
-    const swaps = palette
-      .map((p, i) => ({ from: p, to: hexToRgb(swapHex[i] ?? rgbToHex(p)) }))
-      .filter((s) => s.from.r !== s.to.r || s.from.g !== s.to.g || s.from.b !== s.to.b);
-    if (swaps.length === 0) return null;
-    return applyPaletteSwap(f.imageData, palette, swaps);
-  }, [frames, currentIndex, palette, swapHex]);
+    if (!f || palette.length === 0 || currentSwaps.length === 0) return null;
+    return applyPaletteSwap(f.imageData, palette, currentSwaps);
+  }, [frames, currentIndex, palette, currentSwaps]);
 
   // Canvas render
   const current = frames[currentIndex];
@@ -298,34 +395,198 @@ export default function PalettePage() {
     setSwapHex(palette.map(rgbToHex));
   };
 
+  // Perceptual (OKLCH) rotation, the same maths the CLI and MCP run — an HSL
+  // rotation would darken the blues and mud up the saturated shades.
   const shiftHue = (delta: number) => {
-    setSwapHex((prev) => prev.map((hex) => shiftHueOfHex(hex, delta)));
+    setSwapHex((prev) => prev.map((hex) => rgbToHex(rotateHue(hexToRgb(hex), delta))));
+  };
+
+  // -----------------------------------------------------------------
+  // Ramp remap — the headline: one new base color re-tints a whole ramp.
+  // -----------------------------------------------------------------
+  const applyRampBase = (ramp: Ramp, hex: string) => {
+    const swaps = remapRamp(ramp, hexToRgb(hex));
+    setSwapHex((prev) => {
+      const next = [...prev];
+      const setFor = (from: RGB, to: string) => {
+        for (let i = 0; i < palette.length; i++) if (sameRgb(palette[i], from)) next[i] = to;
+      };
+      // remapRamp always works off the ramp's *original* colors, so clear the
+      // previous re-tint first — otherwise dragging the picker would leave the
+      // shades it no longer touches stuck on the last tint.
+      for (const c of ramp.colors) setFor(c, rgbToHex(c));
+      for (const s of swaps) setFor(s.from, rgbToHex(s.to));
+      return next;
+    });
+  };
+
+  const resetRamp = (ramp: Ramp) => applyRampBase(ramp, rgbToHex(rampBaseColor(ramp)));
+
+  /** Where a ramp currently points: the swap target of its anchor shade. */
+  const rampTargetHex = (ramp: Ramp): string => {
+    const anchor = rampBaseColor(ramp);
+    const i = palette.findIndex((p) => sameRgb(p, anchor));
+    return (i >= 0 ? swapHex[i] : undefined) ?? rgbToHex(anchor);
+  };
+
+  // -----------------------------------------------------------------
+  // Variants
+  // -----------------------------------------------------------------
+  const generateHueSet = () => {
+    const count = Math.min(12, Math.max(2, Math.round(hueSetCount)));
+    setVariants(hueShiftVariants(count));
+    setVariantMode("hue");
+  };
+
+  const addVariantFromCurrent = () => {
+    // Seed from whatever the user has already swapped, so the palette /ramp
+    // editing above doubles as the editor for a new variant.
+    const swaps: Record<string, string> = {};
+    for (const s of currentSwaps) swaps[rgbToHex(s.from)] = rgbToHex(s.to);
+    setVariants((prev) => {
+      const used = new Set(prev.map((v) => slugifyVariantName(v.name)));
+      let n = prev.length + 1;
+      while (used.has(`variant-${n}`)) n++;
+      const spec: VariantSpec = { name: `Variant ${n}` };
+      if (Object.keys(swaps).length > 0) spec.swaps = swaps;
+      else spec.hueShift = 0;
+      return [...prev, spec];
+    });
+    setVariantMode("defs");
+  };
+
+  const updateVariant = (index: number, patch: Partial<VariantSpec>) => {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+    setVariantMode("defs");
+  };
+
+  const setVariantRampTarget = (index: number, baseHex: string, toHex: string) => {
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== index) return v;
+        const rest = (v.ramps ?? []).filter((r) => r.base !== baseHex);
+        const ramps = toHex === baseHex ? rest : [...rest, { base: baseHex, to: toHex }];
+        return ramps.length > 0 ? { ...v, ramps } : { ...v, ramps: undefined };
+      }),
+    );
+    setVariantMode("defs");
+  };
+
+  /** Pull the palette card's current single-color swaps into one variant. */
+  const captureSwapsInto = (index: number) => {
+    const swaps: Record<string, string> = {};
+    for (const s of currentSwaps) swaps[rgbToHex(s.from)] = rgbToHex(s.to);
+    updateVariant(index, { swaps: Object.keys(swaps).length > 0 ? swaps : undefined });
+    toast.success(`Captured ${currentSwaps.length} swaps`);
+  };
+
+  const removeVariant = (index: number) => {
+    setVariants((prev) => prev.filter((_, i) => i !== index));
   };
 
   // -----------------------------------------------------------------
   // Export
   // -----------------------------------------------------------------
+  const baseName = useMemo(
+    () => (sourceFile ? sourceFile.name.replace(/\.[^.]+$/, "") : "sprite"),
+    [sourceFile],
+  );
+
+  // Variant previews are the expensive branch (one full recolor per variant),
+  // so resolve them off a deferred copy of the list: dragging a variant's color
+  // input keeps repainting the input while the grid catches up a beat later.
+  const deferredVariants = useDeferredValue(variants);
+  const variantPreviews = useMemo<VariantPreview[]>(() => {
+    if (palette.length === 0) return [];
+    return deferredVariants.map((spec) => ({
+      name: spec.name,
+      slug: slugifyVariantName(spec.name),
+      file: variantFileName(baseName, spec.name),
+      swaps: resolveVariant(spec, palette, ramps),
+    }));
+  }, [deferredVariants, palette, ramps, baseName]);
+
+  // Two variants that slugify the same would write the same PNG name, and the
+  // CLI's parseVariantSet rejects that outright — so catch it here too instead
+  // of silently dropping a file from the ZIP.
+  const duplicateName = useMemo<string | null>(() => {
+    const seen = new Set<string>();
+    for (const v of variantPreviews) {
+      if (seen.has(v.slug)) return v.name;
+      seen.add(v.slug);
+    }
+    return null;
+  }, [variantPreviews]);
+
+  const manifest = useMemo<VariantManifest | null>(() => {
+    if (!sourceFile || frames.length === 0 || palette.length === 0) return null;
+    if (variantPreviews.length === 0) return null;
+    const f0 = frames[0];
+    return {
+      version: VARIANT_MANIFEST_VERSION,
+      source: sourceFile.name,
+      frameWidth: f0.width,
+      frameHeight: f0.height,
+      grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
+      options: { colors: colorCount, mode: variantMode, rampTolerance },
+      palette: palette.map(rgbToHex),
+      ramps: describeRamps(ramps),
+      variants: variantPreviews.map((v, i) => {
+        const hueShift = deferredVariants[i]?.hueShift;
+        return {
+          name: v.name,
+          slug: v.slug,
+          file: v.file,
+          ...(hueShift === undefined ? {} : { hueShift }),
+          swaps: v.swaps.map((s) => ({ from: rgbToHex(s.from), to: rgbToHex(s.to) })),
+        };
+      }),
+    };
+  }, [
+    sourceFile,
+    frames,
+    palette,
+    ramps,
+    variantPreviews,
+    deferredVariants,
+    sheetCols,
+    sheetRows,
+    sourceMode,
+    colorCount,
+    variantMode,
+    rampTolerance,
+  ]);
+
   // Same shape as `sprite-tools palette` CLI output. Built via useMemo so the
   // JSON preview panel can render it live without duplicating assembly.
   const jsonPayload = useMemo(() => {
     if (!sourceFile || palette.length === 0 || frames.length === 0) return null;
     const f0 = frames[0];
-    const swaps = palette
-      .map((p, i) => ({
-        from: rgbToHex(p),
-        to: swapHex[i] ?? rgbToHex(p),
-      }))
-      .filter((s) => s.from.toLowerCase() !== s.to.toLowerCase());
+    const swaps = currentSwaps.map((s) => ({ from: rgbToHex(s.from), to: rgbToHex(s.to) }));
     return {
       source: sourceFile.name,
       frameWidth: f0.width,
       frameHeight: f0.height,
       grid: { cols: sheetCols, rows: sheetRows, detected: sourceMode === "sheet" },
-      options: { colors: colorCount },
+      options: { colors: colorCount, rampTolerance },
       palette: palette.map(rgbToHex),
+      ramps: describeRamps(ramps),
       swaps,
+      ...(manifest ? { variants: manifest.variants } : {}),
     };
-  }, [sourceFile, palette, swapHex, frames, sheetCols, sheetRows, sourceMode, colorCount]);
+  }, [
+    sourceFile,
+    palette,
+    currentSwaps,
+    frames,
+    ramps,
+    manifest,
+    sheetCols,
+    sheetRows,
+    sourceMode,
+    colorCount,
+    rampTolerance,
+  ]);
 
   const exportPaletteJson = () => {
     if (!jsonPayload || !sourceFile) return;
@@ -358,48 +619,60 @@ export default function PalettePage() {
     setHasDownloaded(true);
   };
 
+  const exportCols = sourceMode === "sheet" ? effectiveCols : 1;
+  // Size from the grid, not the surviving frame count: importing a sheet drops
+  // empty cells, so frames.length can be short of cols*rows. Deriving rows
+  // from it would place the last frames past the bottom edge and lose them.
+  const exportRows = sourceMode === "sheet" ? effectiveRows : Math.ceil(frames.length / exportCols);
+
   const downloadStitched = async () => {
     if (frames.length === 0 || !sourceFile || palette.length === 0) return;
-    const cellW = frames[0].width;
-    const cellH = frames[0].height;
-    const cols = sourceMode === "sheet" ? effectiveCols : 1;
-    // Size from the grid, not the surviving frame count: importing a sheet drops
-    // empty cells, so frames.length can be short of cols*rows. Deriving rows
-    // from it would place the last frames past the bottom edge and lose them.
-    const rows = sourceMode === "sheet" ? effectiveRows : Math.ceil(frames.length / cols);
-    const canvas = document.createElement("canvas");
-    canvas.width = cellW * cols;
-    canvas.height = cellH * rows;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const swaps = palette
-      .map((p, i) => ({ from: p, to: hexToRgb(swapHex[i] ?? rgbToHex(p)) }))
-      .filter((s) => s.from.r !== s.to.r || s.from.g !== s.to.g || s.from.b !== s.to.b);
-    for (let i = 0; i < frames.length; i++) {
-      const f = frames[i];
-      const c = f.cellCol ?? i % cols;
-      const r = f.cellRow ?? Math.floor(i / cols);
-      const out = swaps.length > 0 ? applyPaletteSwap(f.imageData, palette, swaps) : f.imageData;
-      const tmp = document.createElement("canvas");
-      tmp.width = cellW;
-      tmp.height = cellH;
-      const tctx = tmp.getContext("2d");
-      if (!tctx) continue;
-      tctx.putImageData(out, 0, 0);
-      ctx.drawImage(tmp, c * cellW, r * cellH);
-    }
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/png"),
-    );
+    const blob = await renderSheetBlob(frames, palette, currentSwaps, exportCols, exportRows);
     if (!blob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    const base = sourceFile.name.replace(/\.[^.]+$/, "");
-    a.download = `${base}-recolor-sheet.png`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadBlob(blob, `${baseName}-recolor-sheet.png`);
     toast.success("Recolored sheet downloaded");
     setHasDownloaded(true);
+  };
+
+  const downloadManifest = () => {
+    if (!manifest) return;
+    downloadBlob(
+      new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
+      `${baseName}-variants.json`,
+    );
+    toast.success("Variant manifest downloaded");
+    setHasDownloaded(true);
+  };
+
+  const downloadVariantsZip = async () => {
+    if (!manifest || frames.length === 0 || variantPreviews.length === 0) return;
+    if (duplicateName) {
+      toast.error(`Two variants share the filename for "${duplicateName}" — rename one first`);
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const zip = new JSZip();
+      for (const variant of variantPreviews) {
+        // Sheets go back out stitched to the source grid, matching what the CLI
+        // writes for the same variant set.
+        const blob = await renderSheetBlob(frames, palette, variant.swaps, exportCols, exportRows);
+        if (blob) zip.file(variant.file, blob);
+      }
+      zip.file(`${baseName}-variants.json`, JSON.stringify(manifest, null, 2));
+      downloadBlob(await zip.generateAsync({ type: "blob" }), `${baseName}-variants.zip`);
+      track("export", {
+        tool: "palette",
+        format: "variants-zip",
+        variants: variantPreviews.length,
+      });
+      toast.success(`Exported ${variantPreviews.length} variants as ZIP`);
+      setHasDownloaded(true);
+    } catch (e) {
+      toast.error(`Export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const copyPalette = async () => {
@@ -426,12 +699,22 @@ export default function PalettePage() {
         done: palette.length > 0,
       },
       {
-        label: "Swap & download",
-        hint: "Swap any swatch to recolor, then save the PNG or JSON.",
+        label: "Re-tint a ramp",
+        hint: "Pick one new base color and the whole shading ramp follows, steps intact.",
+        done: currentSwaps.length > 0,
+      },
+      {
+        label: "Build variants",
+        hint: "Generate a hue set or add your own — every variant previews side by side.",
+        done: variants.length > 0,
+      },
+      {
+        label: "Export",
+        hint: "Save a recolored PNG, the variant ZIP, or the JSON manifest.",
         done: hasDownloaded,
       },
     ],
-    [sourceUrl, palette.length, hasDownloaded],
+    [sourceUrl, palette.length, currentSwaps.length, variants.length, hasDownloaded],
   );
   const tutorial = useTutorial({ id: "palette", steps: tutorialSteps });
 
@@ -573,6 +856,53 @@ export default function PalettePage() {
             </CardContent>
           </Card>
 
+          {ramps.length > 0 && (
+            <Card className="ring-1 ring-primary/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-primary" /> Ramps
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Pick <strong className="text-foreground">one</strong> new base color — the whole
+                  shading ramp re-tints, keeping its lightness steps and its shadow/highlight hue
+                  drift.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {ramps.map((ramp) => (
+                  <RampRow
+                    key={`ramp-${ramp.index}`}
+                    ramp={ramp}
+                    targetHex={rampTargetHex(ramp)}
+                    shadeHexes={ramp.colors.map((c) => {
+                      const i = palette.findIndex((p) => sameRgb(p, c));
+                      return (i >= 0 ? swapHex[i] : undefined) ?? rgbToHex(c);
+                    })}
+                    onBase={(hex) => applyRampBase(ramp, hex)}
+                    onReset={() => resetRamp(ramp)}
+                  />
+                ))}
+                <div className="space-y-1.5 pt-1 border-t border-dashed">
+                  <div className="flex justify-between">
+                    <Label className="text-xs">Hue tolerance</Label>
+                    <span className="text-[10px] font-mono">{rampTolerance}°</span>
+                  </div>
+                  <Slider
+                    value={[rampTolerance]}
+                    min={5}
+                    max={90}
+                    step={1}
+                    onValueChange={(v) => setRampTolerance(Array.isArray(v) ? v[0] : v)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    How far apart two hues can be and still count as one ramp. Greys always land in
+                    their own bucket.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Palette</CardTitle>
@@ -657,6 +987,26 @@ export default function PalettePage() {
                   <Button onClick={downloadStitched} variant="outline" className="w-full">
                     <Grid3x3 className="w-4 h-4 mr-2" /> Recolored sheet (PNG)
                   </Button>
+                )}
+                {variantPreviews.length > 0 && (
+                  <>
+                    <Button
+                      onClick={() => void downloadVariantsZip()}
+                      disabled={isExporting}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Package className="w-4 h-4 mr-2" />
+                      )}
+                      {variantPreviews.length} variants + manifest (ZIP)
+                    </Button>
+                    <Button onClick={downloadManifest} variant="outline" className="w-full">
+                      <FileJson className="w-4 h-4 mr-2" /> Variant manifest (JSON)
+                    </Button>
+                  </>
                 )}
                 <Button onClick={exportPaletteJson} variant="outline" className="w-full">
                   <Droplet className="w-4 h-4 mr-2" /> Palette JSON
@@ -764,6 +1114,96 @@ export default function PalettePage() {
               )}
             </CardContent>
           </Card>
+
+          {palette.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="w-4 h-4" /> Variants
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  One sprite, many recolors. Every variant previews below, rendered from the frame
+                  you are looking at.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="space-y-1 w-20">
+                    <Label className="text-xs">Hue set</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={12}
+                      value={hueSetCount}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (n >= 2 && n <= 12) setHueSetCount(n);
+                      }}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <Button size="sm" variant="outline" onClick={generateHueSet} className="h-8">
+                    <Wand2 className="w-3.5 h-3.5 mr-1.5" /> Generate rotations
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={addVariantFromCurrent}
+                    className="h-8"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Add current recolor
+                  </Button>
+                  {variants.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setVariants([])}
+                      className="h-8"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+
+                {variants.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Generate an evenly spaced hue set for enemy tints, or recolor with the ramp
+                    controls and add that as a named variant.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {variants.map((spec, i) => (
+                      <VariantRow
+                        // biome-ignore lint/suspicious/noArrayIndexKey: list position is the identity here; names are user-editable and may collide mid-typing
+                        key={`variant-${i}`}
+                        spec={spec}
+                        ramps={ramps}
+                        fileName={variantFileName(baseName, spec.name)}
+                        onName={(name) => updateVariant(i, { name })}
+                        onHueShift={(hueShift) => updateVariant(i, { hueShift })}
+                        onRampTarget={(base, to) => setVariantRampTarget(i, base, to)}
+                        onCaptureSwaps={() => captureSwapsInto(i)}
+                        onRemove={() => removeVariant(i)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {duplicateName && (
+                  <p className="text-xs text-destructive">
+                    “{duplicateName}” collides with another variant’s filename — rename it before
+                    exporting.
+                  </p>
+                )}
+
+                <VariantGrid
+                  frame={current?.imageData ?? null}
+                  palette={palette}
+                  variants={variantPreviews}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -818,55 +1258,166 @@ function PaletteSwatch({
 }
 
 // -----------------------------------------------------------------
-// Hue shift — lightweight HSL roundtrip
+// Ramp row — the whole-ramp re-tint control
 // -----------------------------------------------------------------
-function shiftHueOfHex(hex: string, deltaDeg: number): string {
-  const { r, g, b } = hexToRgb(hex);
-  const { h, s, l } = rgbToHsl(r, g, b);
-  const h2 = ((((h * 360 + deltaDeg) % 360) + 360) % 360) / 360;
-  const rgb = hslToRgb(h2, s, l);
-  return rgbToHex(rgb);
+function RampRow({
+  ramp,
+  targetHex,
+  shadeHexes,
+  onBase,
+  onReset,
+}: {
+  ramp: Ramp;
+  /** Where the ramp currently points (its anchor's swap target). */
+  targetHex: string;
+  /** Current target color of every shade, in ascending-lightness order. */
+  shadeHexes: string[];
+  onBase: (hex: string) => void;
+  onReset: () => void;
+}) {
+  const sourceBase = rgbToHex(rampBaseColor(ramp));
+  const changed = targetHex.toLowerCase() !== sourceBase.toLowerCase();
+  const label = ramp.achromatic ? "Greys" : `Ramp ${ramp.index + 1}`;
+
+  return (
+    <div className={cn("rounded-lg border p-2 space-y-2", changed && "border-primary/60")}>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {label} · {ramp.colors.length} {ramp.colors.length === 1 ? "shade" : "shades"}
+        </span>
+        {changed && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex flex-1 rounded overflow-hidden border border-border/60">
+          {ramp.colors.map((c, i) => {
+            const from = rgbToHex(c);
+            return (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: shades are sorted by lightness and may repeat a hex; the position is the identity
+                key={`${from}-${i}`}
+                className="h-8 flex-1 relative"
+                style={{ background: shadeHexes[i] ?? from }}
+                title={`${from} → ${shadeHexes[i] ?? from}`}
+              >
+                {i === ramp.anchorIndex && (
+                  <span className="absolute inset-x-0 bottom-0.5 mx-auto w-1.5 h-1.5 rounded-full bg-white/90 ring-1 ring-black/40" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <label
+          className="flex items-center gap-1.5 px-2 h-8 rounded border cursor-pointer hover:bg-muted/40 shrink-0"
+          title={`Re-tint the whole ramp — base ${sourceBase} → ${targetHex}`}
+        >
+          <span
+            className="w-4 h-4 rounded-sm border border-border/60"
+            style={{ background: targetHex }}
+          />
+          <span className="text-[10px] font-medium">Re-tint</span>
+          <input
+            type="color"
+            value={targetHex}
+            onChange={(e) => onBase(e.target.value)}
+            className="sr-only"
+          />
+        </label>
+      </div>
+    </div>
+  );
 }
 
-function rgbToHsl(r: number, g: number, b: number) {
-  const R = r / 255;
-  const G = g / 255;
-  const B = b / 255;
-  const max = Math.max(R, G, B);
-  const min = Math.min(R, G, B);
-  const l = (max + min) / 2;
-  let h = 0;
-  let s = 0;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === R) h = (G - B) / d + (G < B ? 6 : 0);
-    else if (max === G) h = (B - R) / d + 2;
-    else h = (R - G) / d + 4;
-    h /= 6;
-  }
-  return { h, s, l };
-}
-
-function hslToRgb(h: number, s: number, l: number): RGB {
-  if (s === 0) {
-    const v = Math.round(l * 255);
-    return { r: v, g: v, b: v };
-  }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const hue2rgb = (t: number) => {
-    let n = t;
-    if (n < 0) n += 1;
-    if (n > 1) n -= 1;
-    if (n < 1 / 6) return p + (q - p) * 6 * n;
-    if (n < 1 / 2) return q;
-    if (n < 2 / 3) return p + (q - p) * (2 / 3 - n) * 6;
-    return p;
-  };
-  return {
-    r: Math.round(hue2rgb(h + 1 / 3) * 255),
-    g: Math.round(hue2rgb(h) * 255),
-    b: Math.round(hue2rgb(h - 1 / 3) * 255),
-  };
+// -----------------------------------------------------------------
+// Variant row — name, hue rotation and one base color per ramp
+// -----------------------------------------------------------------
+function VariantRow({
+  spec,
+  ramps,
+  fileName,
+  onName,
+  onHueShift,
+  onRampTarget,
+  onCaptureSwaps,
+  onRemove,
+}: {
+  spec: VariantSpec;
+  ramps: Ramp[];
+  fileName: string;
+  onName: (name: string) => void;
+  onHueShift: (deg: number) => void;
+  onRampTarget: (baseHex: string, toHex: string) => void;
+  onCaptureSwaps: () => void;
+  onRemove: () => void;
+}) {
+  const swapCount = Object.keys(spec.swaps ?? {}).length;
+  return (
+    <div className="rounded-lg border p-2 space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          value={spec.name}
+          onChange={(e) => onName(e.target.value)}
+          className="h-8 text-sm flex-1 min-w-0"
+        />
+        <div className="flex items-center gap-1 shrink-0">
+          <Label className="text-[10px] text-muted-foreground">Hue</Label>
+          <Input
+            type="number"
+            step={5}
+            value={spec.hueShift ?? 0}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) onHueShift(n);
+            }}
+            className="h-8 w-16 text-sm"
+          />
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onCaptureSwaps}
+          className="h-8 w-8 shrink-0"
+          title="Replace this variant's individual swaps with the palette edits above"
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+        <Button size="icon" variant="ghost" onClick={onRemove} className="h-8 w-8 shrink-0">
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-muted-foreground">Ramp bases</span>
+        {ramps.map((ramp) => {
+          const base = rgbToHex(rampBaseColor(ramp));
+          const to = spec.ramps?.find((r) => r.base === base)?.to ?? base;
+          return (
+            <label
+              key={`vr-${ramp.index}`}
+              className="w-5 h-5 rounded-sm border border-border/60 cursor-pointer"
+              style={{ background: to }}
+              title={`${ramp.achromatic ? "Greys" : `Ramp ${ramp.index + 1}`}: ${base} → ${to}`}
+            >
+              <input
+                type="color"
+                value={to}
+                onChange={(e) => onRampTarget(base, e.target.value)}
+                className="sr-only"
+              />
+            </label>
+          );
+        })}
+        <span className="text-[10px] font-mono text-muted-foreground ml-auto truncate">
+          {fileName}
+          {swapCount > 0 && ` · ${swapCount} swaps`}
+        </span>
+      </div>
+    </div>
+  );
 }

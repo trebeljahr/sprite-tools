@@ -1,16 +1,20 @@
 export const metadata = {
   title: "Palette — sprite-tools",
   description:
-    "Extract dominant sprite colors and palette-swap them into recolored PNG variants or reusable JSON.",
+    "Extract dominant sprite colors, remap whole shading ramps in OKLCH, and export named recolor variants as PNGs plus a manifest.",
 };
 
 # Palette
 
 The [**Palette**](/palette) tab **extracts** the dominant colors from a sprite and lets you **swap any of them** to recolor the whole thing — the classic palette-swap technique for cheap character variants.
 
+Three levels, smallest to largest: swap **one color**, remap a whole **ramp**, or generate a set of named **variants** in one go.
+
 ## Extraction
 
-Uses the same **median-cut** quantizer as the Pixelate tab, run over the **union of all frames** in a sheet so the palette is consistent across the animation. N is tunable (2–32 colors).
+When the sprite has no more distinct colors than you asked for — the usual case for pixel art — you get those colors **exactly**, ordered most-used first. Above that, it falls back to the same **median-cut** quantizer as the Pixelate tab. Either way it runs over the **union of all frames** in a sheet so the palette is consistent across the animation, and never returns a duplicate entry. N is tunable (2–32 colors).
+
+The exact path matters for re-tinting: nearest-bucket lookup is only safe if extraction actually separated the materials. Median-cut splits boxes by *pixel count*, so a large flat shirt can claim several boxes that all average to the same hex while a small skin tone never earns one — and re-tinting the shirt would drag the face with it.
 
 ## Swapping
 
@@ -21,18 +25,157 @@ Click any extracted swatch → native OS color picker opens → pick a replaceme
 - **Hue −30°** / **+30°** — subtle warm/cool drift.
 - **Invert hue** — complementary-color palette (green → red, blue → orange).
 
+Rotation happens in OKLCH, so a −30° drift keeps every shade at its original perceived brightness instead of darkening the cool half of the palette. A full 360° turn is a bit-exact identity.
+
+## Ramps
+
+A sprite palette is not a flat bag of colors. A shirt is not `#af4d4d` — it is four related shades: a dark fold, a mid, a lit face, a highlight. That run of shades is a **ramp**, and it is the unit an artist actually thinks in.
+
+Swapping those four entries by hand almost never works. You pick four new hexes by eye, and the spacing between them drifts: the shadow ends up too close to the mid, the highlight jumps, the shirt reads as flat or as plastic. The shading you are trying to keep is exactly the thing free-hand swapping destroys.
+
+Remapping a ramp moves all of it at once, in OKLCH, relative to the ramp's **anchor** (its most saturated shade):
+
+- **Lightness** — a uniform **additive** offset. Ordering survives, and so do the exact relative step sizes between shades. When the new base would push the ramp past black or white, the **offset** is clamped against the whole ramp rather than each shade being clamped on its own — per-entry clamping would pile several shades onto pure black and flatten the ramp into a blob.
+- **Chroma** — a **multiplicative** ratio, so relative saturation steps scale instead of flattening. A grey ramp (nothing to scale) gets an additive offset instead, so it can still be tinted.
+- **Hue** — a uniform additive rotation along the shortest arc. Intra-ramp hue drift is preserved: pixel artists deliberately push shadows toward blue and highlights toward yellow, and that drift is most of what makes the shading read as light rather than as "darker paint".
+
+Detection groups the palette by hue proximity in OKLCH (default tolerance **25°**, tunable). Anything below a chroma threshold of `0.03` is grey — hue is meaningless there — and lands in one **achromatic** ramp. Every palette entry ends up in exactly one ramp; the ramp lengths always sum to the palette size.
+
+The **Ramps** card in the left column shows each ramp as a row of its swatches in lightness order, with the anchor marked. The color input on the row remaps the whole ramp; **Reset** puts it back. A **Hue tolerance** slider (5–90°) controls how far apart two hues can be and still count as one ramp — raise it if a shirt split into two rows, lower it if two materials merged. Ramps are listed largest-first, so the indices stay stable for a given palette; the CLI and the manifest reference them the same way.
+
+Remapping a ramp to its own base color is a no-op, and colors outside the ramp you touched are never written.
+
+## Variants
+
+A **variant** is a named recipe — hue rotation, ramp remaps, individual swaps — resolved against the extracted palette. The **Variants** card builds a list of them and renders every one side by side in a grid, each labelled with its name and its output filename, so you compare team colors instead of flipping between exports.
+
+Two ways to fill the list:
+
+- **Hue set → Generate rotations** — pick a count (2–12) and get that many evenly spaced rotations, `360 / count` apart. The set **includes the 0° entry**: ask for 8 enemy tints and you get 8 files, the original among them. Names are zero-padded so filenames sort in hue order — `hue000`, `hue045`, `hue090`, …
+- **Add current recolor** — takes whatever you have already swapped with the palette and ramp controls and pins it as a named variant. Each row is then editable: rename it, set a hue shift, or point a ramp at a new base.
+
+Every row shows the filename it will produce. **Clear** empties the list.
+
+Stages apply coarse-to-fine: whole-palette **hue shift**, then **ramp** remaps, then individual **swaps**. Later stages overwrite earlier ones for the same source color, so a hand-picked swap always wins over the broad strokes underneath it.
+
+### Variant set JSON
+
+The same schema the CLI's `--variants` flag reads. `base` may be **any member hex of the target ramp**, not just its anchor — name the shade you can see.
+
+```json
+{
+  "version": 1,
+  "colors": 12,
+  "variants": [
+    {
+      "name": "Team Red",
+      "ramps": [{ "base": "#4d7faf", "to": "#af4d4d" }]
+    },
+    {
+      "name": "Team Green",
+      "ramps": [
+        { "base": "#4d7faf", "to": "#4d9f5a" },
+        { "base": "#8a6b3f", "to": "#6f7a3a" }
+      ]
+    },
+    {
+      "name": "Referee",
+      "ramps": [{ "base": "#4d7faf", "to": "#3d3d3d" }],
+      "swaps": { "#af4d4d": "#f2f2f2" }
+    },
+    {
+      "name": "Ghost",
+      "hueShift": 180
+    }
+  ]
+}
+```
+
+Rules the parser enforces, with a precise message when it fails: `version` must be `1`, `variants` must be non-empty, every variant needs at least one of `swaps` / `ramps` / `hueShift`, and names must be unique **after slugification** (`Team Red` and `team-red` collide). Hex is accepted with or without `#` in any case and normalized to lowercase `#rrggbb`; three-digit shorthand is rejected.
+
+### Output naming
+
+Names are slugified — lowercased, non-alphanumerics collapsed to `-`, ends trimmed — and joined to the file base:
+
+```
+<base>_<slug>.png
+
+hero_team-red.png
+hero_team-green.png
+hero_referee.png
+hero_ghost.png
+hero_hue045.png
+```
+
+A name that slugifies to nothing becomes `variant`.
+
+### Manifest
+
+The ZIP export gives you `<base>-variants.zip` — every variant PNG plus `<base>-variants.json`, the manifest. The manifest also downloads on its own. Sheets are stitched back to the source grid, so a variant PNG drops straight into whatever loads the original.
+
+```json
+{
+  "version": 1,
+  "source": "hero.png",
+  "frameWidth": 64, "frameHeight": 64,
+  "grid": { "cols": 4, "rows": 4, "detected": true },
+  "options": { "colors": 12, "mode": "defs", "rampTolerance": 25 },
+  "palette": ["#2b1b17", "#8a6b3f", "#4d7faf", "#af4d4d", "..."],
+  "ramps": [
+    {
+      "index": 0,
+      "base": "#4d7faf",
+      "colors": ["#243b52", "#395f83", "#4d7faf", "#7ea6cf"],
+      "achromatic": false
+    }
+  ],
+  "variants": [
+    {
+      "name": "Team Red",
+      "slug": "team-red",
+      "file": "hero_team-red.png",
+      "swaps": [{ "from": "#4d7faf", "to": "#af4d4d" }]
+    },
+    {
+      "name": "Ghost",
+      "slug": "ghost",
+      "file": "hero_ghost.png",
+      "hueShift": 180,
+      "swaps": [{ "from": "#af4d4d", "to": "#008088" }]
+    }
+  ]
+}
+```
+
+`mode` is `"defs"` for a hand-built variant list and `"hue"` for a generated hue set. `file` is a filename only, relative to the manifest.
+
+## Why OKLCH, not HSL
+
+HSL is the obvious choice and the wrong one. Its "lightness" is `(max + min) / 2` of the **gamma-encoded** RGB channels, which is a coordinate, not a perception: rotate a yellow to blue at a fixed HSL-L and the blue looks drastically darker, because HSL never modelled how bright those hues actually are. Its saturation is not comparable across hues either, so scaling it moves different ramps by different perceived amounts and the result muddies. Oklab is fitted so that equal numeric steps in L are equal **perceived** steps, and so that rotating hue at constant L and C holds perceived brightness. OKLCH is Oklab in polar form, which is what makes "shift the hue, keep the shading" a single subtraction instead of a fudge factor.
+
+The honest caveat: sRGB is not a ball, so some rotations land outside it. When that happens we walk **chroma** down (binary search, holding L and h) rather than clamping channels. Clamping a channel changes lightness unpredictably and can reorder or collapse the ends of a remapped ramp; giving up saturation keeps the ramp's shape. The cost is that a rotation into a corner of the gamut is not perfectly reversible — a saturated red rotated 180° lands where sRGB simply has less cyan available, and rotating back does not fully recover the chroma. Ramp remaps stay ordered regardless, which is the property that matters here.
+
+The web app, the CLI, and the MCP server share these conversions, so all three produce identical pixels from the same spec.
+
 ## Output
 
-Two options:
+Options:
 
 ```bash
-# Palette JSON (list of hex colors + any swaps)
-Download > "Palette JSON"
+# Recolored PNG (single frame, or stitched sheet when the source is a sheet)
+Export > "Recolored frame (PNG)"
+Export > "Recolored sheet (PNG)"
 
-# Recolored PNG (single frame or stitched sheet)
-Download > "Recolored frame (PNG)"
-Download > "Recolored sheet (PNG)"
+# Every variant PNG plus the manifest, in one archive
+Export > "N variants + manifest (ZIP)"   ->  <base>-variants.zip
+Export > "Variant manifest (JSON)"       ->  <base>-variants.json
+
+# Palette JSON: hex list + detected ramps + current swaps + any variants
+Export > "Palette JSON"
+Export > "Copy hex list"
 ```
+
+The two variant buttons appear once the list has something in it.
 
 The JSON shape mirrors the CLI:
 
@@ -41,8 +184,11 @@ The JSON shape mirrors the CLI:
   "source": "hero.png",
   "frameWidth": 64, "frameHeight": 64,
   "grid": { "cols": 4, "rows": 4, "detected": true },
-  "options": { "colors": 12 },
-  "palette": ["#0f380f", "#306230", "#8bac0f", "#9bbc0f", "#af4d4d", ...],
+  "options": { "colors": 12, "rampTolerance": 25 },
+  "palette": ["#0f380f", "#306230", "#8bac0f", "#9bbc0f", "#af4d4d", "..."],
+  "ramps": [
+    { "index": 0, "base": "#8bac0f", "colors": ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"], "achromatic": false }
+  ],
   "swaps": [
     { "from": "#af4d4d", "to": "#4d7faf" }
   ]
@@ -51,6 +197,10 @@ The JSON shape mirrors the CLI:
 
 ## Tips
 
-- For **character variants** (same hero, different outfit), extract 12–16 colors then swap only the clothing ones. You get a new skin with zero art rework.
+- For **character variants** (same hero, different outfit), extract 12–16 colors then remap only the clothing ramp. You get a new skin with zero art rework and the shading intact.
+- If a ramp came out split — the shirt's shadow landed in its own row — raise the ramp tolerance above 25°. If two materials merged, lower it.
+- Greys always cluster together. To tint them (a white shirt going navy), remap the achromatic ramp: it takes an additive chroma offset, so it can pick up a hue instead of staying grey.
+- Generate a **hue set** for enemy tiers, then hand-fix the one or two variants where a rotation collided with the skin tone.
+- The manifest is machine-readable on purpose — feed `variants[].file` straight into an atlas pack or an asset importer.
 - **Invert hue** is a cheap "evil twin" effect.
 - Palettes exported here are valid input to other tools — paste the colors into a pixel-art editor, or use them as a reference for custom engine palettes.

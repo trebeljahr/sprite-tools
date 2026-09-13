@@ -54,7 +54,7 @@ program.addHelpText(
     "  pivot      anchor / origin metadata                              (JSON)",
     "  tags       named animation ranges                                (JSON)",
     "  meta       collision + pivot + tags in one pass (merged JSON)    (JSON)",
-    "  palette    dominant colors + swaps                               (JSON)",
+    "  palette    dominant colors, ramps, swaps, variants               (JSON + PNG)",
     "  atlas      packed-atlas manifest                                 (JSON + PNG)",
     "",
     "Image transforms (default: stdout, use -o <file>):",
