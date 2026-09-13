@@ -1,7 +1,7 @@
 // Node PNG I/O + sprite-sheet slicing / stitching. Pure JS via pngjs so
 // there are no native dependencies to install.
 
-import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { PNG } from "pngjs";
 import {
   cellRect,
@@ -31,6 +31,33 @@ export function loadPng(path: string): ImageData {
   const out = new Uint8ClampedArray(png.data.length);
   out.set(png.data);
   return new ImageData(out, png.width, png.height);
+}
+
+/**
+ * Width and height from a PNG's IHDR chunk, without decoding any pixels, or
+ * null when the path is not a readable PNG. `export` only needs the size of a
+ * sheet that may be large, so decoding it would be wasted work.
+ */
+export function readPngSize(path: string): { width: number; height: number } | null {
+  let fd: number | null = null;
+  try {
+    if (!statSync(path).isFile()) return null;
+    fd = openSync(path, "r");
+    const head = Buffer.alloc(24);
+    if (readSync(fd, head, 0, 24, 0) < 24) return null;
+    // 8-byte signature, then the IHDR chunk: 4-byte length, "IHDR", width, height.
+    const signature = "89504e470d0a1a0a";
+    if (head.toString("hex", 0, 8) !== signature || head.toString("latin1", 12, 16) !== "IHDR") {
+      return null;
+    }
+    const width = head.readUInt32BE(16);
+    const height = head.readUInt32BE(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
 }
 
 export function savePng(img: ImageData, path: string): void {

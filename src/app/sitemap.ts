@@ -22,6 +22,7 @@ const TOOL_ROUTES = [
   "/lasso",
   "/background-removal",
   "/outline",
+  "/export",
 ];
 
 const AI_ROUTES = ["/generate", "/animate"];

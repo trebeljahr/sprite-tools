@@ -8,6 +8,7 @@ import {
   parseIntArg,
   parseFloatArg,
   loadSheet,
+  sheetHeader,
   baseName,
   addHelpExtras,
   addGridOptions,
@@ -154,7 +155,12 @@ export function registerPaletteCommand(program: Command) {
             ? variantSet.colors
             : opts.colors;
 
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
+        const { image, frames, grid } = loadSheet(
+          input,
+          opts.cols,
+          opts.rows,
+          gridPaddingFromOpts(opts),
+        );
 
         // Build a merged ImageData over ALL frames to extract a shared palette:
         // one palette for the whole animation, so a variant recolors every
@@ -275,10 +281,7 @@ export function registerPaletteCommand(program: Command) {
 
         writeJsonOutput(
           {
-            source: input,
-            frameWidth: frames[0]?.width ?? 0,
-            frameHeight: frames[0]?.height ?? 0,
-            grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+            ...sheetHeader(input, image, grid, frames),
             options: wantsRamps ? { colors, rampTolerance: opts.rampTolerance } : { colors },
             palette: paletteHex,
             swaps: swaps.map((s) => ({ from: rgbToHex(s.from), to: rgbToHex(s.to) })),

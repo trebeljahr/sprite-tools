@@ -1,0 +1,399 @@
+export const metadata = {
+  title: "Engine export — sprite-tools",
+  description:
+    "Turn sprite-tools metadata JSON into a Godot SpriteFrames resource, a Unity texture .meta, an Aseprite sheet JSON, or a Phaser/PixiJS atlas — with the coordinate rules and the caveats.",
+};
+
+# Engine export
+
+Every metadata command in sprite-tools emits JSON. `export` is the last hop: it reads that JSON and writes a file a game engine can import directly. It never touches pixels — no image is decoded, no PNG is written. It is a JSON-to-text transform, which is why the same code runs in the [CLI](/docs/cli/reference), the [MCP server](/docs/mcp/tools), and the browser at [/export](/export). The one read from disk: for a grid document, the CLI and the MCP tool read the width and height out of the header of the PNG that `source` names, when that file exists.
+
+Four targets:
+
+| Format | Output | Consumed by |
+| --- | --- | --- |
+| `godot` | `.tres` text resource | Godot 4.x — `SpriteFrames` on an `AnimatedSprite2D`/`AnimatedSprite3D`, or one `AtlasTexture` per frame |
+| `unity` | `<texture>.png.meta` YAML sidecar | Unity — `TextureImporter` in Multiple sprite mode |
+| `aseprite` | JSON | Aseprite's own sheet-JSON shape; Phaser's `createFromAseprite`, and anything that already parses Aseprite exports |
+| `phaser` | JSON | Phaser 3 `load.atlas`, PixiJS `Spritesheet` |
+
+## The full pipe
+
+```bash
+# 1. metadata: collision polygons, a pivot per frame, named clips
+sprite-tools meta hero.png \
+  --collision --pivot bottom-center \
+  --tag idle=0-4 --tag walk=5-12 --tag attack=13-19 \
+  --fps 12 \
+  -o hero.json
+
+# 2. engine file
+sprite-tools export hero.json --format godot -o hero.tres
+
+# 3. drop hero.png + hero.tres into the Godot project and let the editor import
+```
+
+`-` reads the document from stdin, so step 1 and 2 collapse into one line:
+
+```bash
+sprite-tools meta hero.png --collision --pivot bottom-center --tag idle=0-4 \
+  | sprite-tools export - --format godot -o hero.tres
+```
+
+## What the exporter accepts
+
+Any sprite-tools metadata document, in any of these shapes:
+
+- a single command's output — `collision`, `pivot`, `tags`
+- a `jq -s add` merge of several of them (they share a header and namespace their payloads, so they merge without collisions — see [JSON schemas](/docs/reference/json-schemas))
+- a `meta` output, which is that merge produced in one pass
+- an `atlas --json` manifest
+- a header merged with an atlas manifest
+
+Everything funnels through one normalizer before any format module sees it. That normalizer resolves frame geometry, then attaches pivots, collision polygons and tags **by frame index**; sections that are missing are simply skipped, and an index that no longer exists on the sheet is dropped rather than treated as an error.
+
+Where the geometry comes from:
+
+- **Grid document** (`frameWidth`/`frameHeight`/`grid`) — frames are laid out row-major, `frameCount` frames capped at `cols × rows`. Frame names are `<stem>_00`, `<stem>_01`, … where the stem comes from `--name-prefix`, else from the texture filename. Cell regions are offset by the `margin` and `spacing` recorded in `grid`; every sheet metadata command records them.
+  - Texture size is the real image size: the `source` PNG's header when the CLI or MCP tool can read it, else the document's `sourceWidth`/`sourceHeight`. Only when neither exists is it rebuilt as `frameWidth × cols` by `frameHeight × rows` plus the padding, and a Unity export then warns on stderr.
+  - When the real size is known, the grid is checked against it with the slicer's own arithmetic. A document whose cells do not match its image is an error. The usual cause is a header written before `grid.margin`/`grid.spacing` were recorded; re-run the metadata command.
+- **Image-writing tool output** (anything with an `output_path`, such as `sprite_remove_background`) is refused. Its `source` and `grid` describe the input image, not the PNG it wrote. Run a metadata command on the output PNG instead.
+- **Atlas manifest** — the manifest's `frames` map wins, in its own key order. Manifest keys are kept verbatim as frame names, so a frame is called `frame_00.png`, not `hero_00`.
+- **Both** — the manifest wins, because it is the authoritative record of where pixels actually landed after packing. Tags, pivots and collision from the header still attach by index against the manifest's frame order. The header's `source`, `sourceWidth` and `sourceHeight` describe the pre-pack sheet and are ignored.
+
+The texture filename written into the output is `--texture` if given, else the manifest's `atlas` field, else the basename of `source`, else `spritesheet.png`.
+
+Per-frame duration is the frame's `frameDurations` hold when the document has one (`tags --duration` / `meta --duration`). Otherwise it comes from the fps of the first tag that covers the frame, as `round(1000 / fps)` ms. Frames no tag covers get `--fps` (default 10).
+
+Pivots are pixel positions, the way the pivot tools pick them: `bottom-center` on a 48×48 frame is pixel `(24, 47)`. Engines read a pivot as a point on the canvas, where row 47 is one pixel above the bottom edge. So a pivot on the **last** pixel of an axis is exported as the far edge (`47` → `48`). Every other value is exported unchanged. `bottom-center` therefore reaches every engine as `(24, 48)`, the bottom edge.
+
+## Godot
+
+```bash
+sprite-tools export hero.json --format godot --texture hero.png -o hero.tres
+```
+
+The default variant is one `SpriteFrames` resource: an `[ext_resource]` for the sheet, one `[sub_resource type="AtlasTexture"]` per distinct region, then the `animations` array.
+
+For a 48×48 sheet with a single four-frame ping-pong tag, this is the complete file:
+
+```bash
+sprite-tools tags hero.png --tag bounce=0-3:8:pingpong \
+  | sprite-tools export - --format godot --res-path 'res://art/hero.png'
+```
+
+```
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://art/hero.png" id="1_1e4lb"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_zjphg"]
+atlas = ExtResource("1_1e4lb")
+region = Rect2(0, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3in0o"]
+atlas = ExtResource("1_1e4lb")
+region = Rect2(48, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_joye3"]
+atlas = ExtResource("1_1e4lb")
+region = Rect2(96, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mxjov"]
+atlas = ExtResource("1_1e4lb")
+region = Rect2(144, 0, 48, 48)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_zjphg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3in0o")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_joye3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mxjov")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_joye3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3in0o")
+}],
+"loop": true,
+"name": &"bounce",
+"speed": 8.0
+}]
+```
+
+The ping-pong is baked into six frame references over four sub-resources: frames 2 and 1 are reused on the way back. A trimmed frame (from a packed atlas) also gets a `margin = Rect2(…)` line, so the `AtlasTexture` reports its untrimmed size.
+
+`--variant atlastextures` writes one standalone resource per frame instead. Each is a complete file, so `-o` is a **directory** there:
+
+```bash
+sprite-tools export hero.json --format godot --variant atlastextures -o ./frames
+# wrote 25 AtlasTexture resources → ./frames
+```
+
+`frames/hero_03.tres`:
+
+```
+[gd_resource type="AtlasTexture" format=3]
+
+[ext_resource type="Texture2D" path="res://hero.png" id="1_p10zx"]
+
+[resource]
+atlas = ExtResource("1_p10zx")
+region = Rect2(144, 0, 48, 48)
+```
+
+To stdout that variant can only be a `; <filename>`-delimited bundle of all N files. That bundle is a preview — it holds several `[gd_resource]` headers, so Godot cannot import it. Pass a real `-o` directory when you want files.
+
+**Rules the output follows, and why:**
+
+- `format=3` always. Writing `format=4` makes Godot 4.0–4.2 hard-fail with "Saved with newer format version".
+- No `uid=` anywhere. A guessed UID that happens to match a real resource makes the loader silently substitute *that* resource's path — wrong texture, no warning.
+- Order is `[ext_resource]` → all `[sub_resource]` → `[resource]`. A forward reference is a hard parse error.
+- Sub-resource ids are a hash of the texture path plus the region, so the same input produces a byte-identical file on every run and VCS diffs stay quiet.
+- Frames that share a region share one sub-resource, which is what real Godot files do.
+- `"duration": 1.0` is a **multiplier of `1/speed`**, never seconds or milliseconds. On-screen time is `duration / (speed × speed_scale)`.
+
+**Limitations, plainly:**
+
+- **Only tagged frames appear.** Each tag becomes one animation over exactly its range, and no `[sub_resource]` is written for a frame no animation references. A 25-frame sheet with tags covering frames 0–19 produces a resource with 20 AtlasTextures. With **no** tags at all, one animation named `default` covers every frame.
+- **With tags, there is no animation called `default`.** `AnimatedSprite2D.animation` defaults to `&"default"`, so the node shows nothing until you pick an animation in the inspector or call `play("idle")`. The MCP tool (`godot.default_alias`) and the web page can also write the first animation under the name `default`; the CLI cannot. This is off by default because it duplicates an animation under a second name.
+- **Animations are sorted by name**, which is the order Godot's own writer uses. Two tags with the same name become `idle` and `idle_2`, because Godot keys animations by name and would otherwise keep only one.
+- **Ping-pong is baked, not native.** A `pingpong` tag becomes an explicit frame list `from..to, to-1..from+1` — Aseprite's shape, endpoints not repeated. With `--no-loop` the list also ends on `from`, because a one-shot animation does not wrap back to its first frame. Godot's own `LOOP_PINGPONG` is *not* equivalent (it replays each endpoint for a second full duration), and Godot 4.0–4.6 silently read it as a plain forward loop. So `loop` is written as `true`/`false`, which every 4.x reads. For 4.7 projects, the MCP tool (`godot.loop_mode: "int"` + `godot.pingpong: "native"`) and the web page can write the native value; the CLI cannot.
+- **`reverse` is also baked** into the frame order. Godot has no per-animation direction field.
+- **Timing is per animation.** `speed` is the tag's fps and each frame's `duration` is `1.0`, also when tags overlap. A `frameDurations` hold is the one exception: it is written as a multiple of that animation's step, so a 250 ms hold at 12 fps is `"duration": 3.0`. With no tags, the single `default` animation takes its `speed` from `--fps`.
+- **No pivots, no collision.** The `.tres` has nowhere to put them. Pivot in Godot is `AnimatedSprite2D.centered`/`offset` — a node property, one per node, not per frame — and collision is a separate `CollisionPolygon2D`. Read the pivot and polygon out of your metadata JSON and place them in the scene yourself; the exporter will not invent a `.tscn`.
+- **The PNG must already be in the project** at the `res://` path, and the Godot editor must have imported it (that is what writes the `.import` sidecar). Without that the `ext_resource` resolves to null and the sprite draws nothing. The exporter does not write `.import` files.
+- `--res-path` sets the `res://` string outright; `--texture` renames the texture in the document for every format. They are independent, so `--texture 'res://x.png'` alone would produce `res://res://x.png`.
+- Nothing here was round-tripped through an actual Godot editor. The output follows Godot's own resource-format writer and loader source; treat the first import as a smoke test.
+
+## Unity
+
+```bash
+sprite-tools export hero.json --format unity \
+  --asset-path 'Assets/Art/hero.png' --ppu 48 -o hero.png.meta
+```
+
+A `TextureImporter` YAML sidecar in Multiple sprite mode, with one sprite entry per frame. Excerpt from the `hero.json` above — the header, then the first sprite (the full file also carries texture settings, platform settings and a name table for all 25 sprites):
+
+```yaml
+fileFormatVersion: 2
+guid: 44a8900418c59c99a2f7ddec90ba629e
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 2481027305405708
+    second: hero_00
+  ...
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: hero_00
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 192
+        width: 48
+        height: 48
+      alignment: 9
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape:
+      - - {x: 0, y: 16}
+        - {x: 13, y: -9}
+        - {x: -13, y: -9}
+        - {x: -1, y: 15}
+      tessellationDetail: -1
+      bones: []
+      spriteID: c0d773f2b70d80000800000000000000
+      internalID: 2481027305405708
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+```
+
+The file goes next to the PNG and must be named `<texture filename>.meta` — for `hero.png` that is `hero.png.meta`. The CLI writes wherever `-o` points and does not enforce the name; the MCP tool derives it for you.
+
+**Limitations, plainly:**
+
+- **A `.meta` carries no animation data.** Tags and frame durations are ignored; neither reaches the file. Unity animation clips are a separate asset the exporter does not produce.
+- **Overwriting an existing `.meta` changes the asset's guid and detaches every reference to it** in the project — prefabs, scenes, animations. Nothing in sprite-tools stops you. Before clobbering, read the incumbent `guid:` line out of the old file and pass it back with `--guid`.
+- **Pass `--asset-path`.** The guid and every sprite id are hashed from it. Without it the seed is the document's `source` (else the texture name; for an atlas or a header+atlas merge always the texture name), which is usually a bare filename like `hero.png`. Two sheets both called `hero.png` in different folders then collide, and Unity resolves that by silently reassigning one of them a new guid.
+- **Pixels per unit defaults to the first frame's untrimmed height**, not Unity's own 100, so one sprite spans one world unit. Pass `--ppu` to match the rest of your project.
+- **Frames without a pivot get `alignment: 0` (Center).** Frames with one get `alignment: 9` (Custom) and a normalized `pivot`. A **trimmed** frame without a pivot also gets `alignment: 9`, with the centre of its untrimmed canvas as the pivot. Center would mean the centre of the trimmed pixels, which moves from frame to frame.
+- Filter mode is Point (`filterMode: 0`), mip maps are off and compression is off. The MCP tool can change filter mode, `maxTextureSize`, `serializedVersion` and sprite mesh type, and the web page can change filter mode and `serializedVersion`. The CLI exposes only `--ppu`, `--asset-path`, `--guid` and `--no-physics-shape`.
+- **Unity rewrites the file shortly after import** — normalising formatting, filling in omitted fields, upgrading `serializedVersion`. A byte-for-byte round trip is not achievable and a diff against Unity's own output will fail on cosmetics.
+- `serializedVersion` defaults to **13** (Unity 6). Writing 12 into a Unity 6 project is safe — Unity upgrades it. Writing 13 into a 2022.3 editor is a *future* version whose handling is unverified. For a 2022.3 or 2023.x project, use the MCP tool (`unity.serialized_version: 12`) or the web page; the CLI does not expose it.
+- `maxTextureSize` defaults to `max(2048, next power of two ≥ the texture's largest side)`. Left at Unity's own 2048 default, a sheet larger than that is downscaled on import and every rect silently becomes wrong.
+- **`physicsShape` is emitted from collision polygons but is the least verified part of the output.** The target coordinate space is confirmed from Unity's `SpriteOutlineModule`; what is not confirmed is that Unity's tessellator is winding-agnostic (the Y flip reverses our winding), or how it handles a self-intersecting polygon out of the contour tracer. `--no-physics-shape` drops the block and lets Unity generate its own fallback shape.
+- A frame rect outside the declared texture is a hard error rather than a silent mis-import.
+- None of this was verified against a running Unity editor. It is built from Unity's C# reference source, its docs, and real `.meta` files that Unity itself wrote. Drop the generated `.meta` plus the PNG into an empty project and check the Sprite Editor before trusting a batch of them.
+
+## Aseprite
+
+```bash
+sprite-tools export hero.json --format aseprite -o hero-aseprite.json
+```
+
+Aseprite's own sheet-JSON shape. `--variant hash` (default) keys frames by name; `--variant array` emits a list where each entry carries a `filename`.
+
+Excerpt from the `hero.json` above — frame `"0"` of 25, and the complete `meta`:
+
+```json
+{
+  "frames": {
+    "0": {
+      "frame": { "x": 0, "y": 0, "w": 48, "h": 48 },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 48, "h": 48 },
+      "sourceSize": { "w": 48, "h": 48 },
+      "duration": 83
+    }
+  },
+  "meta": {
+    "app": "https://sprites.trebeljahr.com",
+    "version": "1.0",
+    "image": "hero.png",
+    "format": "RGBA8888",
+    "size": { "w": 240, "h": 240 },
+    "scale": "1",
+    "frameTags": [
+      { "name": "idle", "from": 0, "to": 4, "direction": "forward" },
+      { "name": "walk", "from": 5, "to": 12, "direction": "forward" },
+      { "name": "attack", "from": 13, "to": 19, "direction": "forward" }
+    ]
+  }
+}
+```
+
+**Limitations, plainly:**
+
+- **Frames are named by bare index** (`"0"`, `"1"`, …), not Aseprite's own `hero 0.aseprite`. That is deliberate: Phaser's `createFromAseprite` looks up `frames[i.toString()]`, so any other naming makes it build **empty animations with no warning at all**. Aseprite's own naming is available through the MCP tool (`aseprite.frame_names: "aseprite"`) and the web page, but not on the CLI.
+- **`meta.app` is this tool's URL, not Aseprite's.** The file is Aseprite-*shaped*; claiming to be Aseprite would be a lie. Both `app` and `version` are overridable through the MCP tool.
+- **The format has no per-frame pivot.** `--pivots slices` carries them as a `meta.slices` entry — one slice, one key per pivoted frame, `bounds` at the untrimmed canvas so the pivot passes through in unchanged pixels. That is the only pivot slot the format has ever had, and no consumer is known to read it back; the default is `omit`.
+- **Collision polygons are dropped.** There is no slot for them, and inventing one would produce a file only sprite-tools can read.
+- `repeat`, `pingpong_reverse`, `layers` and tag `color`/`data` are never emitted — sprite-tools has no source for them, and omitting them keeps the file readable by pre-1.3 importers.
+- `direction` is carried verbatim from the tag (`forward`/`reverse`/`pingpong`); nothing is baked, since the format expresses direction natively.
+- `scale` is the **string** `"1"`, which is what Aseprite hardcodes.
+- `meta.image` is always reduced to a bare basename. Pixi and Phaser's multiatlas both resolve it by concatenating the JSON's own directory, so a path there breaks loading.
+
+## Phaser / PixiJS
+
+```bash
+sprite-tools export hero.json --format phaser -o hero-atlas.json
+```
+
+A TexturePacker-shaped atlas plus a Pixi-style `animations` map. The excerpt below keeps frame `hero_00` of 25 and the `idle` tag; the real file for `hero.json` also lists `walk` and `attack` in `animations` and `meta.frameTags`:
+
+```json
+{
+  "frames": {
+    "hero_00": {
+      "frame": { "x": 0, "y": 0, "w": 48, "h": 48 },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": { "x": 0, "y": 0, "w": 48, "h": 48 },
+      "sourceSize": { "w": 48, "h": 48 },
+      "duration": 83,
+      "anchor": { "x": 0.5, "y": 1 }
+    }
+  },
+  "animations": {
+    "idle": ["hero_00", "hero_01", "hero_02", "hero_03", "hero_04"]
+  },
+  "meta": {
+    "app": "https://sprites.trebeljahr.com",
+    "version": "1.0",
+    "image": "hero.png",
+    "format": "RGBA8888",
+    "size": { "w": 240, "h": 240 },
+    "scale": "1",
+    "frameTags": [{ "name": "idle", "from": 0, "to": 4, "direction": "forward" }]
+  }
+}
+```
+
+Load it as `this.load.atlas("hero", "hero.png", "hero-atlas.json")` in Phaser, or `Assets.load("hero-atlas.json")` in Pixi.
+
+**Limitations, plainly:**
+
+- **Use `--variant array` for Phaser only.** Phaser accepts either layout. PixiJS needs `frames` to be an object; an array still loads, but every frame is named `"0"`, `"1"`, … and the names in `animations` no longer match.
+- **Direction is baked into `animations`.** `reverse` reverses the list; `pingpong` appends the interior frames in reverse without repeating the endpoints, so a 5-frame ping-pong is `00 01 02 03 04 03 02 01`. `meta.frameTags` still records the original direction for anything that reads it.
+- **`createFromAseprite` will not find these frames.** It resolves frames by bare index, and the default keeps the resolved names (`hero_00`). Use `--format aseprite` for that path, or `phaser.frame_names: "index"` in the MCP tool (also on the web page).
+- **`animations` uses `_2` suffixes for duplicate tag names**, since a JSON object key would otherwise silently collapse two clips into one. `meta.frameTags` keeps both names verbatim.
+- **`trimmed: false` is always written explicitly.** Pixi tests `data.trimmed !== false`, so an *absent* `trimmed` is treated as trimmed and shifts untrimmed sprites.
+- `related_multi_packs` is available through the MCP tool only. List sibling packs on the **first** pack only — a mutual reference makes Pixi's `Assets.load()` hang forever.
+- `anchor` is a normalized 0..1 point and is only emitted for frames that carry a pivot.
+
+## Coordinate systems — the part that bites
+
+sprite-tools' own JSON is uniformly **top-left origin, +Y down, in pixels, relative to the frame's untrimmed canvas**. That is true of `pivots[].pivot` and of every point in `collision[].polygon`. Three of the four formats agree with that; Unity does not.
+
+**Godot, Aseprite, Phaser** keep pixel rects with a top-left origin. Nothing is flipped.
+
+**Unity flips Y in three places, each in a different space:**
+
+1. *Sprite rects.* Unity's texture origin is bottom-left, so a frame at top-left `y` becomes
+
+   ```
+   rect.y = textureHeight − y − height
+   ```
+
+   `textureHeight` is the height of the `source` PNG or the document's `sourceHeight` for a grid document, and the manifest's `height` for an atlas. Only a document with neither falls back to `frameHeight × grid.rows` plus the padding, with a warning. If the grid was detected wrong, every rect is wrong and the whole sheet imports **vertically mirrored with no error**. Check the grid (`sprite-tools detect`) before exporting to Unity.
+
+2. *Pivots.* Unity pivots are normalized inside the sprite's own rect, origin bottom-left:
+
+   ```
+   pivot.x = px / rect.width
+   pivot.y = 1 − (py / rect.height)
+   ```
+
+   `alignment: 9` (`SpriteAlignment.Custom`) is written whenever a pivot exists, because it is the only alignment value that makes Unity read the `pivot` field at all. The `bottom-center` preset picks pixel `(24, 47)` on a 48×48 frame. That is the last row, so it is exported as the bottom edge `(24, 48)` and comes out as `{x: 0.5, y: 0}`.
+
+   For a trimmed frame, `px`/`py` are first moved into the trimmed rect (minus `spriteSourceSize.x`/`.y`), and `rect.width`/`rect.height` are the trimmed size. A pivot outside the trimmed rect therefore gives values outside 0..1. Unity's Sprite Editor allows that, but an import of such a value from a file is unverified.
+
+3. *Physics shapes.* `physicsShape` points are pixels relative to the sprite rect's **centre**, +Y up:
+
+   ```
+   ux = px − width/2
+   uy = height/2 − py
+   ```
+
+   The same rebase through `spriteSourceSize` applies to trimmed frames.
+
+**Phaser/Pixi anchors** are a third convention again: normalized 0..1, +Y down, relative to the **untrimmed** canvas:
+
+```
+anchor.x = px / sourceSize.w
+anchor.y = py / sourceSize.h
+```
+
+No rebase happens here, even for trimmed frames: both runtimes rebuild the untrimmed extent from `sourceSize`/`spriteSourceSize` before they apply the anchor, so the pivot stays in untrimmed-canvas pixels. That reading of the two parsers was not verified against a running Phaser or Pixi build.
+
+For **trimmed** frames (anything out of `sprite-tools atlas` with trimming on), the Unity and Phaser conversions above are self-consistent with how the pivot was measured. Neither has been tested in the engine on a trimmed frame.
+
+## What export does not do
+
+- It never decodes or writes an image. It reads only the size from the header of the PNG a grid document names. The PNG has to be put where the engine expects it, by you.
+- It does not produce Godot scenes (`.tscn`), Godot `.import` sidecars, Unity animation clips, Unity prefabs, or Aseprite `.aseprite` documents.
+- It does not read an engine project back. Nothing is merged with an existing file — every write is a full overwrite.
+- It carries no layer, blend-mode, palette or pixel-format information, because no sprite-tools document records any of it.
+
+## Honest state of verification
+
+Every format module has a test suite pinning its output, and the shapes above are generated by the real CLI, not written by hand. What has **not** happened is a round trip through the engines themselves: no Godot editor, Unity editor, Aseprite build, or Phaser/Pixi runtime was available to import these files while they were being written. Every claim about how an engine reads them comes from that engine's own source, its documentation, or files it wrote itself.
+
+The practical consequence: import one file by hand before you generate a hundred. The most likely places for a surprise are Unity's `physicsShape` winding, the Phaser anchor divisor on trimmed frames, and anything under `--variant atlastextures`.

@@ -31,6 +31,7 @@ import { registerDedupeCommand } from "./commands/dedupe";
 import { registerChromaCommand } from "./commands/chroma";
 import { registerInfoCommand } from "./commands/info";
 import { registerMetaCommand } from "./commands/meta";
+import { registerExportCommand } from "./commands/export";
 
 const program = new Command();
 
@@ -61,6 +62,9 @@ program.addHelpText(
     "  palette    dominant colors, ramps, swaps, variants               (JSON + PNG)",
     "  atlas      packed-atlas manifest                                 (JSON + PNG)",
     "",
+    "Engine export (metadata JSON in, engine project file out):",
+    "  export     godot .tres / unity .meta / aseprite / phaser atlas   (text/JSON)",
+    "",
     "Image transforms (default: stdout, use -o <file>):",
     "  chroma     chroma-key background removal (alias: remove-bg)      (PNG)",
     "  pixelate   downscale + quantize + dither + palette-snap           (PNG)",
@@ -84,6 +88,11 @@ program.addHelpText(
     "  sprite-tools pivot    hero.png -o p.json",
     "  jq -s 'add' c.json p.json > hero.json",
     "",
+    "Then hand the metadata to an engine:",
+    "",
+    "  sprite-tools meta hero.png --collision --pivot bottom-center \\",
+    "    --tag idle=0-5 | sprite-tools export - --format godot -o hero.tres",
+    "",
     "Run `sprite-tools <command> --help` for the full shape of each output.",
     "",
   ].join("\n"),
@@ -106,6 +115,7 @@ registerNormalMapCommand(program);
 registerOutlineCommand(program);
 registerAtlasCommand(program);
 registerGifCommand(program);
+registerExportCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   process.stderr.write(`sprite-tools: ${err instanceof Error ? err.message : String(err)}\n`);

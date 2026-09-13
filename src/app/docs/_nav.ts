@@ -37,6 +37,7 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/palette", label: "Palette" },
       { href: "/docs/web/atlas", label: "Atlas packer" },
       { href: "/docs/web/gif", label: "GIF export" },
+      { href: "/docs/web/export", label: "Engine export" },
       { href: "/docs/web/generate", label: "AI Character" },
       { href: "/docs/web/animate", label: "AI Animation" },
     ],
@@ -61,6 +62,7 @@ export const DOCS_SECTIONS: DocSection[] = [
     label: "Reference",
     items: [
       { href: "/docs/reference/json-schemas", label: "JSON output schemas" },
+      { href: "/docs/reference/engine-export", label: "Engine export formats" },
       { href: "/docs/reference/algorithms", label: "Algorithm notes" },
       { href: "/docs/reference/contributing", label: "Contributing" },
     ],

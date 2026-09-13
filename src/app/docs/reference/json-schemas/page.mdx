@@ -13,15 +13,23 @@ The canonical shapes every tool emits, in one place. All metadata tools share a 
 ```ts
 interface Header {
   source: string;         // filename (browser) or input path (CLI)
+  sourceWidth?: number;   // pixel size of `source`
+  sourceHeight?: number;
   frameWidth: number;
   frameHeight: number;
-  grid: { cols: number; rows: number; detected: boolean };
+  grid: {
+    cols: number;
+    rows: number;
+    detected: boolean;
+    margin?: { left: number; top: number; right: number; bottom: number };
+    spacing?: { x: number; y: number };
+  };
 }
 ```
 
 Every `collision`, `pivot`, `tags`, `nine-slice`, `palette`, `meta` output starts with this.
 
-The header itself is unchanged by [grid padding](/docs/cli/reference#grid-padding-margins-and-gutters): the metadata commands take the margin/spacing flags but still report only `cols`, `rows`, and `detected`. `sprite-tools slice --json` and every MCP sheet tool additionally report the geometry they actually sliced with — `margin` (`{left,top,right,bottom}`) and `spacing` (`{x,y}`) inside `grid`.
+`grid.margin` and `grid.spacing` are the [grid padding](/docs/cli/reference#grid-padding-margins-and-gutters) the frames were actually cut with, all zeros for a flush sheet. The CLI `collision`, `pivot`, `tags`, `meta` and `palette` commands, `slice --json`, and every MCP sheet tool report them. `sourceWidth`/`sourceHeight` come from the CLI `collision`, `pivot`, `tags`, `meta` and `palette` commands and the MCP `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags` and `sprite_generate_meta` tools. The exporter needs both on a padded sheet or one whose size is not a multiple of the cell size.
 
 ## Collision
 
@@ -107,7 +115,7 @@ Frames 0 and 3 are held for 250 ms. Frames 1, 2, 4, and 5 have no explicit hold,
 
 GIF export applies these durations per frame, but GIF stores delay in 10 ms units: a 125 ms hold is written as 130 ms, and anything under 20 ms is floored at 20 ms. See [GIF export](/docs/web/gif) for the details — the timing is close, not exact.
 
-No engine-native exporter (Aseprite JSON, Godot `SpriteFrames`) ships yet. When one lands, `frameDurations` is the field it maps to Aseprite's per-frame `duration` and to a Godot animation's per-frame timing; the format is designed so that mapping is a lookup, not a conversion.
+[`sprite-tools export`](/docs/reference/engine-export) reads `frameDurations` too: a hold becomes the frame's `duration` in milliseconds in Aseprite and Phaser/Pixi output, and a Godot per-frame `duration` multiplier against the animation's `speed` (250 ms at 12 fps is `3.0`). Unity `.meta` files have no timing field, so holds do not reach them.
 
 ## Nine-slice
 
@@ -252,3 +260,22 @@ jq -s 'add' c.json p.json t.json > hero.json
 `hero.json` ends up with `source`, `frameWidth`, `frameHeight`, `grid`, `options`, `frameCount`, `collision[]`, `pivots[]`, `tags[]` — a single sprite-metadata file ready for an engine.
 
 The payload keys never collide, but `options` is a shared top-level key: the last file in the `jq -s 'add'` list wins it. If you care which command's `options` survives, put that file last, or use `sprite-tools meta` for a single pass instead.
+
+## Feeding a document to an engine
+
+That merged document is the input to `sprite-tools export` (and the `sprite_export_engine` MCP tool). The exporter accepts any of the shapes on this page:
+
+- one command's output — `CollisionOutput`, `PivotOutput`, `TagsOutput`
+- a `jq -s add` merge of several of them
+- a `MetaOutput`
+- an `AtlasManifest`
+- a header merged with an atlas manifest, in which case the manifest's rects win and the header's tags/pivots/collision attach to them by index
+
+Sections that are absent are skipped rather than defaulted, so a tags-only document still exports — it just produces animations over untrimmed grid cells with no pivots and no collision.
+
+Two values the exporter resolves rather than copies:
+
+- **Texture size** — for a header document, the size read from the `source` PNG when the file exists, else `sourceWidth`/`sourceHeight`. The grid is checked against that size, and a mismatch is an error. With neither, it falls back to `frameWidth × grid.cols` by `frameHeight × grid.rows` plus `grid.margin` and the `grid.spacing` gutters. For a manifest it is the manifest's own `width`/`height`. Unity's sprite rects are computed against that height, so a wrong `grid` mirrors the whole sheet vertically with no error.
+- **Per-frame duration** — `round(1000 / fps)` of the first tag covering the frame, or of the `--fps` default for frames no tag covers.
+
+See [engine export](/docs/reference/engine-export) for what each format does with the document, and where the conversions are lossy.

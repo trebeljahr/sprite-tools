@@ -451,6 +451,59 @@ sprite-tools atlas <input ...>
   [--json FILE]                    # atlas.json manifest
 ```
 
+## `export`
+
+```
+sprite-tools export <meta.json>
+  -f, --format godot|unity|aseprite|phaser   # required
+  [--variant V]                    # godot: spriteframes|atlastextures
+                                   # aseprite/phaser: hash|array
+  [--texture NAME]                 # texture filename recorded in the output
+  [--name-prefix STEM]             # frame-name stem (grid inputs only)
+  [--fps N]                        # FPS for frames no tag covers, default 10
+  [--res-path PATH]                # [godot] res:// path, default res://<texture>
+  [--no-loop]                      # [godot] mark animations non-looping
+  [--ppu N]                        # [unity] pixels per unit
+  [--asset-path PATH]              # [unity] project-relative path — seeds the guid
+  [--guid HEX]                     # [unity] reuse an existing .meta guid
+  [--no-physics-shape]             # [unity] omit collision polygons
+  [--pivots omit|slices]           # [aseprite] carry pivots as a slice, default omit
+  [-o FILE]                        # output file (default: stdout)
+```
+
+Metadata JSON in, engine-native file out. No pixels are touched — the input is a document some earlier command already produced. `<meta.json>` accepts `-` to read the document from stdin. For a grid document, the width and height of the `source` PNG are read from its header when the file exists (relative to the working directory, then to the JSON file). The texture size comes from there, and a grid that does not match it is an error. `-o` naming the input file is refused, because it would overwrite the metadata.
+
+Input can be a `meta` output, a `jq -s add` merge of `collision`/`pivot`/`tags`, an `atlas --json` manifest, or a header merged with a manifest. Missing sections are skipped; pivots, polygons and tags attach by frame index.
+
+| Format | Output |
+| --- | --- |
+| `godot` | `.tres` text resource — a `SpriteFrames`, or one `AtlasTexture` per frame |
+| `unity` | `TextureImporter` YAML for `<texture>.png.meta` |
+| `aseprite` | `{ frames, meta: { size, frameTags, slices? } }` |
+| `phaser` | `{ frames, animations, meta }` — Phaser 3 / PixiJS atlas |
+
+```bash
+sprite-tools export hero.json --format godot -o hero.tres
+sprite-tools export hero.json --format unity --asset-path 'Assets/Art/hero.png' --ppu 32 -o hero.png.meta
+sprite-tools export hero.json --format phaser --variant array -o hero-atlas.json
+
+# straight out of a metadata pass
+sprite-tools meta hero.png --collision --pivot bottom-center --tag idle=0-5 \
+  | sprite-tools export - --format aseprite -o hero-aseprite.json
+```
+
+A flag that belongs to another format is an error, not a silent no-op: `--ppu` on a Godot export exits 1 with `--ppu only applies to --format unity, not godot`. `--variant` on a Unity export is an error too, since Unity has one output shape.
+
+The texture filename is `--texture`, else the manifest's `atlas`, else the basename of `source`. Frames no tag covers show for `round(1000 / --fps)` ms. With no tags at all, Godot gets one animation named `default` over every frame.
+
+For PixiJS, keep the default `--variant hash`: Pixi needs `frames` to be an object, and an array loads with frames named `"0"`, `"1"`, … instead of your names.
+
+`--variant atlastextures` is one file per frame, so `-o` is a **directory** there — it is created if missing, the files are written into it, and the count goes to stderr. An `-o` that ends in `.tres` and is not an existing directory is refused, because it would create a folder with a file's name. To stdout the same variant is a `; <filename>`-delimited bundle, which is a preview and not importable.
+
+Two things the command deliberately does not do: it does not name the Unity sidecar for you (it must end up as `<texture>.png.meta` next to the PNG), and it does not read an existing `.meta` back — overwriting one without passing its old `--guid` detaches every reference to that asset in the Unity project.
+
+See [engine export](/docs/reference/engine-export) for the generated output of each format, the coordinate conventions, and the per-format limitations.
+
 ## `gif`
 
 ```

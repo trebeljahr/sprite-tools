@@ -4,6 +4,7 @@ import {
   fail,
   parseIntArg,
   loadSheet,
+  sheetHeader,
   addHelpExtras,
   addGridOptions,
   gridPaddingFromOpts,
@@ -69,7 +70,12 @@ export function registerPivotCommand(program: Command) {
         if (!preset) {
           fail(`--preset must be one of ${PRESETS.map((p) => p.id).join(", ")}`);
         }
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
+        const { image, frames, grid } = loadSheet(
+          input,
+          opts.cols,
+          opts.rows,
+          gridPaddingFromOpts(opts),
+        );
         const pivots = frames.map((f, i) => {
           const x = opts.x !== undefined ? opts.x : Math.round(preset!.nx * (f.width - 1));
           const y = opts.y !== undefined ? opts.y : Math.round(preset!.ny * (f.height - 1));
@@ -81,10 +87,7 @@ export function registerPivotCommand(program: Command) {
         });
         writeJsonOutput(
           {
-            source: input,
-            frameWidth: frames[0]?.width ?? 0,
-            frameHeight: frames[0]?.height ?? 0,
-            grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+            ...sheetHeader(input, image, grid, frames),
             options: {
               preset: opts.preset,
               explicit:

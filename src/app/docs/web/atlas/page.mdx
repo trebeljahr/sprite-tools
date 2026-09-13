@@ -59,7 +59,16 @@ Extrusion fills that gutter instead of leaving it empty: each sprite's edge row 
 - `sourceSize` — the original canvas.
 - `spriteSourceSize` — where the trimmed rect sat within the original canvas.
 
-Most engines (Phaser, PixiJS, Godot with TPatch) import this format natively.
+The `frames` map uses the same field names as a TexturePacker hash, but the manifest itself is not an engine file: it has no `meta` block, no `rotated` flag, no durations and no animations. Godot needs a `.tres` and Unity needs a `.meta`, and neither reads this JSON.
+
+To get an engine file, pass the manifest through [engine export](/docs/reference/engine-export). It converts the manifest into a Godot `.tres`, a Unity `.meta`, an Aseprite sheet JSON, or a Phaser 3 / PixiJS atlas:
+
+```bash
+sprite-tools atlas sprites/*.png -o hero.png --json atlas.json
+sprite-tools export atlas.json --format godot --res-path 'res://art/hero.png' -o hero.tres
+```
+
+The [Export tab](/export) does the same in the browser. Frame names carry over from the manifest keys, and the texture name comes from the manifest's `atlas` field. Trimmed frames keep their offsets: a Godot `margin`, or `spriteSourceSize` in the JSON formats.
 
 ## Tips
 

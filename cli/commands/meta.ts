@@ -5,6 +5,7 @@ import {
   parseFloatArg,
   parseIntArg,
   loadSheet,
+  sheetHeader,
   addHelpExtras,
   addGridOptions,
   gridPaddingFromOpts,
@@ -150,12 +151,14 @@ export function registerMetaCommand(program: Command) {
       } & GridPaddingOpts,
     ) => {
       try {
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
+        const { image, frames, grid } = loadSheet(
+          input,
+          opts.cols,
+          opts.rows,
+          gridPaddingFromOpts(opts),
+        );
         const base: Record<string, unknown> = {
-          source: input,
-          frameWidth: frames[0]?.width ?? 0,
-          frameHeight: frames[0]?.height ?? 0,
-          grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+          ...sheetHeader(input, image, grid, frames),
           frameCount: frames.length,
         };
 

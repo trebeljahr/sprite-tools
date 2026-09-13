@@ -1,0 +1,67 @@
+export const metadata = {
+  title: "Engine export — sprite-tools",
+  description:
+    "Convert sprite-tools metadata JSON into a Godot .tres, a Unity .meta, an Aseprite sheet JSON, or a Phaser/PixiJS atlas, in the browser.",
+};
+
+# Export
+
+[Open Export](/export)
+
+The [**Export**](/export) tab is the last step of the pipeline: metadata JSON in, an engine-native file out. It is the only browser path from the JSON the other tool pages emit into something Godot, Unity, Aseprite, or Phaser can import.
+
+No pixels are involved. Nothing is uploaded, nothing is rendered, no image is read — it is a pure JSON-to-text transform running in the page, which is why the preview regenerates on every keystroke.
+
+For what each format actually contains, the coordinate conventions, and the per-format caveats, read the [engine export reference](/docs/reference/engine-export). This page only covers the browser UI.
+
+## Getting metadata in
+
+Three routes, all landing in the same editable textarea so everything goes through the same validation:
+
+- **Upload .json**, or drag a `.json` file onto the textarea.
+- **Use current sheet** — the shared project source is an *image*, not metadata, so this can only supply geometry. It reads the sheet's size, runs grid detection, and writes a starter document (`source`, `sourceWidth`, `sourceHeight`, `frameWidth`, `frameHeight`, `grid` with the detected `margin` and `spacing`, `frameCount`, empty `tags`) you then edit or paste tags into. The cell size excludes the detected border and gutters.
+- **Example** — a realistic merged document with three tags, two pivots and a collision polygon, so you can see the output shape without setting anything up.
+
+You can also just type or paste. Anything the CLI accepts works: a `meta` output, a `jq -s add` merge of `collision`/`pivot`/`tags`, an `atlas` manifest, or a header merged with a manifest.
+
+## Formats
+
+| Menu entry | File you get |
+| --- | --- |
+| Godot 4 · SpriteFrames (.tres) | `hero.tres` |
+| Godot 4 · AtlasTexture per frame (.tres) | `hero_00.tres` … `hero_24.tres`, one per frame |
+| Unity · Texture importer sidecar (.meta) | `hero.png.meta` |
+| Aseprite · Sprite sheet JSON | `hero.json` |
+| Phaser / PixiJS · Texture atlas JSON | `hero.json` |
+
+The filename stem comes from the texture name, so overriding **Texture filename** renames the download too. Aseprite and Phaser deliberately share `hero.json` — that is each format's own convention; exporting both in a row gives you the browser's `hero (1).json`.
+
+The AtlasTexture variant is genuinely N files. They are listed with a download button per row, and the selected row drives the preview. There is no zip and no combined file: gluing several `[gd_resource]` headers into one `.tres` would produce something Godot cannot import.
+
+## Options
+
+The first three apply to every format:
+
+- **Texture filename** — the image name recorded in the output. Metadata usually only carries the source path.
+- **Frame name prefix** — the stem frames are named from, for grid documents.
+- **Default FPS** — the frame rate, and therefore the duration, of frames no tag covers.
+
+Then one group per format, matching the library's own options: Godot's `res://` path, loop flag, loop field, ping-pong handling and `default` alias; Unity's asset path, existing guid, pixels-per-unit, filter mode, `serializedVersion` and physicsShape toggle; Aseprite's frames layout, frame naming and pivot mode; Phaser's frames layout, frame naming, animations map, anchors and `meta.frameTags`.
+
+Two of the Unity fields carry warnings inline, and they are worth repeating: the **asset path** seeds the guid and every sprite id, so pass the full project path or two same-named PNGs will collide; and if you are overwriting a `.meta` that already exists in a Unity project, paste its current `guid:` into **Existing guid** first, or every reference to that asset detaches.
+
+## Errors
+
+Validation happens in three separate stages, each reported inline: JSON parsing, normalizing the document into frames, then the format module itself. A truncated paste, a palette-only document, or an absolute Godot texture path each fail at their own stage with their own message, so it is clear which one to fix.
+
+## CLI and MCP equivalents
+
+The same modules run outside the browser:
+
+```bash
+sprite-tools export hero.json --format godot -o hero.tres
+sprite-tools export hero.json --format unity --asset-path 'Assets/Art/hero.png' -o hero.png.meta
+sprite-tools export hero.json --format phaser --variant array -o hero-atlas.json
+```
+
+See the [CLI reference](/docs/cli/reference) and the `sprite_export_engine` entry in the [MCP tool catalog](/docs/mcp/tools). The CLI exposes a smaller flag set than this page does; the MCP tool exposes all of it.

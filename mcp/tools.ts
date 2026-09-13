@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
 
 import { loadPng, savePng, stitchSheet } from "../cli/lib/image-io";
-import { gridPaddingFromOpts, sheetFromImage } from "../cli/lib/common";
+import { gridPaddingFromOpts, sheetFromImage, sheetSizeFromSource } from "../cli/lib/common";
 import { applyDurationSpecs, type FrameDurations } from "../src/lib/animation/durations";
 import { detectGridFromImageData } from "../src/lib/pipeline/detect";
 import type { GridMargin, GridSpacing } from "../src/lib/pipeline/grid";
@@ -81,6 +81,28 @@ import {
   remapTags,
   type ParsedTagsDocument,
 } from "../src/lib/pipeline/dedupe-core";
+
+import {
+  detectExportInputKind,
+  normalizeExportInput,
+  stripExtension,
+} from "../src/lib/export/types";
+import {
+  toGodotAtlasTextureFiles,
+  toGodotSpriteFrames,
+  type GodotExportOptions,
+} from "../src/lib/export/godot";
+import { toUnityMeta, unityMetaFilename, type UnityExportOptions } from "../src/lib/export/unity";
+import {
+  toAsepriteJson,
+  type AsepriteExportOptions,
+  type AsepriteFormat,
+} from "../src/lib/export/aseprite";
+import {
+  toPhaserAtlas,
+  type PhaserExportOptions,
+  type PhaserFramesLayout,
+} from "../src/lib/export/phaser";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -199,6 +221,14 @@ function resolveFrameDurations(
 // worded identically to the CLI --help and the docs.
 const MAE_THRESHOLD_DOC =
   "threshold is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.";
+
+/** Output flavours each engine exporter offers; the first entry is that format's default. */
+const EXPORT_VARIANTS = {
+  godot: ["spriteframes", "atlastextures"],
+  unity: ["meta"],
+  aseprite: ["hash", "array"],
+  phaser: ["hash", "array"],
+} as const;
 
 function jsonResult(payload: unknown) {
   return {
@@ -663,7 +693,7 @@ export function registerAllTools(server: McpServer) {
       },
     },
     ({ input_path, alpha_threshold, simplify_tolerance, convex_hull, ...gridArgs }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const collision = frames.map((f, i) => {
         const outline = generateOutline(f, {
           alphaThreshold: alpha_threshold,
@@ -680,6 +710,8 @@ export function registerAllTools(server: McpServer) {
       });
       return jsonResult({
         source: input_path,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
         frameWidth: frames[0]?.width ?? 0,
         frameHeight: frames[0]?.height ?? 0,
         grid,
@@ -707,7 +739,7 @@ export function registerAllTools(server: McpServer) {
       },
     },
     ({ input_path, preset, x, y, ...gridArgs }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const p = PIVOT_PRESETS[preset];
       const pivots = frames.map((f, i) => ({
         index: i,
@@ -719,6 +751,8 @@ export function registerAllTools(server: McpServer) {
       }));
       return jsonResult({
         source: input_path,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
         frameWidth: frames[0]?.width ?? 0,
         frameHeight: frames[0]?.height ?? 0,
         grid,
@@ -881,9 +915,7 @@ export function registerAllTools(server: McpServer) {
     "sprite_generate_tags",
     {
       description:
-        "Emit Aseprite-style animation tag metadata (named frame ranges). Each tag plays at " +
-        "its own uniform fps; `frame_durations` optionally holds individual frames longer " +
-        "(key poses) — omit it and every frame keeps the tag's uniform timing.",
+        "Emit animation tag metadata — named, inclusive frame ranges with a direction and a frame rate — in sprite-tools' own JSON shape. Each tag plays at its own uniform fps; `frame_durations` optionally holds individual frames longer (key poses). This is not an Aseprite file: feed the result to sprite_export_engine to turn it into an actual Aseprite JSON sheet, a Godot SpriteFrames resource, a Unity .meta, or a Phaser/Pixi atlas.",
       inputSchema: {
         input_path: z.string(),
         ...SHEET_GRID_ARGS,
@@ -902,10 +934,12 @@ export function registerAllTools(server: McpServer) {
       },
     },
     ({ input_path, tags, frame_durations, ...gridArgs }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const frameDurations = resolveFrameDurations(frame_durations, frames.length);
       return jsonResult({
         source: input_path,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
         frameWidth: frames[0]?.width ?? 0,
         frameHeight: frames[0]?.height ?? 0,
         grid,
@@ -1834,9 +1868,11 @@ export function registerAllTools(server: McpServer) {
       },
     },
     ({ input_path, collision, pivot, nine_slice, tags, frame_durations, ...gridArgs }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const out: Record<string, unknown> = {
         source: input_path,
+        sourceWidth: image.width,
+        sourceHeight: image.height,
         frameWidth: frames[0]?.width ?? 0,
         frameHeight: frames[0]?.height ?? 0,
         grid,
@@ -1886,6 +1922,350 @@ export function registerAllTools(server: McpServer) {
         out.tags = tags;
       }
       return jsonResult(out);
+    },
+  );
+
+  // ------- export_engine -------
+  server.registerTool(
+    "sprite_export_engine",
+    {
+      description:
+        "Turn sprite-tools metadata into a file a game engine can import directly: a Godot SpriteFrames/AtlasTexture `.tres`, a Unity `<texture>.png.meta` with sliced sprite rects, an Aseprite-shaped JSON sheet, or a Phaser/PixiJS texture atlas. This closes the chain image -> sprite_generate_collision + sprite_generate_pivot + sprite_generate_tags (or sprite_generate_meta in one pass, or sprite_pack_atlas for packed rects) -> engine file. Reach for it whenever the goal is a sheet usable *in an engine* rather than raw JSON. Supply the metadata one of two ways: `input_path` (a JSON file on disk) or `metadata` (the same document inline) — exactly one, and inline is the fast path when you already hold the JSON from a previous call. The document may be a single command's output, several merged with `jq -s add`, a `meta` result, an atlas manifest, or a header+manifest hybrid; collision polygons, pivots and tags all attach by frame index and missing sections are simply skipped. With `output_path` the file is written and a summary returned; without it the exact generated text comes back inline.",
+      inputSchema: {
+        input_path: z
+          .string()
+          .optional()
+          .describe(
+            "Absolute path to a sprite-tools metadata JSON file. Mutually exclusive with `metadata`.",
+          ),
+        metadata: z
+          .record(z.unknown())
+          .optional()
+          .describe(
+            "The metadata document passed inline, so JSON already in hand needs no temp file. Mutually exclusive with `input_path`.",
+          ),
+        format: z
+          .enum(["godot", "unity", "aseprite", "phaser"])
+          .describe("Target engine/format of the generated file"),
+        variant: z
+          .enum(["spriteframes", "atlastextures", "meta", "hash", "array"])
+          .optional()
+          .describe(
+            "Per-format flavour. godot: 'spriteframes' (default — one SpriteFrames resource) or 'atlastextures' (one AtlasTexture .tres per frame). unity: 'meta' (default, the only one). aseprite/phaser: 'hash' (default — frames keyed by name) or 'array'.",
+          ),
+        texture: z
+          .string()
+          .optional()
+          .describe(
+            "Override the spritesheet filename recorded in the output, e.g. 'hero.png'. The metadata usually only carries the source path.",
+          ),
+        name_prefix: z.string().optional().describe("Override the stem used to name frames"),
+        fps: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Frame rate for frames no tag covers, which sets their duration. Default 10."),
+        output_path: z
+          .string()
+          .optional()
+          .describe(
+            "Where to write. A file path for every single-file variant; a DIRECTORY for godot 'atlastextures', which emits one .tres per frame. Omit to get the content back inline.",
+          ),
+        godot: z
+          .object({
+            texture_path: z
+              .string()
+              .optional()
+              .describe(
+                "`res://` path of the PNG inside the Godot project. Default `res://<texture>`.",
+              ),
+            loop: z.boolean().optional().describe("Animation loop flag. Default true."),
+            loop_mode: z
+              .enum(["bool", "int"])
+              .optional()
+              .describe(
+                "'bool' (default) works on every Godot 4.x; 'int' uses the 4.7 LoopMode enum.",
+              ),
+            pingpong: z
+              .enum(["bake", "native"])
+              .optional()
+              .describe(
+                "'bake' (default) expands a pingpong tag into an explicit frame list; 'native' needs loop_mode 'int'.",
+              ),
+            default_animation_name: z
+              .string()
+              .optional()
+              .describe("Name of the fallback animation used when the document has no tags."),
+            default_alias: z
+              .boolean()
+              .optional()
+              .describe(
+                "Also emit the first animation as 'default', which is what AnimatedSprite2D plays out of the box.",
+              ),
+            load_steps: z.boolean().optional().describe("Emit `load_steps=` on the header."),
+          })
+          .optional()
+          .describe("Godot-only options"),
+        unity: z
+          .object({
+            pixels_per_unit: z
+              .number()
+              .positive()
+              .optional()
+              .describe(
+                "Default: the first frame's untrimmed height, so one sprite spans one world unit.",
+              ),
+            filter_mode: z
+              .union([z.literal(0), z.literal(1), z.literal(2)])
+              .optional()
+              .describe("0 Point (default, pixel art), 1 Bilinear, 2 Trilinear"),
+            max_texture_size: z.number().int().positive().optional(),
+            serialized_version: z
+              .union([z.literal(12), z.literal(13)])
+              .optional()
+              .describe("13 = Unity 6 (default), 12 = 2022.3/2023.x"),
+            asset_path: z
+              .string()
+              .optional()
+              .describe(
+                "Project-relative path of the PNG, e.g. 'Assets/Art/hero.png'. Seeds the guid and every sprite id — pass the full path so two same-named sheets cannot collide.",
+              ),
+            guid: z
+              .string()
+              .optional()
+              .describe(
+                "Reuse the guid of an existing .meta. Overwriting a .meta with a fresh guid detaches every reference in the project, so read the incumbent `guid:` line first.",
+              ),
+            sprite_mesh_type: z
+              .union([z.literal(0), z.literal(1)])
+              .optional()
+              .describe("0 FullRect (default), 1 Tight"),
+            generate_fallback_physics_shape: z.boolean().optional(),
+            physics_shape: z
+              .boolean()
+              .optional()
+              .describe("Emit collision polygons as per-sprite physicsShape. Default true."),
+          })
+          .optional()
+          .describe("Unity-only options"),
+        aseprite: z
+          .object({
+            frame_names: z
+              .enum(["index", "aseprite", "normalized"])
+              .optional()
+              .describe(
+                "'index' (default) is bare '0','1',… — the only naming Phaser's createFromAseprite resolves. 'aseprite' reproduces Aseprite's own 'hero 0.aseprite'.",
+              ),
+            pivots: z
+              .enum(["omit", "slices"])
+              .optional()
+              .describe(
+                "The format has no per-frame pivot slot; 'slices' carries them in meta.slices instead. Default 'omit'.",
+              ),
+            pivot_slice_name: z.string().optional(),
+            app: z.string().optional().describe("meta.app provenance string"),
+            version: z.string().optional().describe("meta.version provenance string"),
+            image: z.string().optional().describe("meta.image; always reduced to a basename"),
+            pixel_format: z
+              .enum(["RGBA8888", "I8"])
+              .optional()
+              .describe("meta.format. Default 'RGBA8888'; 'I8' for indexed/grayscale sheets."),
+          })
+          .optional()
+          .describe("Aseprite-only options"),
+        phaser: z
+          .object({
+            frame_names: z
+              .enum(["keep", "index"])
+              .optional()
+              .describe(
+                "'keep' (default) uses the resolved frame names; 'index' renames to '0','1',… for createFromAseprite.",
+              ),
+            image: z.string().optional().describe("meta.image; always reduced to a basename"),
+            pixel_format: z.string().optional().describe("meta.format. Default 'RGBA8888'."),
+            scale: z
+              .union([z.string(), z.number()])
+              .optional()
+              .describe("meta.scale. Default the string '1', which is what Aseprite hardcodes."),
+            app: z.string().optional().describe("meta.app provenance string"),
+            version: z.string().optional().describe("meta.version provenance string"),
+            frame_tags: z.boolean().optional().describe("Emit meta.frameTags. Default true."),
+            animations: z
+              .boolean()
+              .optional()
+              .describe("Emit the top-level Pixi `animations` map. Default true."),
+            anchors: z
+              .boolean()
+              .optional()
+              .describe("Emit a normalized per-frame anchor for pivoted frames. Default true."),
+            related_multi_packs: z
+              .array(z.string())
+              .optional()
+              .describe(
+                "Bare sibling pack filenames for meta.related_multi_packs. List them on the FIRST pack only — a mutual reference deadlocks Pixi's Assets.load().",
+              ),
+          })
+          .optional()
+          .describe("Phaser/PixiJS-only options"),
+      },
+    },
+    ({
+      input_path,
+      metadata,
+      format,
+      variant,
+      texture,
+      name_prefix,
+      fps,
+      output_path,
+      godot,
+      unity,
+      aseprite,
+      phaser,
+    }) => {
+      if ((input_path === undefined) === (metadata === undefined)) {
+        throw new Error(
+          "sprite_export_engine: pass exactly one of `input_path` (a metadata JSON file on disk) " +
+            "or `metadata` (the same document inline) — got " +
+            (input_path === undefined ? "neither" : "both"),
+        );
+      }
+
+      const allowed: readonly string[] = EXPORT_VARIANTS[format];
+      if (variant !== undefined && !allowed.includes(variant)) {
+        throw new Error(
+          `sprite_export_engine: format '${format}' has no variant '${variant}' — it accepts ${allowed
+            .map((v) => `'${v}'`)
+            .join(" or ")}`,
+        );
+      }
+      const resolvedVariant = variant ?? allowed[0];
+
+      const raw = input_path !== undefined ? readJsonDocument(input_path) : metadata;
+      // A grid document's texture size is only trustworthy when read from the
+      // sheet itself: the slicer floors, so frameWidth × cols can be short of
+      // the real PNG, and Unity flips every rect against that height.
+      const sheetSize =
+        detectExportInputKind(raw) === "grid" ? sheetSizeFromSource(raw, input_path ?? null) : null;
+      const doc = normalizeExportInput(raw, {
+        texture,
+        namePrefix: name_prefix,
+        defaultFps: fps,
+        sheetSize: sheetSize ?? undefined,
+      });
+      const stem = stripExtension(doc.texture);
+
+      // Every format collapses to the same shape — a list of files — so the
+      // single-file and multi-file variants share one write/return path.
+      let files: { filename: string; content: string }[];
+      switch (format) {
+        case "godot": {
+          const opts: GodotExportOptions = {
+            texturePath: godot?.texture_path,
+            loop: godot?.loop,
+            loopMode: godot?.loop_mode,
+            pingpong: godot?.pingpong,
+            defaultAnimationName: godot?.default_animation_name,
+            defaultAlias: godot?.default_alias,
+            loadSteps: godot?.load_steps,
+          };
+          files =
+            resolvedVariant === "atlastextures"
+              ? toGodotAtlasTextureFiles(doc, opts)
+              : [{ filename: `${stem}.tres`, content: toGodotSpriteFrames(doc, opts) }];
+          break;
+        }
+        case "unity": {
+          const opts: UnityExportOptions = {
+            pixelsPerUnit: unity?.pixels_per_unit,
+            filterMode: unity?.filter_mode,
+            maxTextureSize: unity?.max_texture_size,
+            serializedVersion: unity?.serialized_version,
+            assetPath: unity?.asset_path,
+            guid: unity?.guid,
+            spriteMeshType: unity?.sprite_mesh_type,
+            generateFallbackPhysicsShape: unity?.generate_fallback_physics_shape,
+            physicsShape: unity?.physics_shape,
+          };
+          files = [{ filename: unityMetaFilename(doc), content: toUnityMeta(doc, opts) }];
+          break;
+        }
+        case "aseprite": {
+          const opts: AsepriteExportOptions = {
+            format: resolvedVariant as AsepriteFormat,
+            frameNames: aseprite?.frame_names,
+            pivots: aseprite?.pivots,
+            pivotSliceName: aseprite?.pivot_slice_name,
+            app: aseprite?.app,
+            version: aseprite?.version,
+            image: aseprite?.image,
+            pixelFormat: aseprite?.pixel_format,
+          };
+          files = [
+            {
+              filename: `${stem}.json`,
+              content: `${JSON.stringify(toAsepriteJson(doc, opts), null, 2)}\n`,
+            },
+          ];
+          break;
+        }
+        case "phaser": {
+          const opts: PhaserExportOptions = {
+            layout: resolvedVariant as PhaserFramesLayout,
+            image: phaser?.image,
+            format: phaser?.pixel_format,
+            scale: phaser?.scale,
+            app: phaser?.app,
+            version: phaser?.version,
+            frameNames: phaser?.frame_names,
+            frameTags: phaser?.frame_tags,
+            animations: phaser?.animations,
+            anchors: phaser?.anchors,
+            relatedMultiPacks: phaser?.related_multi_packs,
+          };
+          files = [
+            {
+              filename: `${stem}.json`,
+              content: `${JSON.stringify(toPhaserAtlas(doc, opts), null, 2)}\n`,
+            },
+          ];
+          break;
+        }
+      }
+
+      const sized = files.map((f) => ({ ...f, bytes: Buffer.byteLength(f.content, "utf8") }));
+      const summary = {
+        format,
+        variant: resolvedVariant,
+        texture: doc.texture,
+        frameCount: doc.frames.length,
+        tagCount: doc.tags.length,
+        bytes: sized.reduce((n, f) => n + f.bytes, 0),
+      };
+
+      if (output_path === undefined) {
+        return jsonResult(
+          sized.length === 1
+            ? { ...summary, filename: sized[0].filename, content: sized[0].content }
+            : { ...summary, files: sized },
+        );
+      }
+
+      // A multi-file variant needs somewhere to put N files, so `output_path`
+      // is the containing directory there and the file itself everywhere else.
+      if (sized.length === 1) {
+        mkdirSync(dirname(output_path), { recursive: true });
+        writeFileSync(output_path, sized[0].content);
+        return jsonResult({ path: output_path, ...summary });
+      }
+      mkdirSync(output_path, { recursive: true });
+      const written = sized.map((f) => {
+        const p = join(output_path, f.filename);
+        writeFileSync(p, f.content);
+        return { path: p, filename: f.filename, bytes: f.bytes };
+      });
+      return jsonResult({ path: output_path, ...summary, files: written });
     },
   );
 }
@@ -1980,6 +2360,21 @@ function readTagsFile(path: string): ParsedTagsDocument {
     return parseTagsDocument(parsed);
   } catch (e) {
     throw new Error(`tags JSON at ${path}: ${e instanceof Error ? e.message : e}`);
+  }
+}
+
+/** Reads a metadata document, reporting a parse failure against the path the caller passed. */
+function readJsonDocument(path: string): unknown {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    throw new Error(`sprite_export_engine: cannot read ${path} — ${(err as Error).message}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error(`sprite_export_engine: ${path} is not valid JSON — ${(err as Error).message}`);
   }
 }
 

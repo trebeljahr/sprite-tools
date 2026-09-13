@@ -255,6 +255,75 @@ for f in characters/*.png; do
 done
 ```
 
+## PNG to a Godot 4 SpriteFrames resource
+
+```bash
+sprite-tools meta hero.png \
+  --collision --pivot bottom-center \
+  --tag idle=0-4 --tag walk=5-12 --tag attack=13-19 \
+  --fps 12 \
+  -o hero.json
+
+sprite-tools export hero.json --format godot --res-path 'res://art/hero.png' -o hero.tres
+```
+
+Copy `hero.png` and `hero.tres` into the Godot project at the path `--res-path` names, let the editor import the PNG, then drop `hero.tres` onto an `AnimatedSprite2D`. The three tags become three animations. Collision and pivot are *not* in the `.tres` — Godot has no field for them — so read them out of `hero.json` and build the `CollisionPolygon2D` / node offset yourself. See [engine export](/docs/reference/engine-export).
+
+Same thing without the intermediate file:
+
+```bash
+sprite-tools meta hero.png --collision --pivot bottom-center --tag idle=0-4 --fps 12 \
+  | sprite-tools export - --format godot -o hero.tres
+```
+
+## Same metadata, four engines
+
+```bash
+sprite-tools meta hero.png --collision --pivot bottom-center \
+  --tag idle=0-4 --tag walk=5-12 -o hero.json
+
+sprite-tools export hero.json --format godot                       -o hero.tres
+sprite-tools export hero.json --format unity  \
+  --asset-path 'Assets/Art/hero.png' --ppu 48                      -o hero.png.meta
+sprite-tools export hero.json --format aseprite                    -o hero-aseprite.json
+sprite-tools export hero.json --format phaser                      -o hero-atlas.json
+```
+
+The Unity sidecar has to be named after the PNG it sits next to (`hero.png` → `hero.png.meta`); the CLI writes wherever `-o` points and will not correct you.
+
+## Pack loose sprites, then export the packed atlas for Phaser
+
+```bash
+sprite-tools atlas sprites/*.png --padding 2 -o hero.png --json atlas.json
+sprite-tools export atlas.json --format phaser -o hero-atlas.json
+```
+
+The texture name comes from the manifest's `atlas` field (`hero.png`), so `--texture` is not needed. Frame names come from the manifest keys, so they stay `hero_idle_0.png` rather than being renumbered. With no tags in the manifest, the atlas has frames and no `animations` map.
+
+## Merge a packed atlas with tags, then export
+
+`jq -s add` merges cleanly, and the exporter resolves the hybrid: the manifest supplies the rects, the header supplies the tags.
+
+```bash
+sprite-tools atlas frames/*.png -o hero.png --json atlas.json
+sprite-tools tags hero-sheet.png --tag idle=0-4 --tag run=5-12:12 -o tags.json
+
+jq -s add tags.json atlas.json \
+  | sprite-tools export - --format phaser --texture hero.png -o hero-atlas.json
+```
+
+## Batch: a Godot resource per character folder
+
+```bash
+mkdir -p godot
+for f in characters/*.png; do
+  name=$(basename "$f" .png)
+  sprite-tools meta "$f" --pivot bottom-center --tag idle=0-3 --fps 10 \
+    | sprite-tools export - --format godot \
+        --res-path "res://characters/${name}.png" -o "godot/${name}.tres"
+done
+```
+
 ## Consume the output in Node
 
 ```js

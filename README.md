@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, GIF export, and engine-native export for Godot, Unity, Aseprite, and Phaser.
 
 Three surfaces, one shared pipeline:
 
@@ -28,6 +28,7 @@ Good starting points:
 - [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art, or upscale existing pixel art with Scale2x, Scale3x, Eagle, or xBR.
 - [Outline & Shadow](https://sprites.trebeljahr.com/outline) — add an outline and a drop shadow to a sprite or a sheet.
 - [Atlas](https://sprites.trebeljahr.com/atlas) — pack loose sprites into one PNG plus JSON.
+- [Export](https://sprites.trebeljahr.com/export) — turn that metadata into a Godot, Unity, Aseprite, or Phaser file.
 - [Docs](https://sprites.trebeljahr.com/docs) — quickstart, CLI reference, MCP setup, schemas, and algorithm notes.
 
 ## Project status
@@ -59,6 +60,9 @@ sprite-tools nine-slice panel.png --preview panel-stretched.png -o panel-9s.json
 sprite-tools dedupe walk-sheet.png --cols 8 --rows 4 --threshold 1 \
   --tags walk-tags.json --tags-out walk-tags-deduped.json \
   --sheet walk-deduped.png -o dedupe.json
+
+# Hand that metadata to an engine — Godot 4 SpriteFrames, Unity .meta, Aseprite, Phaser
+sprite-tools export hero.json --format godot -o hero.tres
 
 # Turn any sprite into Game Boy pixel art
 sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero-gb.png
@@ -114,9 +118,9 @@ Restart Claude Desktop — 20 tools appear under the MCP menu. If `sprite-tools-
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`.
+**CLI**: `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
 
 **MCP**: 20 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
 
@@ -129,6 +133,7 @@ Full docs live in the app at [sprites.trebeljahr.com/docs](https://sprites.trebe
 - **Web app guide** — Sheet Builder, Background Removal, Lasso, metadata tools, transforms, exports, and AI flows.
 - **CLI reference** — every flag + output shape.
 - **JSON schemas** — the canonical data contract shared across all surfaces.
+- **Engine export** — what the Godot / Unity / Aseprite / Phaser files contain, and where each one is lossy.
 - **Algorithm notes** — how grid detection / contour tracing / duplicate detection / bin packing work.
 - **Contributing** — how to add a new tool.
 

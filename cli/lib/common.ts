@@ -1,9 +1,9 @@
 // Shared CLI helpers: JSON output dispatch, error handling, grid resolution.
 
 import { writeFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import type { Command } from "commander";
-import { loadPng } from "./image-io";
+import { loadPng, readPngSize } from "./image-io";
 import { detectGridFromImageData } from "../../src/lib/pipeline/detect";
 import {
   computeCellGeometry,
@@ -223,6 +223,64 @@ function fits(image: ImageData, cols: number, rows: number, padding: GridPadding
     if (e instanceof GridFitError) return false;
     throw e;
   }
+}
+
+/**
+ * The shared header fields of every sheet-metadata document. `grid` carries the
+ * margin/spacing the frames were actually cut with, and `sourceWidth` /
+ * `sourceHeight` the image size — `export` needs both to place regions on a
+ * padded sheet and to flip Unity rects against the real texture height, and
+ * neither can be rebuilt from `frameWidth × cols` once the slicer has floored.
+ */
+export function sheetHeader(
+  input: string,
+  image: ImageData,
+  grid: ResolvedGrid,
+  frames: ImageData[],
+): {
+  source: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  frameWidth: number;
+  frameHeight: number;
+  grid: { cols: number; rows: number; detected: boolean; margin: GridMargin; spacing: GridSpacing };
+} {
+  return {
+    source: input,
+    sourceWidth: image.width,
+    sourceHeight: image.height,
+    frameWidth: frames[0]?.width ?? 0,
+    frameHeight: frames[0]?.height ?? 0,
+    grid: {
+      cols: grid.cols,
+      rows: grid.rows,
+      detected: grid.detected,
+      margin: grid.margin,
+      spacing: grid.spacing,
+    },
+  };
+}
+
+/**
+ * Pixel size of the sheet named by a grid document's `source`, read from the
+ * PNG header. Relative paths are tried against the working directory (where the
+ * metadata command ran, in a pipe) and then next to the JSON file. Shared by the
+ * CLI `export` command and the MCP `sprite_export_engine` tool.
+ */
+export function sheetSizeFromSource(
+  raw: unknown,
+  jsonPath: string | null,
+): { width: number; height: number } | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const source = (raw as { source?: unknown }).source;
+  if (typeof source !== "string" || source === "" || source === "-") return null;
+  const candidates = [resolve(source)];
+  if (jsonPath) candidates.push(resolve(dirname(jsonPath), source));
+  for (const candidate of candidates) {
+    const size = readPngSize(candidate);
+    if (size) return size;
+  }
+  return null;
 }
 
 export function baseName(path: string): string {

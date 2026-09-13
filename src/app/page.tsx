@@ -8,6 +8,7 @@ import {
   Compass,
   Crop,
   Eraser,
+  FileCode2,
   Film,
   Frame,
   Grid3x3,
@@ -98,6 +99,12 @@ const TOOLS = [
     icon: Frame,
     blurb: "Set panel borders by hand, preview the stretch, read or write .9.png.",
   },
+  {
+    href: "/export",
+    label: "Engine export",
+    icon: FileCode2,
+    blurb: "Metadata JSON into a Godot .tres, Unity .meta, Aseprite or Phaser atlas.",
+  },
 ];
 
 export default function HomePage() {
@@ -169,7 +176,7 @@ export default function HomePage() {
             <div>
               <CardTitle className="text-base">CLI</CardTitle>
               <CardDescription className="text-xs">
-                16 composable subcommands. Pipe-friendly.
+                17 composable subcommands. Pipe-friendly.
               </CardDescription>
             </div>
           </CardHeader>

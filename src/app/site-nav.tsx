@@ -75,6 +75,7 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
     items: [
       { href: "/atlas", label: "Atlas", hint: "bin-pack multiple sprites" },
       { href: "/gif", label: "GIF", hint: "animated GIF / WebM" },
+      { href: "/export", label: "Engine export", hint: "Godot / Unity / Aseprite / Phaser" },
     ],
   },
 ];
