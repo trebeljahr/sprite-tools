@@ -27,6 +27,7 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/spritesheet", label: "Sheet Builder" },
       { href: "/docs/web/background-removal", label: "Background removal" },
       { href: "/docs/web/lasso", label: "Lasso cutout" },
+      { href: "/docs/web/lint", label: "Sheet Lint" },
       { href: "/docs/web/collision", label: "Collision" },
       { href: "/docs/web/pivot", label: "Pivot" },
       { href: "/docs/web/tags", label: "Animation tags" },

@@ -246,6 +246,88 @@ interface DetectOutput {
 }
 ```
 
+## Lint
+
+`sprite-tools lint`, the MCP tool `sprite_lint_sheet`, and the [Sheet Lint](/docs/web/lint) page all emit the same `LintReport`. It does **not** extend the common header — it has no `options` block and its `grid` carries the detection confidence:
+
+```ts
+type Severity = "error" | "warning" | "info";
+
+type RuleId =
+  | "alpha-fringe" | "frame-bleed" | "pivot-drift"
+  | "duplicate-frames" | "empty-cell" | "opaque-frame"
+  | "non-power-of-two" | "palette-bloat" | "palette-near-duplicates";
+
+interface Finding {
+  rule: RuleId;
+  severity: Severity;
+  message: string;                 // one sentence, states the numbers
+  frame: number | null;            // row-major index; null when sheet-wide
+  cell: { row: number; col: number } | null;
+  at: { x: number; y: number } | null;                                    // SHEET-absolute
+  region: { x: number; y: number; width: number; height: number } | null; // SHEET-absolute
+  data: Record<string, number | string | boolean | null | number[]>;   // the numbers behind the message
+}
+
+interface LintReport {
+  source: string;
+  width: number;
+  height: number;
+  frameWidth: number;    // cell width after margin and spacing
+  frameHeight: number;   // cell height after margin and spacing
+  grid: {
+    cols: number;
+    rows: number;
+    detected: boolean;           // true only when BOTH dimensions were detected
+    confidence: number | null;   // null unless the whole grid was detected
+    margin: { left: number; top: number; right: number; bottom: number };   // px, zeros when flush
+    spacing: { x: number; y: number };                                      // px gutter, zeros when flush
+  };
+  summary: {
+    errors: number;
+    warnings: number;
+    infos: number;
+    frameCount: number;                                    // === cols * rows
+    rulesRun: RuleId[];
+    rulesSkipped: Array<{ rule: RuleId; reason: string }>;
+  };
+  findings: Finding[];   // sorted by severity, then rule id, then frame index
+}
+```
+
+`detected` and `confidence` follow provenance, not effort. Pass `--cols 3` on a sheet detection reads as 5×5 and detection still fills the rows, but the grid being linted is yours, so it comes back `detected: false, confidence: null` — reporting the overridden detection's confidence would hand `frame-bleed`, which gates its error-severity findings on that number, a score describing a different grid.
+
+`data` is a flat bag of scalars and frame-index lists whose keys depend on the rule (`runLength` and `boundaryLength` for `frame-bleed`, `duplicateOf` and the `memberFrames` array for `duplicate-frames`, `colorA` / `colorB` plus the `pairColorsA` / `pairColorsB` columns for `palette-near-duplicates`, …), so nothing has to parse `message` to act on a finding.
+
+### Coordinates are sheet-absolute here
+
+`at` and `region` are in **sheet pixels**, measured from the top-left of the whole image — unlike `collision` polygons and `pivots`, which are **cell-relative**. The reason is the consumer: a lint finding gets drawn on top of the sheet you just looked at, so a viewer can render `region` as an SVG rect over the image at 1:1 without knowing the grid, and a `frame-bleed` region can legitimately straddle two cells (it is 2 px wide across a seam). Collision and pivot data goes the other way — an engine applies it per frame, after slicing, so cell-relative is what it needs.
+
+To convert a lint finding to cell-relative coordinates yourself:
+
+```js
+const originX = finding.cell.col * report.frameWidth;
+const originY = finding.cell.row * report.frameHeight;
+const local = { x: finding.at.x - originX, y: finding.at.y - originY };
+```
+
+Sheet-wide findings (`non-power-of-two`, `palette-bloat`, a fully blank sheet) have `frame: null` and `cell: null`, and may have both `at` and `region` null — there is no one place to point at.
+
+### A non-empty `rulesSkipped` is the healthy case
+
+A rule that cannot judge its preconditions records why instead of guessing, and that shows up in `summary.rulesSkipped`. On healthy pixel art most of the list is expected: `alpha-fringe` skips because the alpha channel is strictly binary, `palette-bloat` skips because the sheet has fewer distinct colours than its minimum, `frame-bleed` and `empty-cell` skip on a 1×1 grid. All three bundled samples in `public/samples/` skip between two and seven rules and still pass:
+
+```json
+"rulesSkipped": [
+  { "rule": "alpha-fringe", "reason": "sheet alpha is strictly binary, so no fringe is possible" },
+  { "rule": "palette-bloat", "reason": "26 distinct opaque colours, below the 256 minimum" }
+]
+```
+
+Do not treat it as an error, a partial run, or something to configure away. `rulesRun` lists what actually executed; a rule you disabled appears in neither list, because it was never asked to judge.
+
+The MCP tool adds one field the CLI does not: `ok`, which is `summary.errors === 0`.
+
 ## Merging outputs
 
 Because namespaces don't collide:

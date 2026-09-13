@@ -193,3 +193,38 @@ export function uniqueColors(img: ImageData): string[] {
 export function isUniformColor(img: ImageData): boolean {
   return uniqueColors(img).length === 1;
 }
+
+/** Overwrite a single pixel in place. */
+export function setPixel(
+  img: ImageData,
+  x: number,
+  y: number,
+  color: [number, number, number, number],
+): void {
+  const i = (y * img.width + x) * 4;
+  img.data[i] = color[0];
+  img.data[i + 1] = color[1];
+  img.data[i + 2] = color[2];
+  img.data[i + 3] = color[3];
+}
+
+/** Paint a rect in place, clipped to the image. Composable, unlike filledRect. */
+export function paintRect(
+  img: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: [number, number, number, number],
+): void {
+  for (let yy = Math.max(0, y); yy < Math.min(img.height, y + h); yy++) {
+    for (let xx = Math.max(0, x); xx < Math.min(img.width, x + w); xx++) {
+      setPixel(img, xx, yy, color);
+    }
+  }
+}
+
+/** Every pixel set to one colour — the "nothing was keyed out" case. */
+export function fillAll(img: ImageData, color: [number, number, number, number]): void {
+  paintRect(img, 0, 0, img.width, img.height, color);
+}

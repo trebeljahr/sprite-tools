@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP server
 
-`sprite-tools-mcp` exposes all 20 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
+`sprite-tools-mcp` exposes all 22 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
 
 ## Why use it over the CLI
 
@@ -32,6 +32,7 @@ See the full [tool catalog](/docs/mcp/tools) for every tool's input schema and o
 
 | Tool | Purpose |
 |---|---|
+| `sprite_lint_sheet` | Health check to run first: findings, real grid, `ok` flag |
 | `sprite_info` | Stats + detected grid + content bounds |
 | `sprite_detect_grid` | Just the grid |
 | `sprite_slice` | Split sheet into per-cell PNGs on disk |

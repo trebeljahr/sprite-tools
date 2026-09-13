@@ -1,0 +1,137 @@
+export const metadata = {
+  title: "Sheet Lint — sprite-tools",
+  description:
+    "Lint a sprite sheet in the browser: detect the grid, find chroma-key fringe, frame bleed, pivot jumps, duplicate or empty cells and palette noise, and see every finding drawn on the sheet.",
+};
+
+# Sheet Lint
+
+[Open Sheet Lint](/lint)
+
+Sheet Lint runs nine rules over a sheet and draws every finding on top of the image. It is the tool to open first on a sheet somebody else made, or on the output of a generator: it states the grid the sheet really has, how many frames that is, and what is wrong with the art — before any other tool commits to an interpretation.
+
+It changes nothing. There is no export PNG here, only a report: the same JSON `sprite-tools lint` writes.
+
+## When to use it
+
+- A sheet arrived from an artist, an asset pack, or an AI generator and you do not know its grid.
+- [Collision](/docs/web/collision) or [Pivot](/docs/web/pivot) produced something odd and you want to know whether the sheet or the settings are at fault.
+- You keyed a background out and want to check the edges before shipping — chroma-key fringe is invisible at 1× and obvious once the sprite is scaled or drawn over a different backdrop.
+- You are about to commit art to a repo and want a gate that fails on real defects. That gate is the [CLI](/docs/cli/recipes#gate-a-build-on-lint); this page is where you look at what it found.
+
+## Workflow
+
+1. Load a sheet: upload, drop, or paste it anywhere on the page. Sample sprites are there if you just want to see what the tool does. The sheet is shared with the other tools, so you can send the same source straight into Collision, Pivot, Tags, Atlas, or GIF afterwards.
+2. Read the summary bar. It says whether the sheet is clean (no errors, no warnings), the count per severity, and how many of the nine rules ran, were muted by you, or skipped themselves.
+3. Check the grid. It is auto-detected, and the **Override grid** switch shows what was detected with its confidence — `Detected 5×5 (90% confident)`. A wrong grid makes `frame-bleed` and `empty-cell` noisy, so telling the linter the truth is better than muting the rules. Detection also reads a sheet's outer margin and gutters, and overriding the grid keeps the padding it detected.
+4. Work the findings. Hover a row in the list to highlight it on the sheet; click it to pin it. Click a box on the sheet to jump to its finding. Everything but the active finding dims, so a sheet with a dozen findings still reads.
+5. Take the report: **Download JSON** writes `<name>-lint.json`, **Copy to Clipboard** copies the same thing, and **Copy CLI command** gives you the `sprite-tools lint` invocation that reproduces what you are looking at.
+
+Every change re-lints immediately — toggling a rule, overriding the grid, loading a new sheet. There is no run button and no progress bar: `lintSheet()` is synchronous and one sheet is fast.
+
+## The overlay
+
+The linter emits **sheet-absolute** coordinates, so the overlay is a plain SVG sitting on the image at 1:1 sheet pixels — no re-derivation, nothing to line up. That is the point of the page: the JSON says "content crosses the vertical seam between frames 7 and 8", the overlay shows you where.
+
+- A **box** is a finding's `region` — a frame, a fringe's bounding box, a 2 px-wide strip across a seam.
+- A **crosshair** is a finding's `at` — a single pixel, like the first offending pixel of a fringe or the first occurrence of a near-duplicate colour.
+- A **dashed outline of the whole sheet** is a sheet-wide finding (non-power-of-two dimensions, palette bloat) selected. It has nowhere else to point.
+- Faint outlines show the cells actually being linted — margin and gutters included — so a wrong grid is visible rather than inferred.
+
+Colour follows severity: red for errors, amber for warnings, blue for infos. Drag to pan, scroll to zoom, and the toolbar zooms and refits; the palette button swaps the checkerboard behind the sheet between light and dark so soft edges read against either.
+
+## The rules
+
+Each rule can be switched off in the **Rules** panel, which also shows how many findings it produced, or — when it did not run — the reason it gave. A rule that skips itself is the normal case on healthy art, not a failure: strictly binary alpha means no chroma fringe is possible, a 1×1 grid has no seams to bleed across, four distinct colours cannot be palette bloat.
+
+Thresholds below are the defaults, and are tunable in the CLI (`--set rule.option=value`) and the MCP tool, not on this page.
+
+### Alpha fringe — `alpha-fringe`
+
+A ring of semi-transparent, off-colour pixels around sprites, left behind by a sloppy chroma key. A pixel counts only if it is partially transparent, touches a fully transparent neighbour, and sits close to the sheet's background colour — anti-aliased art fails that last test, because its soft edge is tinted with the sprite's own colours.
+
+The background colour is a majority vote over the four corner pixels, and a corner only votes when it actually carries a colour: still opaque, or transparent with its RGB left in place by a keyer that only touched alpha. A corner that is transparent *and* zeroed — what canvas, `new ImageData` and every optimizer that clears invisible pixels leave behind — is not evidence of anything, and reading its `rgb(0,0,0)` as "the background was black" would turn the colour test into "is this pixel dark?", which every dark anti-aliased outline passes.
+
+- **Severity** `warning`. **Thresholds** `opaqueAlpha=250`, `colourDistance=60`, `minPixels=24`, `minEdgeFraction=0.02` (share of the frame's own silhouette length).
+- **Can miss** a fringe keyed against a background colour that is not in the corners, a fringe on a sheet whose invisible pixels were zeroed — the background is then unknowable rather than black — and a fully opaque halo, which shows up as palette noise instead. Skipped outright when the sheet's alpha is strictly binary, which is the normal pixel-art case.
+
+### Frame bleed — `frame-bleed`
+
+Content touching or crossing an internal cell boundary: either the grid is wrong or the sheet has spacing nobody stated. Only internal seams count, and the crossing has to be a continuous run of opaque pixels from one cell's edge to the next — across the whole gutter on a padded sheet — not a stray pixel.
+
+A seam only means something when there is transparency for the content to stop at. Two cells that are both wall-to-wall opaque — a gutterless terrain tileset, full-cell portrait or card art — are opaque on both sides of every seam by construction, so those seams are passed over, and a sheet with no transparency anywhere skips the rule outright. Without that, an ordinary tileset would fail a build on every one of its seams.
+
+- **Severity** `error` — the only rule that fails a build by default, because everything downstream depends on the grid. **Thresholds** `minConfidence=0.5`, `minRunLength=3`, `minRunFraction=0.05`, `alphaThreshold=8`.
+- **Can miss** content that runs into a gutter or the outer margin without reaching the next cell (the slicer silently crops it), bleed between two cells that both happen to be padded at the seam, bleed where the true grid is so wrong that detection returned a single cell, and bleed on a sheet with no transparency at all, which is indistinguishable from contiguous art. It also stands down when grid detection confidence is below `minConfidence`, because untrustworthy seams cannot be judged. Seam pixels at or below `alphaThreshold=8` (about 3% opacity) are ignored so invisible alpha noise never fails a build, which also means a genuinely faint shadow or glow crossing a seam is not reported unless you lower it.
+
+### Pivot drift — `pivot-drift`
+
+A content-anchored pivot that jumps mid-sequence, which makes a character visibly hop. Each frame's pivot comes from its content bounds; the rule takes the median across non-empty frames and fires only when a frame is both far from that median and a large step from the previous frame, on the same axis.
+
+- **Severity** `info`, for the same reason `duplicate-frames` is: an airborne frame in a jump is by construction far from the sequence median and a large step from its neighbour, and nothing here can tell that from a mis-anchored frame. The rule reports and leaves the call to you; `--set pivot-drift.severity=warning` promotes it once you know the sheet holds no intentional excursions. **Thresholds** `preset=bottom-center`, `minFrames=3`, `maxDeviationFraction=0.25`, `maxStepFraction=0.15` (both as shares of frame size).
+- **Can miss** a sheet where every frame's pivot is equally wrong, so there is no outlier to find, and multi-animation sheets where two animations legitimately anchor differently — pass an explicit grid or lint one row at a time to avoid that noise.
+
+### Duplicate frames — `duplicate-frames`
+
+Frames that `sprite-tools dedupe` would remove. The rule runs the same detection code with the same `threshold`, so a finding and the dedupe command never disagree, and each finding names the command that would collapse its group. Info, never a warning: held and repeated frames are a legitimate animation technique. A sheet of 16 identical cells reports once — anchored on the group's lowest frame index — rather than fifteen times. Empty cells are left to `empty-cell`.
+
+- **Severity** `info`. **Thresholds** `threshold=0` (mean absolute RGBA difference on a 0–255 scale; 0 is exact), `maxComparisonPixels=32000000` (fuzzy pass only), `maxGroupsReported=20`.
+- **Can miss** near-duplicates from lossy video or AI generation at the default `threshold=0`, which only matches byte-identical visible pixels. Raising it has a cost: the difference is a mean over the whole frame, so at `threshold=1` a 48×48 frame whose 15-pixel detail changed completely still matches. Frames that differ only by a small translation never match. A fuzzy pass is skipped — with the reason stated — once frames² × frame area exceeds `maxComparisonPixels`, because the page re-lints on every change. The group list is capped at `maxGroupsReported`, and the true group total is always in the finding's `data`.
+
+### Empty cell — `empty-cell`
+
+A cell with no content, or so little content that it looks like a slicing mistake. Near-empty fires only when the rest of the sheet is far denser, which is what keeps thin-limbed art from tripping it. A wholly blank sheet is one finding, not one per cell.
+
+Empty cells come in two kinds and only one is a defect. An unbroken run at the *end* of the sheet is packer padding — ten frames laid into a 4×3 grid leave two cells over — and reports at `paddingSeverity`. An empty cell with content after it is a hole in the sequence, and stays a warning.
+
+- **Severity** `warning` for a hole, `nearEmptySeverity=info` for a near-empty cell, `paddingSeverity=info` for trailing padding. **Thresholds** `alphaThreshold=0`, `nearEmptyFraction=0.005`, `contrastFactor=10`.
+- **Can miss** a near-empty cell on a sheet whose other cells are just as sparse: the `contrastFactor` gate is exactly what keeps thin-limbed art quiet. In the other direction, an intentional blank spacer in the *middle* of a strip reads as a hole and still warns — that is what switching the rule off is for.
+
+### Opaque frame — `opaque-frame`
+
+A frame with zero transparent pixels while *most* frames in the same sheet do have transparency. The mixed signal is the point: usually a background was left un-keyed on that one frame. A sheet that is mostly opaque is a legitimate tileset and is skipped, so a terrain set shipping one keyed decal tile does not turn all fifteen of its solid tiles into findings.
+
+- **Severity** `warning`. **Thresholds** `minTransparentFrames=1`, `minTransparentFraction=0.5` — the keyed frames have to be both present and the majority.
+- **Can miss** a frame whose background was keyed to a solid colour rather than to transparency — that looks intentional here and is not reported — and an un-keyed frame on a sheet where the keyed frames are the minority, which reads as a tileset. `minTransparentFraction` is the knob for that.
+
+### Non-power-of-two dimensions — `non-power-of-two`
+
+Sheet width or height is not a power of two. Always info: GLES2 and WebGL1 restrict such textures to `CLAMP_TO_EDGE` with no mipmaps and Unity may pad them or refuse compressed formats, while desktop GL, WebGL2, Vulkan, Metal and every modern console handle them fine.
+
+- **Severity** `info`. **Threshold** `checkFrames=false` — turn it on to have frame dimensions checked as well as the sheet's.
+- **Can miss** the judgement entirely: nothing here knows your target platform, so this is a note for you to decide on, not a defect.
+
+### Palette bloat — `palette-bloat`
+
+Far more distinct colours than the sheet appears to use. It quantizes to a small palette with the same median-cut the [Pixelate](/docs/web/pixelate) tool uses and measures the mean error, firing only when the sheet genuinely collapses — so the extra colours are encoding noise rather than real gradient detail.
+
+- **Severity** `info`. **Thresholds** `minColors=256` (below this it does not look), `targetColors=32`, `sampleStride=7`, `maxQuantizationError=4.0`.
+- **Can miss** by design: sheets that legitimately use gradients or anti-aliasing quantize badly and are left alone.
+
+### Palette near-duplicates — `palette-near-duplicates`
+
+Colours differing by one or two values, which on flat-colour art usually means the file went through a lossy re-encode. Both colours in a pair must cover a meaningful number of pixels. The rule reports **one** sheet-wide finding, not one per pair: the most-covered pair is in the message and marked by the crosshair, and up to `maxPairs` pairs are listed in `data` as parallel columns (`pairColorsA`, `pairColorsB`, `pairDistances`, `pairPixelsA`, `pairPixelsB`), with the true count in `totalPairs`.
+
+- **Severity** `info`. **Thresholds** `maxColors=4096`, `maxDistance=2.0`, `minPixelsEach=8`, `maxPairs=20` (caps the listed pairs, not the finding count).
+- **Can miss** anything on a photographic source, which has too many colours to check and is skipped outright. It also **cannot tell** a lossy re-encode from deliberate anti-aliasing or a gradient — both produce colours one step apart — so on soft-edged art treat it as a note, not a defect.
+
+## Limits
+
+- **It reports, it does not repair.** Nothing here edits pixels. Act on a finding with [Background Removal](/docs/web/background-removal), [Sheet Builder](/docs/web/spritesheet), or [Palette](/docs/web/palette).
+- **Nine rules is not a proof.** Every rule above lists what it accepts missing; thresholds lean conservative because a rule that fires on healthy art is worse than a missing rule. A clean report means these nine rules found nothing.
+- **Thresholds are not exposed here.** This page toggles rules on and off and sets the grid. Moving a threshold or re-grading a severity is a CLI (`--set`) or MCP (`options`) job.
+- **One sheet at a time.** Loop the CLI for a folder.
+- **Detection is a heuristic.** Confidence is shown for exactly that reason; override the grid when it is wrong, and treat a low-confidence detection as a reason to check rather than a verdict.
+
+## CLI and MCP equivalent
+
+The same nine rules and the same report, from the same code:
+
+```bash
+sprite-tools lint sheet.png --format text
+sprite-tools lint sheet.png --cols 8 --rows 4
+sprite-tools lint sheet.png --disable duplicate-frames,non-power-of-two
+sprite-tools lint sheet.png --set alpha-fringe.minPixels=40
+```
+
+**Copy CLI command** on the page writes exactly this for your current grid override and muted rules. The CLI adds `--set`, `--only`, `--severity` and an exit code you can gate CI on — see the [command reference](/docs/cli/reference#lint) and the [CI recipe](/docs/cli/recipes#gate-a-build-on-lint). Agents should call the MCP tool [`sprite_lint_sheet`](/docs/mcp/tools#sprite_lint_sheet) first on any unfamiliar sheet. The JSON shape, including why lint coordinates are sheet-absolute while collision and pivot are cell-relative, is in the [schema reference](/docs/reference/json-schemas#lint).

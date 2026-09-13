@@ -49,6 +49,7 @@ sprite-tools gif sheet.png --fps 12 -o anim.gif
 
 | Command | What it emits |
 |---|---|
+| `lint`       | JSON or text: rule findings with severity, frame and sheet coordinates; exit 1 on errors |
 | `info`       | JSON: dimensions, opaque pixel count, content bounds, detected grid |
 | `detect`     | JSON: grid (cols, rows, margin, spacing) + confidence |
 | `slice`      | files: one PNG per cell (plus optional JSON index) |

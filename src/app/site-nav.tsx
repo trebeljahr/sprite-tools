@@ -50,6 +50,7 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
     items: [
       { href: "/background-removal", label: "Background", hint: "chroma-key removal" },
       { href: "/lasso", label: "Lasso", hint: "manual polygon cutout" },
+      { href: "/lint", label: "Lint", hint: "check a sheet for problems" },
     ],
   },
   {

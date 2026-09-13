@@ -103,6 +103,15 @@ import {
   type PhaserExportOptions,
   type PhaserFramesLayout,
 } from "../src/lib/export/phaser";
+import {
+  lintSheet,
+  isRuleId,
+  RULE_IDS,
+  SEVERITY_ORDER,
+  validateRuleOption,
+  type DeepPartial,
+  type LintConfig,
+} from "../src/lib/lint";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -427,6 +436,145 @@ export function registerAllTools(server: McpServer) {
         },
         confidence: Number(det.confidence.toFixed(3)),
       });
+    },
+  );
+
+  // ------- lint -------
+  server.registerTool(
+    "sprite_lint_sheet",
+    {
+      description:
+        "Lint a sprite sheet and report what is wrong with it. Run this FIRST on any sheet you did not make yourself: it says whether the sheet is healthy, what grid it really has, and what problems it carries — alpha fringe from a sloppy chroma key, content bleeding across cell seams, jumping pivots, duplicate/empty/fully-opaque frames, non-power-of-two dimensions, palette noise. Every finding carries a stable rule id, a severity, the frame and cell it belongs to, and sheet-absolute pixel coordinates, so you can act on it without re-deriving anything. `ok` is true when nothing error-severity fired; `summary.rulesSkipped` lists rules whose preconditions the sheet did not meet, which is normal on healthy art, not a failure.",
+      inputSchema: {
+        input_path: z.string().describe("Absolute path to a PNG sprite or sheet"),
+        ...SHEET_GRID_ARGS,
+        disable_rules: z
+          .array(z.string())
+          .optional()
+          .describe(`Rule ids to skip entirely. Valid ids: ${RULE_IDS.join(", ")}`),
+        only_rules: z
+          .array(z.string())
+          .optional()
+          .describe("Run only these rule ids; every other rule is disabled"),
+        min_severity: z
+          .enum(["error", "warning", "info"])
+          .optional()
+          .describe(
+            "Drop findings below this severity from the list. `summary` still counts the whole run, so you can see what was filtered out.",
+          ),
+        options: z
+          .record(z.string(), z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])))
+          .optional()
+          .describe(
+            'Per-rule threshold overrides, keyed by rule id then option name, e.g. {"frame-bleed": {"minRunLength": 5}}. Unlisted options keep their defaults; an unknown option name, a value of the wrong type, or a severity outside error|warning|info comes back as an invalid_rule_option error rather than being ignored.',
+          ),
+      },
+    },
+    ({ input_path, disable_rules, only_rules, min_severity, options, ...gridArgs }) => {
+      // Every rule id the caller named is validated up front, so a typo comes
+      // back as a recoverable message listing the valid ids rather than a
+      // silently ignored flag or an opaque throw.
+      const named = [
+        ...(disable_rules ?? []),
+        ...(only_rules ?? []),
+        ...Object.keys(options ?? {}),
+      ];
+      const unknown = [...new Set(named.filter((id) => !isRuleId(id)))];
+      if (unknown.length > 0) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  error: "unknown_rule_id",
+                  message: `Unknown rule id(s): ${unknown.join(", ")}. Valid rule ids are: ${RULE_IDS.join(", ")}.`,
+                  unknownRules: unknown,
+                  validRules: RULE_IDS,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      // Option names and value types are checked too, against the same defaults
+      // the CLI's `--set` validates against: an unknown name is otherwise
+      // dropped silently, and a string where a threshold belongs makes every
+      // comparison against it false, which inverts a gate instead of leaving it
+      // alone. A mis-cased severity would also put a value outside the
+      // documented Severity enum into the report and leave `ok` true.
+      const badOptions: string[] = [];
+      for (const [id, opts] of Object.entries(options ?? {})) {
+        if (!isRuleId(id)) continue;
+        for (const [option, value] of Object.entries(opts)) {
+          const problem = validateRuleOption(id, option, value);
+          if (problem) badOptions.push(problem);
+        }
+      }
+      if (badOptions.length > 0) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  error: "invalid_rule_option",
+                  message: `Invalid rule option(s): ${badOptions.join("; ")}.`,
+                  problems: badOptions,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      const rules: Record<string, Record<string, unknown>> = {};
+      const patch = (id: string, fields: Record<string, unknown>) => {
+        rules[id] = { ...rules[id], ...fields };
+      };
+      if (only_rules && only_rules.length > 0) {
+        for (const id of RULE_IDS) {
+          if (!only_rules.includes(id)) patch(id, { enabled: false });
+        }
+      }
+      for (const id of disable_rules ?? []) patch(id, { enabled: false });
+      for (const [id, opts] of Object.entries(options ?? {})) patch(id, opts);
+
+      const image = loadPng(input_path);
+      const report = lintSheet({
+        source: input_path,
+        image,
+        cols: gridArgs.cols,
+        rows: gridArgs.rows,
+        padding: gridPaddingFromOpts({
+          margin: gridArgs.margin,
+          marginX: gridArgs.margin_x,
+          marginY: gridArgs.margin_y,
+          spacing: gridArgs.spacing,
+          spacingX: gridArgs.spacing_x,
+          spacingY: gridArgs.spacing_y,
+        }),
+        // The record is keyed by validated rule ids, which is exactly the
+        // DeepPartial shape lintSheet merges — TypeScript just cannot see it.
+        config: { rules } as DeepPartial<LintConfig>,
+      });
+
+      // Filtering trims the findings list only — `summary` keeps counting the
+      // whole run, so an agent can still see how much was held back.
+      const floor = min_severity ? SEVERITY_ORDER[min_severity] : null;
+      const findings =
+        floor === null
+          ? report.findings
+          : report.findings.filter((f) => SEVERITY_ORDER[f.severity] <= floor);
+
+      return jsonResult({ ok: report.summary.errors === 0, ...report, findings });
     },
   );
 

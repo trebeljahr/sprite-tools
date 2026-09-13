@@ -8,6 +8,77 @@ export const metadata = {
 
 Full option list for each subcommand. Always run `sprite-tools <command> --help` for the authoritative, up-to-date version.
 
+## `lint`
+
+```
+sprite-tools lint <input>
+  [--cols N] [--rows N]            # auto-detected if omitted
+  [--margin N] [--margin-x N] [--margin-y N]      # see Grid padding below
+  [--spacing N] [--spacing-x N] [--spacing-y N]
+  [--disable RULE]                 # repeatable; also accepts a comma-separated list
+  [--only RULE]                    # repeatable; run only these rules
+  [--set RULE.OPTION=VALUE]        # repeatable threshold override
+  [--severity LEVEL]               # error|warning|info, default: info
+  [--format FMT]                   # json|text, default: json
+  [--exit-zero]                    # always exit 0, even when errors are found
+  [-o FILE]                        # output file (default: stdout)
+```
+
+Runs nine rules over the sheet and reports structured findings. This is the command to run first on a sheet you did not make: it states the grid it detected, the frame count, and what is wrong before any other command commits to an interpretation. Output shape: [`LintReport`](/docs/reference/json-schemas#lint).
+
+`--severity` trims findings below the level from the list; `summary` still counts the whole run, the same as the MCP tool's `min_severity`, so both surfaces emit the same JSON and you can see how much was held back. Error-severity findings are never filtered out, which keeps the exit code honest whatever you pass. `--only` wins first (every other rule off), `--disable` then turns individual rules off, and `--set` is applied last, so it can re-enable or re-severity a rule the earlier flags touched. Every part of a `--set` is validated: an unknown rule id, an unknown option name, a value of the wrong type, or a severity outside `error|warning|info` fails the command and names the valid alternatives, rather than being silently dropped. That matters because an unchecked string in a numeric threshold makes every comparison against it false, which inverts the gate instead of disabling it.
+
+```bash
+sprite-tools lint sheet.png --format text
+sprite-tools lint sheet.png --cols 8 --rows 4 --severity warning
+sprite-tools lint sheet.png --disable duplicate-frames,non-power-of-two
+sprite-tools lint sheet.png --set alpha-fringe.minPixels=40 --set frame-bleed.severity=warning
+sprite-tools lint sheet.png | jq '.findings[] | select(.severity=="error")'
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | No error-severity findings, or `--exit-zero` was passed |
+| `1` | Error-severity findings present, **or** the tool itself failed |
+
+Tell the two `1`s apart by stdout: a lint failure still writes a complete, valid report there, while a tool failure writes only `sprite-tools: <msg>` to stderr and nothing at all to stdout. The report is flushed before the non-zero exit, so `sprite-tools lint sheet.png | jq` works in CI. Warnings and infos never fail the build on their own — only `frame-bleed` is an error by default.
+
+### Rules
+
+Every rule is on by default. `--disable <id>` turns one off, `--set <id>.severity=<level>` re-grades it, and `--set <id>.<option>=<value>` moves a threshold. Fractions are shares of the frame's own size, not pixels.
+
+| Rule | Default severity | Tunables (defaults) |
+|---|---|---|
+| `alpha-fringe` | `warning` | `opaqueAlpha=250`, `colourDistance=60`, `minPixels=24`, `minEdgeFraction=0.02` |
+| `frame-bleed` | `error` | `minConfidence=0.5`, `minRunLength=3`, `minRunFraction=0.05`, `alphaThreshold=8` |
+| `pivot-drift` | `info` | `preset=bottom-center`, `minFrames=3`, `maxDeviationFraction=0.25`, `maxStepFraction=0.15` |
+| `duplicate-frames` | `info` | `threshold=0` (same meaning as `dedupe --threshold`), `maxComparisonPixels=32000000`, `maxGroupsReported=20` |
+| `empty-cell` | `warning` (near-empty: `nearEmptySeverity=info`; trailing padding: `paddingSeverity=info`) | `alphaThreshold=0`, `nearEmptyFraction=0.005`, `contrastFactor=10` |
+| `opaque-frame` | `warning` | `minTransparentFrames=1`, `minTransparentFraction=0.5` |
+| `non-power-of-two` | `info` | `checkFrames=false` |
+| `palette-bloat` | `info` | `minColors=256`, `targetColors=32`, `sampleStride=7`, `maxQuantizationError=4.0` |
+| `palette-near-duplicates` | `info` | `maxColors=4096`, `maxDistance=2.0`, `minPixelsEach=8`, `maxPairs=20` |
+
+### What each rule will not catch
+
+Thresholds lean conservative on purpose — a rule that fires on healthy art is worse than a missing rule — so every rule has false negatives it accepts by design. A clean report means these nine rules found nothing, not that the sheet is correct.
+
+| Rule | Known misses |
+|---|---|
+| `alpha-fringe` | A fringe keyed against a background colour that is not in the corners; a fringe on a sheet whose invisible pixels had their colour zeroed, where the background is unknowable rather than black; a fully opaque halo, which shows up as palette noise instead. Skipped outright when the sheet's alpha is strictly binary. |
+| `frame-bleed` | Content that runs into a gutter or the outer margin without reaching the next cell, which the slicer silently crops; bleed between two cells that both happen to be padded at the seam; bleed where the true grid is so wrong that detection returned a single cell; bleed between two wall-to-wall opaque cells, which is indistinguishable from a gutterless tileset or full-cell art. Also skipped when detection confidence is below `minConfidence`. Seam pixels at or below `alphaThreshold` (default 8, about 3% opacity) are ignored, so a genuinely faint shadow or glow crossing a seam goes unreported unless you lower it. |
+| `pivot-drift` | A sheet where every frame's pivot is equally wrong, so there is no outlier to find; multi-animation sheets where two animations legitimately anchor differently. Info by default because an intentional excursion — an airborne jump frame — is indistinguishable from a mis-anchored one. |
+| `duplicate-frames` | Near-duplicates from lossy video or AI generation at the default `threshold=0`, which matches byte-identical visible pixels only; a raised threshold is a mean over the whole frame, so it starts merging frames whose small details differ. Frames that differ only by a small translation never match. A fuzzy pass is skipped, with the reason stated, once frames² × frame area exceeds `maxComparisonPixels`; the group list is capped at `maxGroupsReported`, though the true group total is always in the finding data. |
+| `empty-cell` | An intentional blank spacer in the middle of a strip reads as a hole and still warns — that is what `--disable empty-cell` is for. Trailing padding is reported at `paddingSeverity` rather than as a warning. |
+| `opaque-frame` | A frame whose background was keyed to a solid colour rather than to transparency looks intentional here and is not reported; an un-keyed frame on a sheet where the keyed frames are the minority reads as a tileset, which `minTransparentFraction` tunes. |
+| `non-power-of-two` | Nothing here knows your target platform, so this is a note for you to judge, not a defect. |
+| `palette-bloat` | Sheets that legitimately use gradients or anti-aliasing quantize badly and are left alone by design. |
+| `palette-near-duplicates` | Photographic sources have too many colours to check and are skipped outright. Cannot tell a lossy re-encode from deliberate anti-aliasing or a gradient, which both produce colours one step apart. |
+
+`sprite-tools lint --help` prints the same rule list with a one-line summary each. The [Sheet Lint page](/docs/web/lint) explains what each rule measures and how to react to it.
+
 ## `info`
 
 ```

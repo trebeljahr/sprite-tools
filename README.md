@@ -11,7 +11,7 @@ A batteries-included toolkit for turning AI-generated or hand-drawn sprites into
 Three surfaces, one shared pipeline:
 
 - **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 17 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **CLI (`sprite-tools`)** — 19 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -22,6 +22,7 @@ Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools i
 
 Good starting points:
 
+- [Sheet Lint](https://sprites.trebeljahr.com/lint) — the one to open first: what a sheet is, and what is wrong with it, drawn onto the sheet.
 - [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, or loose frames into a clean sheet.
 - [Background Removal](https://sprites.trebeljahr.com/background-removal) — chroma-key a flat background out of every frame.
 - [Collision](https://sprites.trebeljahr.com/collision) — trace tight polygons for physics engines.
@@ -38,6 +39,12 @@ sprite-tools is actively maintained. The npm package ships the CLI and MCP serve
 ## Quick taste
 
 ```bash
+# Start here on a sheet you know nothing about: detected grid, frame count, findings
+sprite-tools lint unknown-sheet.png --format text
+
+# Gate CI on it — exit 1 on error-severity findings, full JSON report still on stdout
+sprite-tools lint hero.png > lint-report.json
+
 # Auto-detect grid, generate collision polygons + pivots + tags in one shot
 sprite-tools meta hero.png \
   --collision --tolerance 4 \
@@ -114,15 +121,15 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 20 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 22 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
+**CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
 
-**MCP**: 20 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
+**MCP**: 22 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
 
 ## Docs
 

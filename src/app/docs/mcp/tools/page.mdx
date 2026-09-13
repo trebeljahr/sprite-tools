@@ -6,11 +6,11 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 20 MCP tools.
+Full input/output schema for each of the 22 MCP tools.
 
 ## Grid args on sheet tools
 
-Sixteen tools consume a sheet and accept the same grid block: `sprite_slice`, `sprite_remove_background`, `sprite_find_duplicates`, `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags`, `sprite_generate_nine_slice`, `sprite_extract_palette`, `sprite_palette_swap`, `sprite_detect_ramps`, `sprite_palette_variants`, `sprite_pixelate`, `sprite_generate_normal_map`, `sprite_add_outline`, `sprite_add_shadow`, and `sprite_generate_meta`.
+Seventeen tools consume a sheet and accept the same grid block: `sprite_lint_sheet`, `sprite_slice`, `sprite_remove_background`, `sprite_find_duplicates`, `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags`, `sprite_generate_nine_slice`, `sprite_extract_palette`, `sprite_palette_swap`, `sprite_detect_ramps`, `sprite_palette_variants`, `sprite_pixelate`, `sprite_generate_normal_map`, `sprite_add_outline`, `sprite_add_shadow`, and `sprite_generate_meta`.
 
 ```ts
 {
@@ -68,6 +68,53 @@ Returns JSON:
 ```
 
 `margin` and `spacing` are always present and are all zeros for a flush sheet or one whose padding could not be read confidently. Pass them straight back into any sheet tool. Inference only fires when every content block on an axis is the same size and every gap between them is identical, so it reports zeros rather than a guess.
+
+## `sprite_lint_sheet`
+
+**Call this first on any sheet you did not make yourself.** It answers "what is this file and what is wrong with it" in one call — the grid it really has, the frame count, and nine rules' worth of findings — so no later tool has to guess at an interpretation.
+
+Inputs:
+
+```ts
+{
+  input_path: string,
+  cols?: number, rows?: number,           // auto-detected if omitted
+  margin?, margin_x?, margin_y?,          // grid block above; detection fills
+  spacing?, spacing_x?, spacing_y?,       //   whatever you leave out
+  disable_rules?: string[],               // rule ids to skip entirely
+  only_rules?: string[],                  // run only these; every other rule off
+  min_severity?: "error" | "warning" | "info",
+  options?: {                             // per-rule threshold overrides
+    [ruleId: string]: { [option: string]: number | string | boolean }
+  }
+}
+```
+
+Valid rule ids: `alpha-fringe`, `frame-bleed`, `pivot-drift`, `duplicate-frames`, `empty-cell`, `opaque-frame`, `non-power-of-two`, `palette-bloat`, `palette-near-duplicates`.
+
+Returns JSON — a [`LintReport`](/docs/reference/json-schemas#lint) with one extra field, `ok`:
+
+```json
+{ "ok": true,
+  "source", "width", "height", "frameWidth", "frameHeight",
+  "grid": {cols,rows,detected,confidence,margin,spacing},
+  "summary": { "errors", "warnings", "infos", "frameCount",
+               "rulesRun": [ruleId],
+               "rulesSkipped": [{rule, reason}] },
+  "findings": [{ "rule", "severity", "message",
+                 "frame": number|null, "cell": {row,col}|null,
+                 "at": {x,y}|null, "region": {x,y,width,height}|null,
+                 "data": {...} }] }
+```
+
+Notes:
+
+- `ok` is `summary.errors === 0`. Only `frame-bleed` is error severity by default, so `ok: false` means the grid is wrong — fix that (pass `cols` / `rows`) before acting on anything else. A `severity` you set through `options` is held to the same enum, so `ok` can never be true alongside a finding graded outside it.
+- `at` and `region` are **sheet-absolute** pixel coordinates, unlike `sprite_generate_collision` and `sprite_generate_pivot`, which are cell-relative. `data` carries the numbers behind `message`, so branch on `rule` and `data` rather than parsing prose.
+- `summary.rulesSkipped` lists rules whose preconditions the sheet did not meet. It is normally non-empty on healthy art — binary alpha skips `alpha-fringe`, a small palette skips `palette-bloat` — and is not a failure.
+- `min_severity` trims the `findings` list only; `summary` still counts the whole run, so you can see how much was held back. The CLI's `--severity` behaves identically.
+- An unknown rule id in `disable_rules`, `only_rules`, or `options` comes back as a recoverable `unknown_rule_id` error naming `validRules`, rather than being silently ignored. Inside `options`, an unknown option name, a value of the wrong type, or a severity outside `error|warning|info` comes back the same way, as `invalid_rule_option` — so an override either applied or told you why not.
+- Every rule has documented blind spots — see [what each rule will not catch](/docs/cli/reference#what-each-rule-will-not-catch). A clean report means these nine rules found nothing, not that the sheet is correct.
 
 ## `sprite_slice`
 

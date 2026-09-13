@@ -8,6 +8,104 @@ export const metadata = {
 
 Copy-paste pipelines for common workflows.
 
+## Gate a build on `lint`
+
+`lint` exits 1 when it finds an error-severity finding, so it works as a CI step with no wrapper. Warnings and infos never fail on their own:
+
+```bash
+#!/usr/bin/env bash
+# ci/lint-art.sh — fails the job if any sheet has error-severity findings.
+set -uo pipefail
+mkdir -p lint-reports
+failed=0
+
+while IFS= read -r sheet; do
+  name=$(basename "$sheet" .png)
+  # One run per sheet: the JSON is kept as a build artifact, the exit code gates,
+  # and jq turns the same file into a readable log line per finding.
+  sprite-tools lint "$sheet" -o "lint-reports/${name}.json" || failed=1
+  jq -r --arg f "$name" '.findings[] | "\($f)\t\(.severity)\t\(.rule)\t\(.message)"' \
+    "lint-reports/${name}.json"
+done < <(find art -name '*.png')
+
+exit $failed
+```
+
+Two things make this safe to gate on. The report is written before the non-zero exit, so `-o` still produces a complete file on a failing sheet and `| jq` still works. And exit 1 covers both "error findings" and "the tool broke" — tell them apart by stdout, which is empty on a tool failure and a full report on a lint failure:
+
+```bash
+if ! out=$(sprite-tools lint "$sheet"); then
+  if [ -z "$out" ]; then
+    echo "lint itself failed — see stderr" >&2   # bad path, missing file, unreadable PNG
+    exit 2
+  fi
+  echo "$out" | jq -r '.findings[] | select(.severity=="error") | .message'
+  exit 1
+fi
+```
+
+### Turning off a rule the project has decided about
+
+`--disable` takes a repeatable flag or a comma-separated list. A tileset whose cells intentionally touch, or a project shipping only to WebGL2, has already made the call:
+
+```bash
+sprite-tools lint "$sheet" --disable non-power-of-two,duplicate-frames
+```
+
+A disabled rule is not run and is not reported as skipped. If you want the rule's findings recorded but not blocking, drop its severity instead of disabling it:
+
+```bash
+sprite-tools lint "$sheet" --set frame-bleed.severity=warning
+```
+
+To gate on warnings too, promote them the other way: `--set alpha-fringe.severity=error`. Nothing else in the pipeline needs changing — only error severity moves the exit code.
+
+## Inspect an unknown sheet before you touch it
+
+Every other command has to assume a grid. `lint` tells you what the grid actually is, plus what is wrong with the art, in one pass:
+
+```bash
+sprite-tools lint unknown.png --format text
+```
+
+```
+unknown.png  240x240  grid 5x5 (detected, confidence 0.8964)  25 frame(s)
+
+info  non-power-of-two  sheet  The sheet is 240x240, not a power of two (256x256 is the next one up) — …
+
+0 error(s), 0 warning(s), 1 info(s) in 1 finding(s)
+skipped  alpha-fringe  sheet alpha is strictly binary, so no fringe is possible
+skipped  palette-bloat  26 distinct opaque colours, below the 256 minimum
+```
+
+Then act on what it said:
+
+```bash
+# 1. Reuse the grid it reported, rather than re-detecting per command.
+GRID=$(sprite-tools lint unknown.png | jq -r '.grid | "--cols \(.cols) --rows \(.rows)"')
+
+# 2. A frame-bleed error means the grid is wrong. So does a detection confidence
+#    under 0.5 — at that point frame-bleed stands down and cannot tell you.
+#    Pass the real grid and re-lint; that is cheaper than muting rules.
+sprite-tools lint unknown.png --cols 8 --rows 4 --format text
+
+# 3. alpha-fringe warnings mean the sheet was keyed badly. Re-key it — chroma
+#    treats the whole image as one frame, so slice first for per-cell keying.
+sprite-tools chroma unknown.png --choke 1 --spill 30 -o clean.png
+
+# 4. Clean, so commit to the interpretation.
+sprite-tools meta unknown.png $GRID --collision --pivot bottom-center -o unknown.json
+```
+
+The findings are addressed to a machine as much as to you: each one carries a rule id, a severity, the frame and cell, sheet-absolute pixel coordinates, and the raw numbers in `data`, so a script can branch on `.rule` without parsing prose.
+
+```bash
+sprite-tools lint unknown.png \
+  | jq -r '.findings[] | select(.rule=="empty-cell") | .frame'
+```
+
+A non-empty `summary.rulesSkipped` is normal on healthy art — see [the schema](/docs/reference/json-schemas#lint) — and the rules' blind spots are listed in the [reference](/docs/cli/reference#rules).
+
 ## One file with all metadata, merged
 
 ```bash

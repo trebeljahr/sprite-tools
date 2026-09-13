@@ -23,6 +23,7 @@ const TOOL_ROUTES = [
   "/background-removal",
   "/outline",
   "/export",
+  "/lint",
 ];
 
 const AI_ROUTES = ["/generate", "/animate"];

@@ -19,6 +19,7 @@ import {
   PenTool,
   Scissors,
   Sparkles,
+  Stethoscope,
   Terminal,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -50,6 +51,13 @@ const TOOLS = [
     label: "Lasso",
     icon: Crop,
     blurb: "Manually cut one clean sprite from a cluttered source image.",
+  },
+  {
+    href: "/lint",
+    label: "Lint",
+    icon: Stethoscope,
+    blurb:
+      "Check a sheet for fringe, frame bleed, pivot jumps, and palette noise before you ship it.",
   },
   {
     href: "/pixelate",

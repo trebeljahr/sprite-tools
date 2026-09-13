@@ -30,6 +30,7 @@ import { registerTrimCommand } from "./commands/trim";
 import { registerDedupeCommand } from "./commands/dedupe";
 import { registerChromaCommand } from "./commands/chroma";
 import { registerInfoCommand } from "./commands/info";
+import { registerLintCommand } from "./commands/lint";
 import { registerMetaCommand } from "./commands/meta";
 import { registerExportCommand } from "./commands/export";
 
@@ -47,6 +48,7 @@ program.addHelpText(
   [
     "",
     "Inspect / slice:",
+    "  lint       structured findings about a sheet (run this first)    (JSON)",
     "  info       image stats + detected grid + content bounds          (JSON)",
     "  detect     just the detected grid                                (JSON)",
     "  slice      split a sheet into per-cell PNGs on disk              (files)",
@@ -98,6 +100,7 @@ program.addHelpText(
   ].join("\n"),
 );
 
+registerLintCommand(program);
 registerInfoCommand(program);
 registerDetectCommand(program);
 registerSliceCommand(program);
