@@ -3,6 +3,12 @@
 
 import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { PNG } from "pngjs";
+import {
+  cellRect,
+  computeCellGeometry,
+  type GridPadding,
+  type GridPaddingInput,
+} from "../../src/lib/pipeline/grid";
 
 /**
  * Load a PNG from a file path, or from stdin when `path === "-"`.
@@ -39,19 +45,32 @@ export function imageToPngBuffer(img: ImageData): Buffer {
   return PNG.sync.write(png);
 }
 
-/** Slice a sheet image into cellW×cellH frames in row-major order. */
-export function sliceSheet(img: ImageData, cols: number, rows: number): ImageData[] {
+/**
+ * Slice a sheet image into cellW×cellH frames in row-major order.
+ *
+ * `padding` describes the sheet's outer margin and inter-cell gutters; without
+ * it the geometry reduces to the flush width/cols division, so every existing
+ * caller slices exactly as before. A GridFitError from a stated padding that
+ * cannot tile the sheet propagates — a wrong slice is worse than an error.
+ */
+export function sliceSheet(
+  img: ImageData,
+  cols: number,
+  rows: number,
+  padding?: GridPaddingInput | GridPadding | null,
+): ImageData[] {
   if (cols <= 0 || rows <= 0) return [];
-  const cellW = Math.floor(img.width / cols);
-  const cellH = Math.floor(img.height / rows);
+  const geom = computeCellGeometry(img.width, img.height, cols, rows, padding);
+  const { cellW, cellH } = geom;
   if (cellW <= 0 || cellH <= 0) return [];
 
   const frames: ImageData[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      const rect = cellRect(geom, c, r);
       const sub = new ImageData(cellW, cellH);
       for (let y = 0; y < cellH; y++) {
-        const srcRowOffset = ((r * cellH + y) * img.width + c * cellW) * 4;
+        const srcRowOffset = ((rect.y + y) * img.width + rect.x) * 4;
         const dstRowOffset = y * cellW * 4;
         // Row-wise copy: much faster than per-pixel.
         sub.data.set(img.data.subarray(srcRowOffset, srcRowOffset + cellW * 4), dstRowOffset);

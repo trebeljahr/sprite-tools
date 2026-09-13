@@ -8,6 +8,36 @@ export const metadata = {
 
 Full input/output schema for each of the 19 MCP tools.
 
+## Grid args on sheet tools
+
+Ten tools consume a sheet and accept the same grid block: `sprite_slice`, `sprite_remove_background`, `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags`, `sprite_extract_palette`, `sprite_palette_swap`, `sprite_pixelate`, `sprite_generate_normal_map`, and `sprite_generate_meta`.
+
+```ts
+{
+  cols?: number, rows?: number,   // auto-detected if omitted
+  margin?: number,                // border in px around the whole sheet
+  margin_x?: number,              // left+right border; beats margin
+  margin_y?: number,              // top+bottom border; beats margin
+  spacing?: number,               // gutter in px between cells, both axes
+  spacing_x?: number,             // horizontal gutter; beats spacing
+  spacing_y?: number              // vertical gutter; beats spacing
+}
+```
+
+All six are whole pixels, zero or more. Sheets from Kenney, Tiled, and TexturePacker carry a border and a 1–2px gutter. Slicing one flush shifts every cell boundary, so each frame picks up a strip of its neighbour — it looks almost right, which is why it goes unnoticed. Call `sprite_detect_grid` first if you do not know the numbers; it reports them in the same units.
+
+The args are per-axis — `margin_x` sets left and right together. `sprite_detect_grid` can report an asymmetric border, which no arg expresses; on such a sheet omit the margin args and let detection fill all four sides in.
+
+Unless you pass both `cols` and `rows`, detection runs and fills in whatever you left out, padding included; pass both and detection is skipped, so padding you did not state is zero rather than inferred. Detected padding is a hint — if it does not tile the sheet it is dropped rather than raised — but padding *you* passed is an assertion, so numbers that do not divide come back as an error naming the actual pixel counts instead of a silently wrong slice. With no padding args the cell size is `floor(width / cols)`, exactly as before.
+
+Every one of these tools reports the geometry it actually used:
+
+```json
+"grid": { "cols", "rows", "detected",
+          "margin": {left,top,right,bottom},
+          "spacing": {x,y} }
+```
+
 ## `sprite_info`
 
 Inputs: `{ input_path: string }`
@@ -17,7 +47,10 @@ Returns JSON:
 ```json
 { "source", "width", "height", "opaquePixels", "opaqueFraction",
   "contentBounds": {x,y,width,height}|null,
-  "grid": {cols,rows,confidence} }
+  "grid": {cols, rows,
+           "margin": {left,top,right,bottom},
+           "spacing": {x,y},
+           "confidence": 0..1} }
 ```
 
 ## `sprite_detect_grid`
@@ -28,8 +61,13 @@ Returns JSON:
 
 ```json
 { "source", "width", "height",
-  "grid": {cols,rows}, "confidence": 0..1 }
+  "grid": {cols, rows,
+           "margin": {left,top,right,bottom},
+           "spacing": {x,y}},
+  "confidence": 0..1 }
 ```
+
+`margin` and `spacing` are always present and are all zeros for a flush sheet or one whose padding could not be read confidently. Pass them straight back into any sheet tool. Inference only fires when every content block on an axis is the same size and every gap between them is identical, so it reports zeros rather than a guess.
 
 ## `sprite_slice`
 
@@ -41,6 +79,8 @@ Inputs:
   out_dir: string,
   cols?: number,
   rows?: number,
+  margin?, margin_x?, margin_y?,     // see Grid args above
+  spacing?, spacing_x?, spacing_y?,
   name_pattern?: string   // printf-style, default "frame_%02d.png"
 }
 ```
@@ -72,6 +112,8 @@ Inputs:
   input_path: string,
   output_path: string,
   cols?: number, rows?: number,          // auto-detected if omitted
+  margin?, margin_x?, margin_y?,         // see Grid args above
+  spacing?, spacing_x?, spacing_y?,
   mode?: "transparent" | "solid",        // default "transparent"
   similarity?: number,                   // 0..150, default 30
   softness?: number,                     // 0..50,  default 10
@@ -89,7 +131,7 @@ Writes PNG. Returns JSON:
 ```json
 { "source", "output_path",
   "sourceWidth", "sourceHeight", "width", "height",
-  "grid": {cols,rows,detected},
+  "grid": {cols,rows,detected,margin,spacing},
   "frameCount", "frameWidth", "frameHeight",
   "backgroundColor": "#rrggbb"|null,
   "backgroundColorSource": "explicit"|"detected"|null,
@@ -117,6 +159,7 @@ Inputs:
   input_path: string,
   cols?: number,
   rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   alpha_threshold?: number,   // 0..254, default 10
   simplify_tolerance?: number, // default 10
   convex_hull?: boolean        // default false
@@ -133,6 +176,7 @@ Inputs:
 {
   input_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   preset?: "center" | "top-center" | "top-left" | "top-right"
          | "bottom-center" | "bottom-left" | "bottom-right",  // default "bottom-center"
   x?: number, y?: number   // explicit override
@@ -182,6 +226,7 @@ Inputs:
 {
   input_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   tags: Array<{
     name: string,
     from: number,
@@ -202,6 +247,7 @@ One-shot: combines collision + pivot + tags + nine-slice. Each sub-section is op
 {
   input_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   collision?: { alpha_threshold?, simplify_tolerance?, convex_hull? },
   pivot?: { preset?, x?, y? },
   tags?: Array<{name, from, to, direction?, fps?}>,
@@ -216,7 +262,7 @@ Passing `nine_slice` (even as an empty object) adds the `nineSlice` section, wit
 
 ## `sprite_extract_palette`
 
-Inputs: `{ input_path, cols?, rows?, colors?: number /* 1..256, default 8 */ }`
+Inputs: `{ input_path, cols?, rows?, colors?: number /* 1..256, default 8 */ }` plus the [grid args](#grid-args-on-sheet-tools).
 
 Returns `{ source, frameWidth, frameHeight, grid, options, palette: string[] /* hex */ }`.
 
@@ -229,6 +275,7 @@ Inputs:
   input_path: string,
   output_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   colors?: number,   // palette size to extract
   swaps: Array<{ from: "#rrggbb", to: "#rrggbb" }>   // at least 1
 }
@@ -340,6 +387,7 @@ Inputs:
   input_path: string,
   output_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   pixel_size?: number,   // 1..64, default 4
   colors?: number,       // 0..256, default 16
   palette?: "none" | "gameboy" | "gameboy-pocket" | "mono" | "pico8" | "cga" | "nes",
@@ -359,6 +407,7 @@ Inputs:
   input_path: string,
   output_path: string,
   cols?: number, rows?: number,
+  margin?, margin_x?, margin_y?, spacing?, spacing_x?, spacing_y?,   // see Grid args above
   source?: "alpha" | "luminance" | "mixed",   // default "alpha"
   strength?: number,
   mix?: number,          // 0..1

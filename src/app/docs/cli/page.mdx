@@ -41,7 +41,7 @@ sprite-tools gif sheet.png --fps 12 -o anim.gif
 
 - **Every command has `--help`** with examples and output shape inline.
 - **Stdin / stdout pipes work everywhere.** Input path `-` reads PNG from stdin; output path `-` writes to stdout.
-- **Grid auto-detection.** If you don't pass `--cols` / `--rows`, the algorithm infers them via autocorrelation. Override anytime.
+- **Grid auto-detection.** If you don't pass `--cols` / `--rows`, the algorithm infers them via autocorrelation — along with the sheet's outer margin and the gutter between cells. Override anytime with `--cols` / `--rows` and the [padding flags](/docs/cli/reference#grid-padding-margins-and-gutters).
 - **JSON composability.** Every metadata command shares `{source, frameWidth, frameHeight, grid}` at the top level and adds its own namespaced field (`collision`, `pivots`, `tags`, `nineSlice`, `palette`). Merge three outputs with `jq -s 'add'`.
 - **No native dependencies.** Install on any machine with Node 20+; no `node-gyp` required.
 
@@ -50,7 +50,7 @@ sprite-tools gif sheet.png --fps 12 -o anim.gif
 | Command | What it emits |
 |---|---|
 | `info`       | JSON: dimensions, opaque pixel count, content bounds, detected grid |
-| `detect`     | JSON: just grid + confidence |
+| `detect`     | JSON: grid (cols, rows, margin, spacing) + confidence |
 | `slice`      | files: one PNG per cell (plus optional JSON index) |
 | `trim`       | PNG: opaque-bounded crop (plus optional trim-metadata JSON) |
 | `collision`  | JSON: per-frame polygons |

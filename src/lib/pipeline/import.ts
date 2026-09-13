@@ -1,3 +1,4 @@
+import { type CellGeometry, cellRect, computeCellGeometry } from "./grid";
 import {
   computeStats,
   type Frames,
@@ -142,15 +143,27 @@ export async function importFromSpriteSheet(
   else if (typeof source === "string") bitmap = await urlToBitmap(source);
   else bitmap = await createImageBitmap(source);
 
-  const cellW = Math.floor(bitmap.width / cfg.cols);
-  const cellH = Math.floor(bitmap.height / cfg.rows);
+  // A GridFitError is user-facing (the pages toast its message verbatim), so it
+  // escapes intact — just not while we still hold the decoded sheet.
+  let geom: CellGeometry;
+  try {
+    geom = computeCellGeometry(bitmap.width, bitmap.height, cfg.cols, cfg.rows, {
+      margin: cfg.margin,
+      spacing: cfg.spacing,
+    });
+  } catch (e) {
+    bitmap.close?.();
+    throw e;
+  }
+  const { cellW, cellH } = geom;
   if (cellW <= 0 || cellH <= 0) {
     bitmap.close?.();
     throw new Error("Invalid grid: cell size is zero");
   }
 
   // Sample the sheet's background from its four corners so we can skip
-  // cells that are entirely that background / transparent.
+  // cells that are entirely that background / transparent. Still correct with
+  // a margin: the margin *is* background, so the corners read the same colour.
   const sheetCanvas = document.createElement("canvas");
   sheetCanvas.width = bitmap.width;
   sheetCanvas.height = bitmap.height;
@@ -166,7 +179,8 @@ export async function importFromSpriteSheet(
   let idx = 0;
   for (let r = 0; r < cfg.rows; r++) {
     for (let c = 0; c < cfg.cols; c++) {
-      const cell = await createImageBitmap(bitmap, c * cellW, r * cellH, cellW, cellH);
+      const rect = cellRect(geom, c, r);
+      const cell = await createImageBitmap(bitmap, rect.x, rect.y, rect.w, rect.h);
       if (isCellEmpty(cell, bg)) {
         cell.close?.();
         continue;
@@ -298,7 +312,13 @@ export async function detectSheetGrid(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
     bitmap.close?.();
-    return { cols: 1, rows: 1, confidence: 0 };
+    return {
+      cols: 1,
+      rows: 1,
+      confidence: 0,
+      margin: { left: 0, top: 0, right: 0, bottom: 0 },
+      spacing: { x: 0, y: 0 },
+    };
   }
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close?.();

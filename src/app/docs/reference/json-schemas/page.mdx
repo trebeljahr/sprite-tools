@@ -21,6 +21,8 @@ interface Header {
 
 Every `collision`, `pivot`, `tags`, `nine-slice`, `palette`, `meta` output starts with this.
 
+The header itself is unchanged by [grid padding](/docs/cli/reference#grid-padding-margins-and-gutters): the metadata commands take the margin/spacing flags but still report only `cols`, `rows`, and `detected`. `sprite-tools slice --json` and every MCP sheet tool additionally report the geometry they actually sliced with — `margin` (`{left,top,right,bottom}`) and `spacing` (`{x,y}`) inside `grid`.
+
 ## Collision
 
 ```ts

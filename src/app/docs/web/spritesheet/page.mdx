@@ -25,6 +25,18 @@ Sheet Builder turns video, GIFs, existing sprite sheets, or loose frame images i
 
 When you arrive from [AI Animation](/docs/web/animate), the generated video is passed into Sheet Builder automatically.
 
+## Margin and spacing
+
+Sheets from Kenney, Tiled, TexturePacker, and most itch.io packs are not flush: there is a border around the sheet and a 1–2px gutter between cells. Splitting one as `width / cols` puts every cell boundary slightly off, so each frame picks up a strip of its neighbour. It looks almost right, which is why it usually survives until the sprite is animating on screen.
+
+Under **Columns** and **Rows** on a **Sheet** source there is a **Margin & spacing** disclosure with six fields: margin left, top, right, and bottom, plus spacing X and Y — all in pixels. Auto-detection fills them in when it can read the sheet's padding, and opens the disclosure so you can check the numbers before splitting; the collapsed label summarises them (`· margin 1, spacing 2`).
+
+Margin is per side here, unlike the CLI and MCP flags, which are per axis — so a sheet whose right border differs from its left can be split correctly in the browser and nowhere else.
+
+The grid overlay on the preview honours the values. With padding set it draws both edges of every cell, so the lines fall on the gutters rather than through them — that is the fastest way to confirm the numbers are right before you split.
+
+Padding has to tile the sheet exactly. When it does not, the fit error appears under the fields with the actual pixel counts and **Split Sheet** stays disabled until you fix it. Leaving everything at zero keeps the old behaviour: the cell size is `floor(width / cols)` and a non-divisible sheet just loses the remainder off the right and bottom edges.
+
 ## CLI equivalents
 
 Use the CLI for scriptable pieces of this workflow:
@@ -32,6 +44,7 @@ Use the CLI for scriptable pieces of this workflow:
 ```bash
 sprite-tools detect sheet.png
 sprite-tools slice sheet.png --out-dir frames --json frames.json
+sprite-tools slice tileset.png --cols 8 --rows 6 --margin 1 --spacing 2 --out-dir tiles
 sprite-tools trim sprite.png --padding 1 -o tight.png
 sprite-tools atlas frames/*.png -o atlas.png --json atlas.json
 ```

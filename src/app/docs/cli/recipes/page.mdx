@@ -69,6 +69,39 @@ For an Android `.9.png`, read the marker border instead of guessing at all:
 sprite-tools nine-slice ui/panels/button.9.png --from-9patch -o button.json
 ```
 
+## Slice a tileset that has a border and gutters
+
+Kenney, Tiled, and most itch.io packs ship sheets with an outer border and a 1–2px gutter between cells. Slicing those flush bleeds a strip of the neighbouring tile into every frame — it looks almost right, so it survives until the tile is on screen. `detect` reports the padding it can infer, and the flags take it back:
+
+```bash
+sprite-tools detect tileset.png
+# {
+#   "grid": { "cols": 8, "rows": 6,
+#             "margin": {"left":1,"right":1,"top":1,"bottom":1},
+#             "spacing": {"x":2,"y":2} },
+#   "confidence": 0.9
+# }
+
+sprite-tools slice tileset.png \
+  --cols 8 --rows 6 --margin 1 --spacing 2 \
+  --out-dir tiles
+```
+
+Or hand the whole thing over with `jq`:
+
+```bash
+PAD=$(sprite-tools detect tileset.png | jq -r '.grid |
+  "--cols \(.cols) --rows \(.rows) --margin-x \(.margin.left) --margin-y \(.margin.top)"
+  + " --spacing-x \(.spacing.x) --spacing-y \(.spacing.y)"')
+sprite-tools slice tileset.png $PAD --out-dir tiles
+```
+
+`--margin-x` sets the left *and* right border, so that one-liner flattens a sheet whose trailing border differs from its leading one — check `.margin.right` and `.margin.bottom` before trusting it. The flags are per-axis by design and cannot express an asymmetric border; when `detect` reports one, leave the margin flags off and let detection supply all four sides itself.
+
+Dropping the flags entirely works too — `slice` runs the same detection and uses the inferred padding when it tiles the sheet. Pass them when you know the numbers (the pack's README usually says) or when detection reports zeros on a sheet you can see has gutters.
+
+Once you state a margin or spacing, the numbers have to divide exactly, and a mismatch is an error naming the actual pixel counts instead of a quietly wrong slice. With no padding flags nothing changes: the cell size is still `floor(width / cols)`. See [Grid padding](/docs/cli/reference#grid-padding-margins-and-gutters).
+
 ## Convert a regular sprite to Game Boy style
 
 ```bash

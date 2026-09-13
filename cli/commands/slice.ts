@@ -1,7 +1,16 @@
 import type { Command } from "commander";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { writeJsonOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
+import {
+  writeJsonOutput,
+  fail,
+  parseIntArg,
+  loadSheet,
+  addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+} from "../lib/common";
 import { savePng } from "../lib/image-io";
 
 export function registerSliceCommand(program: Command) {
@@ -18,15 +27,20 @@ export function registerSliceCommand(program: Command) {
     )
     .option("--json <file>", "also write an index JSON to this path");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools slice sheet.png",
       "sprite-tools slice sheet.png --cols 8 --rows 4 --out-dir ./frames",
       'sprite-tools slice sheet.png --name "run_%03d.png" --json index.json',
+      "# sheet with a 1px border and 2px gutters (Kenney / TexturePacker style):",
+      "sprite-tools slice tileset.png --cols 8 --rows 4 --margin 1 --spacing 2",
     ],
     output: [
       "Writes one PNG per cell into --out-dir. Optional --json writes:",
       "  { source, frameWidth, frameHeight, grid, frames: [{ index, cell, path }, ...] }",
+      "  grid: { cols, rows, detected, margin:{left,top,right,bottom}, spacing:{x,y} }",
     ],
   });
 
@@ -39,10 +53,10 @@ export function registerSliceCommand(program: Command) {
         outDir: string;
         name: string;
         json?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         mkdirSync(opts.outDir, { recursive: true });
         const paths: string[] = [];
         for (let i = 0; i < frames.length; i++) {
@@ -58,7 +72,13 @@ export function registerSliceCommand(program: Command) {
               source: input,
               frameWidth: frames[0]?.width ?? 0,
               frameHeight: frames[0]?.height ?? 0,
-              grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+              grid: {
+                cols: grid.cols,
+                rows: grid.rows,
+                detected: grid.detected,
+                margin: grid.margin,
+                spacing: grid.spacing,
+              },
               frames: paths.map((p, i) => ({
                 index: i,
                 cell: { row: Math.floor(i / grid.cols), col: i % grid.cols },

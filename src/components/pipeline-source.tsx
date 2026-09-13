@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRef, useState } from "react";
-import { Upload, Loader2, Scissors, Grid3x3, Wand2 } from "lucide-react";
+import { Upload, Loader2, Scissors, Grid3x3, Wand2, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import {
+  type CellGeometry,
+  cellRect,
+  computeCellGeometry,
+  type GridMargin,
+  type GridSpacing,
+  isZeroPadding,
+  ZERO_PADDING,
+} from "@/lib/pipeline/grid";
 import { ensurePreviewUrl, type Frame } from "@/lib/pipeline/types";
 
 // -----------------------------------------------------------------
@@ -102,9 +111,19 @@ export interface SheetPreviewWithGridProps {
   src: string;
   cols: number;
   rows: number;
+  /** Real cut geometry. Given a padded one, the overlay draws both edges of every
+   *  cell so the lines land on the gutters; without it, even lines as before. */
+  geom?: CellGeometry | null;
+  sheetSize?: { width: number; height: number } | null;
 }
 
-export function SheetPreviewWithGrid({ src, cols, rows }: SheetPreviewWithGridProps) {
+export function SheetPreviewWithGrid({
+  src,
+  cols,
+  rows,
+  geom,
+  sheetSize,
+}: SheetPreviewWithGridProps) {
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ left: number; top: number; w: number; h: number } | null>(null);
@@ -135,6 +154,19 @@ export function SheetPreviewWithGrid({ src, cols, rows }: SheetPreviewWithGridPr
     };
   }, []);
 
+  // Padded sheets get explicit per-cell edges; flush ones keep the single-line
+  // overlay they have always had.
+  const cut = geom && sheetSize && !isZeroPadding(geom.padding) ? { geom, size: sheetSize } : null;
+  const edges = (count: number, axis: "x" | "y") => {
+    if (!cut) return [];
+    const size = axis === "x" ? cut.size.width : cut.size.height;
+    const cell = axis === "x" ? cut.geom.cellW : cut.geom.cellH;
+    return Array.from({ length: count }, (_, i) => {
+      const start = axis === "x" ? cellRect(cut.geom, i, 0).x : cellRect(cut.geom, 0, i).y;
+      return [(start / size) * 100, ((start + cell) / size) * 100];
+    }).flat();
+  };
+
   return (
     <div
       ref={containerRef}
@@ -147,7 +179,30 @@ export function SheetPreviewWithGrid({ src, cols, rows }: SheetPreviewWithGridPr
         alt="Sheet preview"
         className="max-w-full max-h-full object-contain"
       />
-      {box && (cols > 1 || rows > 1) && (
+      {box && cut && (
+        <div
+          className="absolute pointer-events-none"
+          style={{ left: box.left, top: box.top, width: box.w, height: box.h }}
+        >
+          {edges(cols, "x").map((pct, i) => (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: positional grid line, never reordered
+              key={`cx${i}`}
+              className="absolute top-0 bottom-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
+              style={{ left: `${pct}%`, width: 1 }}
+            />
+          ))}
+          {edges(rows, "y").map((pct, i) => (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: positional grid line, never reordered
+              key={`cy${i}`}
+              className="absolute left-0 right-0 bg-primary/80 shadow-[0_0_3px_rgba(0,0,0,0.6)]"
+              style={{ top: `${pct}%`, height: 1 }}
+            />
+          ))}
+        </div>
+      )}
+      {box && !cut && (cols > 1 || rows > 1) && (
         <div
           className="absolute pointer-events-none"
           style={{ left: box.left, top: box.top, width: box.w, height: box.h }}
@@ -255,13 +310,62 @@ export function VideoSource({
   );
 }
 
+/** "margin 1, spacing 2" — empty when flush, so a flush hint reads exactly as before. */
+export function describeGridPadding(margin?: GridMargin, spacing?: GridSpacing): string {
+  const parts: string[] = [];
+  if (margin && (margin.left || margin.top || margin.right || margin.bottom)) {
+    const { left, top, right, bottom } = margin;
+    const uniform = left === top && top === right && right === bottom;
+    parts.push(uniform ? `margin ${left}` : `margin L${left} T${top} R${right} B${bottom}`);
+  }
+  if (spacing && (spacing.x || spacing.y)) {
+    const { x, y } = spacing;
+    parts.push(x === y ? `spacing ${x}` : `spacing ${x}×${y}`);
+  }
+  return parts.join(", ");
+}
+
+function NumField({
+  label,
+  value,
+  onChange,
+  min = 0,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type="number"
+        min={min}
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n) && n >= min) onChange(n);
+        }}
+        className="h-8 text-sm"
+      />
+    </div>
+  );
+}
+
 export interface SheetSourceProps {
   sheetUrl: string | null;
   cols: number;
   rows: number;
   setCols: (n: number) => void;
   setRows: (n: number) => void;
-  detected: { cols: number; rows: number } | null;
+  /** Cut padding. Pages that don't hold this state omit the setters and the
+   *  panel stays flush-only — no disclosure, no extra fields. */
+  margin?: GridMargin;
+  spacing?: GridSpacing;
+  setMargin?: (m: GridMargin) => void;
+  setSpacing?: (s: GridSpacing) => void;
+  detected: { cols: number; rows: number; margin?: GridMargin; spacing?: GridSpacing } | null;
   uploadZoneProps: UploadZoneDragProps;
   isDragging: boolean;
   onFile: (f: File) => void;
@@ -277,6 +381,10 @@ export function SheetSource({
   rows,
   setCols,
   setRows,
+  margin = ZERO_PADDING.margin,
+  spacing = ZERO_PADDING.spacing,
+  setMargin,
+  setSpacing,
   detected,
   uploadZoneProps,
   isDragging,
@@ -286,6 +394,49 @@ export function SheetSource({
   progressLabel,
   progressPct,
 }: SheetSourceProps) {
+  // The fit check and the overlay both need the sheet's real pixel size, and a
+  // blob URL is all we get handed.
+  const [sheetSize, setSheetSize] = useState<{ width: number; height: number } | null>(null);
+  React.useEffect(() => {
+    setSheetSize(null);
+    if (!sheetUrl) return;
+    let active = true;
+    const img = new Image();
+    img.onload = () => {
+      if (active) setSheetSize({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.src = sheetUrl;
+    return () => {
+      active = false;
+    };
+  }, [sheetUrl]);
+
+  const fit = React.useMemo(() => {
+    if (!sheetSize) return { geom: null, error: null };
+    try {
+      const geom = computeCellGeometry(sheetSize.width, sheetSize.height, cols, rows, {
+        margin,
+        spacing,
+      });
+      return { geom, error: null };
+    } catch (e) {
+      return { geom: null, error: e instanceof Error ? e.message : String(e) };
+    }
+  }, [sheetSize, cols, rows, margin, spacing]);
+
+  const editable = !!setMargin && !!setSpacing;
+  const summary = describeGridPadding(margin, spacing);
+  const detectedPadding = describeGridPadding(detected?.margin, detected?.spacing);
+  const [showPadding, setShowPadding] = useState(false);
+  // A fresh detection re-decides the disclosure: open when it found padding (the
+  // user needs to see and correct the numbers about to be used), closed for a
+  // flush sheet so the common case keeps the two-field panel it always had.
+  const [lastDetected, setLastDetected] = useState(detected);
+  if (detected !== lastDetected) {
+    setLastDetected(detected);
+    setShowPadding(!!detectedPadding);
+  }
+
   return (
     <div className="space-y-4">
       <UploadZone
@@ -296,7 +447,13 @@ export function SheetSource({
         onChange={(files) => onFile(files[0])}
       >
         {sheetUrl ? (
-          <SheetPreviewWithGrid src={sheetUrl} cols={cols} rows={rows} />
+          <SheetPreviewWithGrid
+            src={sheetUrl}
+            cols={cols}
+            rows={rows}
+            geom={fit.geom}
+            sheetSize={sheetSize}
+          />
         ) : (
           <div className="text-center">
             <Grid3x3 className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
@@ -305,40 +462,68 @@ export function SheetSource({
         )}
       </UploadZone>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Columns</Label>
-          <Input
-            type="number"
-            min={1}
-            value={cols}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (n > 0) setCols(n);
-            }}
-            className="h-8 text-sm"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Rows</Label>
-          <Input
-            type="number"
-            min={1}
-            value={rows}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (n > 0) setRows(n);
-            }}
-            className="h-8 text-sm"
-          />
-        </div>
+        <NumField label="Columns" value={cols} onChange={setCols} min={1} />
+        <NumField label="Rows" value={rows} onChange={setRows} min={1} />
       </div>
+      {editable && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowPadding((v) => !v)}
+            aria-expanded={showPadding}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight
+              className={cn("w-3 h-3 transition-transform", showPadding && "rotate-90")}
+            />
+            Margin &amp; spacing
+            {!showPadding && summary && <span className="font-mono">· {summary}</span>}
+          </button>
+          {showPadding && (
+            <div className="grid grid-cols-2 gap-3">
+              <NumField
+                label="Margin left"
+                value={margin.left}
+                onChange={(n) => setMargin?.({ ...margin, left: n })}
+              />
+              <NumField
+                label="Margin top"
+                value={margin.top}
+                onChange={(n) => setMargin?.({ ...margin, top: n })}
+              />
+              <NumField
+                label="Margin right"
+                value={margin.right}
+                onChange={(n) => setMargin?.({ ...margin, right: n })}
+              />
+              <NumField
+                label="Margin bottom"
+                value={margin.bottom}
+                onChange={(n) => setMargin?.({ ...margin, bottom: n })}
+              />
+              <NumField
+                label="Spacing X"
+                value={spacing.x}
+                onChange={(n) => setSpacing?.({ ...spacing, x: n })}
+              />
+              <NumField
+                label="Spacing Y"
+                value={spacing.y}
+                onChange={(n) => setSpacing?.({ ...spacing, y: n })}
+              />
+            </div>
+          )}
+        </div>
+      )}
       {detected && (
         <p className="text-[10px] text-muted-foreground flex items-center gap-1">
           <Wand2 className="w-3 h-3" />
           Auto-detected {detected.cols}×{detected.rows}
+          {detectedPadding && `, ${detectedPadding}`}
         </p>
       )}
-      <Button onClick={onRun} disabled={running || !sheetUrl} className="w-full">
+      {fit.error && <p className="text-[11px] text-destructive leading-relaxed">{fit.error}</p>}
+      <Button onClick={onRun} disabled={running || !sheetUrl || !!fit.error} className="w-full">
         {running ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : (

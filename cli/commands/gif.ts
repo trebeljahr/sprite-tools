@@ -1,5 +1,14 @@
 import type { Command } from "commander";
-import { writeBinaryOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
+import {
+  writeBinaryOutput,
+  fail,
+  parseIntArg,
+  loadSheet,
+  addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+} from "../lib/common";
 import { upscaleNearest } from "../lib/image-io";
 import { GIFEncoder, applyPalette, quantize } from "gifenc";
 
@@ -20,6 +29,8 @@ export function registerGifCommand(program: Command) {
     .option("--reverse", "play frames in reverse order", false)
     .option("--pingpong", "forward then reverse", false)
     .option("-o, --output <file>", "output GIF file (default: stdout)");
+
+  addGridOptions(cmd);
 
   addHelpExtras(cmd, {
     examples: [
@@ -45,10 +56,10 @@ export function registerGifCommand(program: Command) {
         reverse: boolean;
         pingpong: boolean;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
-        const { frames } = loadSheet(input, opts.cols, opts.rows);
+        const { frames } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         if (frames.length === 0) fail("no frames found");
 
         // Build playback sequence.

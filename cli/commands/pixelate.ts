@@ -1,5 +1,14 @@
 import type { Command } from "commander";
-import { writeBinaryOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
+import {
+  writeBinaryOutput,
+  fail,
+  parseIntArg,
+  loadSheet,
+  addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+} from "../lib/common";
 import { imageToPngBuffer, stitchSheet } from "../lib/image-io";
 import { pixelate, hexToRgb } from "../../src/lib/pixel-art/pixelate";
 import { paletteById, PALETTES } from "../../src/lib/pixel-art/palettes";
@@ -34,6 +43,8 @@ export function registerPixelateCommand(program: Command) {
     .option("--no-upscale", "keep output at the downscaled size (default: upscale to source size)")
     .option("-o, --output <file>", "output PNG file (default: stdout, use - for explicit stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools pixelate hero.png -o hero-pixel.png",
@@ -61,13 +72,14 @@ export function registerPixelateCommand(program: Command) {
         alphaThreshold: number;
         upscale: boolean;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
         const { frames, grid } = loadSheet(
           input,
           opts.autoGrid || opts.cols !== undefined || opts.rows !== undefined ? opts.cols : 1,
           opts.autoGrid || opts.cols !== undefined || opts.rows !== undefined ? opts.rows : 1,
+          gridPaddingFromOpts(opts),
         );
         const preset = paletteById(opts.palette);
         const palette = preset.colors.length > 0 ? preset.colors.map(hexToRgb) : undefined;

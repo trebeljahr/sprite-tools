@@ -1,5 +1,14 @@
 import type { Command } from "commander";
-import { writeJsonOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
+import {
+  writeJsonOutput,
+  fail,
+  parseIntArg,
+  loadSheet,
+  addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+} from "../lib/common";
 
 type Direction = "forward" | "reverse" | "pingpong";
 
@@ -21,6 +30,8 @@ export function registerTagsCommand(program: Command) {
     .option("--fps <n>", "default FPS for tags", (v) => parseIntArg("fps", v), 10)
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools tags hero.png --tag idle=0-5 --tag run=6-11",
@@ -37,10 +48,16 @@ export function registerTagsCommand(program: Command) {
   cmd.action(
     (
       input: string,
-      opts: { cols?: number; rows?: number; tag: string[]; fps: number; output?: string },
+      opts: {
+        cols?: number;
+        rows?: number;
+        tag: string[];
+        fps: number;
+        output?: string;
+      } & GridPaddingOpts,
     ) => {
       try {
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         const frameCount = frames.length;
         const tags: ParsedTag[] = opts.tag.map((spec) => parseTag(spec, frameCount, opts.fps));
 

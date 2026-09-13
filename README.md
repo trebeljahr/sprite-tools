@@ -46,6 +46,9 @@ sprite-tools meta hero.png \
   --tag attack=8-11 \
   -o hero.json
 
+# Slice a tileset that has a 1px border and 2px gutters between cells
+sprite-tools slice tileset.png --cols 8 --rows 6 --margin 1 --spacing 2 --out-dir tiles
+
 # Chroma-key a flat background out and crop to the content
 sprite-tools chroma hero.png --color '#00ff00' --trim -o hero-cut.png
 

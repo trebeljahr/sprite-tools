@@ -7,8 +7,11 @@
 
 import type { Command } from "commander";
 import {
+  addGridOptions,
   addHelpExtras,
   fail,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
   loadSheet,
   parseFloatArg,
   parseIntArg,
@@ -25,7 +28,7 @@ import {
   type OverflowMode,
 } from "../../src/lib/outline/outline-fx";
 
-interface OutlineCommandOptions {
+interface OutlineCommandOptions extends GridPaddingOpts {
   cols?: number;
   rows?: number;
   style: string;
@@ -87,6 +90,8 @@ export function registerOutlineCommand(program: Command) {
     .option("--json <file>", "also write metadata JSON here")
     .option("-o, --output <file>", "output PNG file (default: stdout, use - for explicit stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools outline hero.png -o hero-outlined.png",
@@ -101,7 +106,7 @@ export function registerOutlineCommand(program: Command) {
       "PNG. --overflow expand (default) grows every frame by the required",
       "margin so nothing is cropped; --overflow clip keeps the source cell",
       "size and lets the effect run off the edge.",
-      "--json: { source, sourceWidth, sourceHeight, grid:{cols,rows},",
+      "--json: { source, sourceWidth, sourceHeight, grid:{cols,rows,margin,spacing},",
       "          frameWidth, frameHeight, outputWidth, outputHeight,",
       "          margin:{left,top,right,bottom}, options:{...} }",
     ],
@@ -111,7 +116,12 @@ export function registerOutlineCommand(program: Command) {
     try {
       const cfg = buildConfig(opts);
 
-      const { image, grid, frames } = loadSheet(input, opts.cols, opts.rows);
+      const { image, grid, frames } = loadSheet(
+        input,
+        opts.cols,
+        opts.rows,
+        gridPaddingFromOpts(opts),
+      );
       if (frames.length === 0) fail("no frames — check --cols / --rows");
 
       // One margin for every frame keeps the stitched sheet's cells uniform.
@@ -136,7 +146,7 @@ export function registerOutlineCommand(program: Command) {
             source: input,
             sourceWidth: image.width,
             sourceHeight: image.height,
-            grid: { cols: grid.cols, rows: grid.rows },
+            grid: { cols: grid.cols, rows: grid.rows, margin: grid.margin, spacing: grid.spacing },
             frameWidth: frames[0].width,
             frameHeight: frames[0].height,
             outputWidth: output.width,

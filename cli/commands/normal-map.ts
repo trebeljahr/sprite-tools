@@ -6,6 +6,9 @@ import {
   parseIntArg,
   loadSheet,
   addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
 } from "../lib/common";
 import { imageToPngBuffer, stitchSheet } from "../lib/image-io";
 import { generateNormalMap, type NormalSource } from "../../src/lib/normal-map/normal-map";
@@ -33,6 +36,8 @@ export function registerNormalMapCommand(program: Command) {
     .option("--blur <n>", "pre-blur radius in px", (v) => parseIntArg("blur", v), 0)
     .option("-o, --output <file>", "output PNG file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools normal-map hero.png -o hero-normal.png",
@@ -59,13 +64,13 @@ export function registerNormalMapCommand(program: Command) {
         flipY: boolean;
         blur: number;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
         if (!["alpha", "luminance", "mixed"].includes(opts.source)) {
           fail(`--source must be one of alpha | luminance | mixed`);
         }
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         const processed = frames.map((f) =>
           generateNormalMap(f, {
             source: opts.source,

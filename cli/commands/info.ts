@@ -22,7 +22,9 @@ export function registerInfoCommand(program: Command) {
       "{ source, width, height,",
       "  opaquePixels, opaqueFraction,",
       "  contentBounds: {x,y,width,height} | null,",
-      "  grid: {cols, rows, confidence} }",
+      "  grid: {cols, rows, confidence,",
+      "         margin: {left,top,right,bottom}, spacing: {x,y}} }",
+      "# margin/spacing are the inferred border + gutter; all zero on a flush sheet",
     ],
   });
 
@@ -50,6 +52,8 @@ export function registerInfoCommand(program: Command) {
             cols: det.cols,
             rows: det.rows,
             confidence: Number(det.confidence.toFixed(3)),
+            margin: det.margin,
+            spacing: det.spacing,
           },
         },
         opts.output,

@@ -10,6 +10,9 @@ import {
   loadSheet,
   baseName,
   addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
 } from "../lib/common";
 import { imageToPngBuffer, savePng, stitchSheet } from "../lib/image-io";
 import {
@@ -73,6 +76,8 @@ export function registerPaletteCommand(program: Command) {
     .option("--image <file>", "write recolored sheet PNG here (in addition to JSON)")
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools palette hero.png --colors 12",
@@ -125,7 +130,7 @@ export function registerPaletteCommand(program: Command) {
         manifest?: string;
         image?: string;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
         if (opts.variants && opts.hueVariants !== undefined) {
@@ -149,7 +154,7 @@ export function registerPaletteCommand(program: Command) {
             ? variantSet.colors
             : opts.colors;
 
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
 
         // Build a merged ImageData over ALL frames to extract a shared palette:
         // one palette for the whole animation, so a variant recolors every

@@ -3,6 +3,8 @@
 // Authoritative pixels live in ImageBitmap (no re-decode between transforms).
 // Blob URLs are lazily produced via ensurePreviewUrl for React <img> rendering.
 
+import type { GridMargin, GridSpacing } from "./grid";
+
 export type FrameId = string;
 
 export interface FrameMetadata {
@@ -70,6 +72,10 @@ export interface AutoCropConfig {
 export interface SheetSliceConfig {
   cols: number;
   rows: number;
+  // Optional and omitted when zero, so a flush sheet serializes — and caches,
+  // via JSON.stringify(step.config) — exactly as it did before padding existed.
+  margin?: GridMargin;
+  spacing?: GridSpacing;
 }
 
 export interface VideoImportConfig {

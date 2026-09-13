@@ -5,10 +5,15 @@ import {
   parseFloatArg,
   parseIntArg,
   loadSheet,
-  resolveGrid,
+  sheetFromImage,
+  addGridOptions,
   addHelpExtras,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+  type ResolvedGrid,
 } from "../lib/common";
-import { loadPng, savePng, sliceSheet } from "../lib/image-io";
+import { loadPng, savePng } from "../lib/image-io";
+import type { GridPaddingInput } from "../../src/lib/pipeline/grid";
 import {
   clampInsets,
   detectNineSlice,
@@ -123,6 +128,8 @@ export function registerNineSliceCommand(program: Command) {
     .option("--preview-size <WxH>", "size for --preview (default: 3x the frame)")
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools nine-slice panel.png",
@@ -152,7 +159,7 @@ export function registerNineSliceCommand(program: Command) {
   cmd.action(
     (
       input: string,
-      opts: {
+      opts: GridPaddingOpts & {
         cols?: number;
         rows?: number;
         left?: number;
@@ -172,8 +179,12 @@ export function registerNineSliceCommand(program: Command) {
       try {
         const explicit: NineSliceExplicit = definedSides(opts);
         const sheet = opts.from9patch
-          ? loadNinePatchSheet(input, opts.cols, opts.rows)
-          : { ...loadSheet(input, opts.cols, opts.rows), insets: null, padding: null };
+          ? loadNinePatchSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts))
+          : {
+              ...loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts)),
+              insets: null,
+              padding: null,
+            };
         const { frames, grid } = sheet;
         if (frames.length === 0) fail("no frames to slice — check --cols / --rows");
 
@@ -207,7 +218,13 @@ export function registerNineSliceCommand(program: Command) {
             source: input,
             frameWidth: first.width,
             frameHeight: first.height,
-            grid: { cols: grid.cols, rows: grid.rows, detected: grid.detected },
+            grid: {
+              cols: grid.cols,
+              rows: grid.rows,
+              detected: grid.detected,
+              margin: grid.margin,
+              spacing: grid.spacing,
+            },
             options: {
               auto: entries.some((e) => e.detected),
               explicit: Object.keys(explicit).length > 0 ? explicit : null,
@@ -246,17 +263,15 @@ function loadNinePatchSheet(
   input: string,
   cols: number | undefined,
   rows: number | undefined,
+  gridPadding: GridPaddingInput | undefined,
 ): {
   frames: ImageData[];
-  grid: ReturnType<typeof resolveGrid>;
+  grid: ResolvedGrid;
   insets: NineSliceInsets;
   padding: NineSliceInsets | null;
 } {
   const decoded = decodeNinePatch(loadPng(input));
-  const content = decoded.content;
-  const grid = resolveGrid(content, cols, rows);
-  const frames =
-    grid.cols > 1 || grid.rows > 1 ? sliceSheet(content, grid.cols, grid.rows) : [content];
+  const { frames, grid } = sheetFromImage(decoded.content, cols, rows, gridPadding);
   return { frames, grid, insets: decoded.insets, padding: decoded.padding };
 }
 

@@ -56,7 +56,13 @@ import {
   buildManualCropStep,
 } from "@/lib/pipeline/use-pipeline";
 import { stitchSheet, exportAsZip } from "@/lib/pipeline/export";
-import { detectSheetGrid } from "@/lib/pipeline/import";
+import { detectSheetGrid, type SheetDetection } from "@/lib/pipeline/import";
+import {
+  type GridMargin,
+  type GridSpacing,
+  isZeroPadding,
+  ZERO_PADDING,
+} from "@/lib/pipeline/grid";
 import type {
   AutoCropConfig,
   ChromaKeyConfig,
@@ -65,7 +71,12 @@ import type {
   PipelineStep,
 } from "@/lib/pipeline/types";
 import { composeCrops } from "@/lib/pipeline/transforms";
-import { FrameImg, VideoSource, SheetSource } from "@/components/pipeline-source";
+import {
+  describeGridPadding,
+  FrameImg,
+  VideoSource,
+  SheetSource,
+} from "@/components/pipeline-source";
 
 // -----------------------------------------------------------------
 // <FrameItem>: single thumb in the Frame Selection grid.
@@ -144,7 +155,9 @@ function SpritesheetContent() {
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const [sheetCols, setSheetCols] = useState(8);
   const [sheetRows, setSheetRows] = useState(1);
-  const [detectedGrid, setDetectedGrid] = useState<{ cols: number; rows: number } | null>(null);
+  const [sheetMargin, setSheetMargin] = useState<GridMargin>(ZERO_PADDING.margin);
+  const [sheetSpacing, setSheetSpacing] = useState<GridSpacing>(ZERO_PADDING.spacing);
+  const [detectedGrid, setDetectedGrid] = useState<SheetDetection | null>(null);
   const [fps, setFps] = useState(10);
 
   // ------- Chroma-key (applied on "Re-do Background Removal") -------
@@ -304,14 +317,22 @@ function SpritesheetContent() {
     // chroma-key to passthrough. User can re-enable via the Auto Background
     // Removal switch.
     setBrState((prev) => ({ ...prev, backgroundMode: "transparent-cutout" }));
+    // Drop the previous sheet's padding before detecting: carrying it over onto
+    // a sheet detection can't read would block Split Sheet on a fit error, where
+    // flush is both this tool's old behaviour and the safer guess.
+    setSheetMargin(ZERO_PADDING.margin);
+    setSheetSpacing(ZERO_PADDING.spacing);
     // Try auto-detection
     try {
       const det = await detectSheetGrid(file);
       if (det.confidence > 0) {
-        setDetectedGrid({ cols: det.cols, rows: det.rows });
+        setDetectedGrid(det);
         setSheetCols(det.cols);
         setSheetRows(det.rows);
-        toast.success(`Detected ${det.cols}×${det.rows} grid`);
+        setSheetMargin(det.margin);
+        setSheetSpacing(det.spacing);
+        const padding = describeGridPadding(det.margin, det.spacing);
+        toast.success(`Detected ${det.cols}×${det.rows} grid${padding ? ` with ${padding}` : ""}`);
       }
     } catch {
       // Silent — user can still specify grid manually.
@@ -373,6 +394,13 @@ function SpritesheetContent() {
 
   // ------- Kickoff / re-run helpers -------
 
+  // Zero padding is left off the step config entirely, so a flush sheet keeps
+  // the exact config (and therefore the exact step cache key) it had before.
+  const sheetPadding = () => {
+    const padding = { margin: sheetMargin, spacing: sheetSpacing };
+    return isZeroPadding(padding) ? {} : padding;
+  };
+
   const runFromSource = async (sourceTabOverride?: SourceTab, crop: FrameCrop = appliedCrop) => {
     const tab = sourceTabOverride ?? sourceTab;
     let steps: PipelineStep[];
@@ -391,7 +419,10 @@ function SpritesheetContent() {
       if (!sheetFile && !sheetUrl) return;
       pipeline.setSource({ file: sheetFile ?? undefined, url: sheetUrl ?? undefined });
       steps = [
-        buildImportSheetStep({ cols: sheetCols, rows: sheetRows }, sheetFile?.name),
+        buildImportSheetStep(
+          { cols: sheetCols, rows: sheetRows, ...sheetPadding() },
+          sheetFile?.name,
+        ),
         buildChromaKeyStep(chromaConfigFromBr(brState)),
         buildAutoCropStep(autoCropConfigFromBr(brState)),
         buildManualCropStep(crop),
@@ -801,6 +832,10 @@ function SpritesheetContent() {
                   rows={sheetRows}
                   setCols={setSheetCols}
                   setRows={setSheetRows}
+                  margin={sheetMargin}
+                  spacing={sheetSpacing}
+                  setMargin={setSheetMargin}
+                  setSpacing={setSheetSpacing}
                   detected={detectedGrid}
                   uploadZoneProps={uploadZoneProps}
                   isDragging={isDragging}

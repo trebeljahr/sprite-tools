@@ -6,6 +6,9 @@ import {
   parseIntArg,
   loadSheet,
   addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
 } from "../lib/common";
 import { generateOutline } from "../../src/lib/collision/outline";
 import { computeNineSliceEntries } from "./nine-slice";
@@ -89,6 +92,8 @@ export function registerMetaCommand(program: Command) {
     // Output
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools meta hero.png --collision --pivot bottom-center \\",
@@ -130,10 +135,10 @@ export function registerMetaCommand(program: Command) {
         nineSliceTop?: number;
         nineSliceBottom?: number;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         const base: Record<string, unknown> = {
           source: input,
           frameWidth: frames[0]?.width ?? 0,

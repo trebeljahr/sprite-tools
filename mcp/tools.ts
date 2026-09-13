@@ -10,8 +10,10 @@ import { z } from "zod";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
 
-import { loadPng, savePng, sliceSheet, stitchSheet } from "../cli/lib/image-io";
+import { loadPng, savePng, stitchSheet } from "../cli/lib/image-io";
+import { gridPaddingFromOpts, sheetFromImage } from "../cli/lib/common";
 import { detectGridFromImageData } from "../src/lib/pipeline/detect";
+import type { GridMargin, GridSpacing } from "../src/lib/pipeline/grid";
 import {
   applyChromaKeyToImageData,
   applySolidFillToImageData,
@@ -139,45 +141,126 @@ function jsonResult(payload: unknown) {
   };
 }
 
-function loadSheetFromArgs(
-  input: string,
-  cols?: number,
-  rows?: number,
-): {
-  image: ImageData;
-  grid: { cols: number; rows: number; detected: boolean };
-  frames: ImageData[];
-} {
-  return gridFromImage(loadPng(input), cols, rows);
+/**
+ * The grid knobs every sheet-consuming tool accepts. One shared block so the
+ * ten tools cannot drift, and so an agent that learns them on `sprite_slice`
+ * can use the same words everywhere.
+ */
+const SHEET_GRID_ARGS = {
+  cols: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Columns in the sheet; auto-detected if omitted"),
+  rows: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Rows in the sheet; auto-detected if omitted"),
+  margin: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "Border in px around the whole sheet, before the first cell. Sheets exported by Kenney, Tiled or TexturePacker often have one; slicing them without it bleeds a strip of the neighbouring sprite into every frame. Run sprite_detect_grid first if you do not know the number.",
+    ),
+  margin_x: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Left+right border in px; beats `margin` on the horizontal axis"),
+  margin_y: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Top+bottom border in px; beats `margin` on the vertical axis"),
+  spacing: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "Gutter in px between cells, both axes. Kenney and Tiled tilesets typically use 1-2. Leave unset for flush sheets; run sprite_detect_grid first if unknown.",
+    ),
+  spacing_x: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Horizontal gutter in px; beats `spacing`"),
+  spacing_y: z.number().int().min(0).optional().describe("Vertical gutter in px; beats `spacing`"),
+};
+
+/** The same fields as handed back by zod, i.e. what a handler's `...gridArgs` rest holds. */
+interface SheetGridArgs {
+  cols?: number;
+  rows?: number;
+  margin?: number;
+  margin_x?: number;
+  margin_y?: number;
+  spacing?: number;
+  spacing_x?: number;
+  spacing_y?: number;
 }
 
-// Same split, but starting from pixels that are already in memory — the
-// nine-slice tool has to strip a .9.png marker border before it can slice.
-function gridFromImage(
-  image: ImageData,
-  cols?: number,
-  rows?: number,
+/**
+ * The choke point every sheet-consuming tool goes through. Delegates to the
+ * CLI's sheetFromImage so both transports resolve geometry identically: stated
+ * fields win, detection fills the rest, detected padding that cannot tile the
+ * sheet is dropped rather than thrown. A GridFitError from a padding the
+ * caller stated propagates to the client — a wrong slice is worse than an
+ * error the agent can act on.
+ */
+function loadSheetFromArgs(
+  input: string,
+  args: SheetGridArgs = {},
 ): {
   image: ImageData;
-  grid: { cols: number; rows: number; detected: boolean };
+  grid: {
+    cols: number;
+    rows: number;
+    detected: boolean;
+    margin: GridMargin;
+    spacing: GridSpacing;
+  };
   frames: ImageData[];
 } {
-  let effectiveCols = cols;
-  let effectiveRows = rows;
-  let detected = false;
-  if (effectiveCols === undefined || effectiveRows === undefined) {
-    const det = detectGridFromImageData(image);
-    effectiveCols ??= det.cols;
-    effectiveRows ??= det.rows;
-    detected = true;
-  }
-  const frames =
-    effectiveCols === 1 && effectiveRows === 1
-      ? [image]
-      : sliceSheet(image, effectiveCols, effectiveRows);
+  return gridFromImage(loadPng(input), args);
+}
+
+type SheetGrid = ReturnType<typeof loadSheetFromArgs>;
+
+// Same resolution, but starting from pixels that are already in memory — the
+// nine-slice tool has to strip a .9.png marker border before it can slice.
+function gridFromImage(image: ImageData, args: SheetGridArgs = {}): SheetGrid {
+  const { grid, frames } = sheetFromImage(
+    image,
+    args.cols,
+    args.rows,
+    gridPaddingFromOpts({
+      margin: args.margin,
+      marginX: args.margin_x,
+      marginY: args.margin_y,
+      spacing: args.spacing,
+      spacingX: args.spacing_x,
+      spacingY: args.spacing_y,
+    }),
+  );
   return {
     image,
-    grid: { cols: effectiveCols, rows: effectiveRows, detected },
+    // Report the geometry actually used, not the geometry asked for.
+    grid: {
+      cols: grid.cols,
+      rows: grid.rows,
+      detected: grid.detected,
+      margin: grid.margin,
+      spacing: grid.spacing,
+    },
     frames,
   };
 }
@@ -192,7 +275,7 @@ export function registerAllTools(server: McpServer) {
     "sprite_info",
     {
       description:
-        "Inspect a PNG sprite or sheet. Returns width, height, opaque-pixel count, content bounds, and auto-detected grid.",
+        "Inspect a PNG sprite or sheet. Returns width, height, opaque-pixel count, content bounds, and the auto-detected grid — cols, rows plus the sheet's outer margin and inter-cell spacing in px.",
       inputSchema: {
         input_path: z.string().describe("Absolute path to a PNG file"),
       },
@@ -216,6 +299,8 @@ export function registerAllTools(server: McpServer) {
         grid: {
           cols: det.cols,
           rows: det.rows,
+          margin: det.margin,
+          spacing: det.spacing,
           confidence: Number(det.confidence.toFixed(3)),
         },
       });
@@ -226,7 +311,8 @@ export function registerAllTools(server: McpServer) {
   server.registerTool(
     "sprite_detect_grid",
     {
-      description: "Auto-detect the (cols, rows) of a sprite sheet. Returns confidence in [0,1].",
+      description:
+        "Auto-detect the layout of a sprite sheet: cols, rows, the outer margin (left/top/right/bottom) and the gutter between cells (x/y), all in px, plus confidence in [0,1]. Margin and spacing are zeros for a flush sheet. Pass the numbers straight back into sprite_slice (and every other cols/rows tool) as `margin`/`margin_x`/`margin_y` and `spacing`/`spacing_x`/`spacing_y` so frames are cut on the real cell boundaries.",
       inputSchema: {
         input_path: z.string().describe("Absolute path to a PNG file"),
       },
@@ -238,7 +324,12 @@ export function registerAllTools(server: McpServer) {
         source: input_path,
         width: img.width,
         height: img.height,
-        grid: { cols: det.cols, rows: det.rows },
+        grid: {
+          cols: det.cols,
+          rows: det.rows,
+          margin: det.margin,
+          spacing: det.spacing,
+        },
         confidence: Number(det.confidence.toFixed(3)),
       });
     },
@@ -249,20 +340,19 @@ export function registerAllTools(server: McpServer) {
     "sprite_slice",
     {
       description:
-        "Split a sprite sheet into one PNG per cell on disk. Returns the list of written paths.",
+        "Split a sprite sheet into one PNG per cell on disk. Returns the list of written paths, plus the grid geometry actually used. Handles sheets with an outer border or gutters between cells via `margin`/`spacing` — run sprite_detect_grid first and pass its numbers through, otherwise a padded sheet slices with a strip of the neighbouring sprite in every frame.",
       inputSchema: {
         input_path: z.string(),
         out_dir: z.string().describe("Directory to write frames into"),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         name_pattern: z
           .string()
           .default("frame_%02d.png")
           .describe("printf-style pattern, e.g. 'run_%03d.png'"),
       },
     },
-    ({ input_path, out_dir, cols, rows, name_pattern }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, out_dir, name_pattern, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       mkdirSync(out_dir, { recursive: true });
       const paths: string[] = [];
       for (let i = 0; i < frames.length; i++) {
@@ -332,8 +422,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         mode: z
           .enum(["transparent", "solid"])
           .default("transparent")
@@ -386,8 +475,6 @@ export function registerAllTools(server: McpServer) {
     ({
       input_path,
       output_path,
-      cols,
-      rows,
       mode,
       similarity,
       softness,
@@ -397,8 +484,9 @@ export function registerAllTools(server: McpServer) {
       fill,
       trim,
       trim_padding,
+      ...gridArgs
     }) => {
-      const { image, frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const { image, frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const solid = mode === "solid";
       const cfg: ChromaCoreConfig = {
         mode: solid ? "chroma-solid" : "chroma-transparent",
@@ -503,15 +591,14 @@ export function registerAllTools(server: McpServer) {
         "Per-frame collision polygons from a sprite or sheet. Outputs a structured JSON; tolerance 0 keeps every contour pixel, higher values produce simpler hulls.",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         alpha_threshold: z.number().int().min(0).max(254).default(10),
         simplify_tolerance: z.number().min(0).default(10),
         convex_hull: z.boolean().default(false),
       },
     },
-    ({ input_path, cols, rows, alpha_threshold, simplify_tolerance, convex_hull }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, alpha_threshold, simplify_tolerance, convex_hull, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const collision = frames.map((f, i) => {
         const outline = generateOutline(f, {
           alphaThreshold: alpha_threshold,
@@ -548,15 +635,14 @@ export function registerAllTools(server: McpServer) {
       description: "Emit per-frame pivot (anchor) metadata from a preset or explicit coords.",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         preset: z.enum(PRESET_IDS as [string, ...string[]]).default("bottom-center"),
         x: z.number().int().optional().describe("Override X (pixels)"),
         y: z.number().int().optional().describe("Override Y (pixels)"),
       },
     },
-    ({ input_path, cols, rows, preset, x, y }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, preset, x, y, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const p = PIVOT_PRESETS[preset];
       const pivots = frames.map((f, i) => ({
         index: i,
@@ -588,8 +674,7 @@ export function registerAllTools(server: McpServer) {
         "Nine-slice (9-patch) insets plus the nine stretch regions for a sprite or every cell of a sheet. Setting `left`/`right`/`top`/`bottom` yourself is the real interface. Any side left out is filled in with a starting guess read off adjacent-line variance profiles: it holds up on panels with an obviously flat or repeated middle and falls apart on busy or gradient artwork, so check `confidence` and correct the numbers. `from_9patch` reads the insets off an Android .9.png marker border instead of guessing. Optionally also writes a .9.png (`ninepatch_output_path`) and a stretched preview PNG (`preview_output_path`), both built from the first frame.",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         left: z.number().int().min(0).optional().describe("Explicit left inset (pixels)"),
         right: z.number().int().min(0).optional().describe("Explicit right inset (pixels)"),
         top: z.number().int().min(0).optional().describe("Explicit top inset (pixels)"),
@@ -641,8 +726,6 @@ export function registerAllTools(server: McpServer) {
     },
     ({
       input_path,
-      cols,
-      rows,
       left,
       right,
       top,
@@ -655,6 +738,7 @@ export function registerAllTools(server: McpServer) {
       preview_output_path,
       preview_width,
       preview_height,
+      ...gridArgs
     }) => {
       // A .9.png keeps its insets in a 1px marker border around the content,
       // so the border has to come off before the sheet is cut into cells.
@@ -668,7 +752,7 @@ export function registerAllTools(server: McpServer) {
         sheet = decoded.content;
       }
 
-      const { frames, grid } = gridFromImage(sheet, cols, rows);
+      const { frames, grid } = gridFromImage(sheet, gridArgs);
       const nineSlice = nineSliceSection(frames, grid, {
         left,
         right,
@@ -734,8 +818,7 @@ export function registerAllTools(server: McpServer) {
       description: "Emit Aseprite-style animation tag metadata (named frame ranges).",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         tags: z
           .array(
             z.object({
@@ -749,8 +832,8 @@ export function registerAllTools(server: McpServer) {
           .default([]),
       },
     },
-    ({ input_path, cols, rows, tags }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, tags, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       return jsonResult({
         source: input_path,
         frameWidth: frames[0]?.width ?? 0,
@@ -770,13 +853,12 @@ export function registerAllTools(server: McpServer) {
         "Extract N dominant colors from a sprite (or shared across all frames of a sheet).",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         colors: z.number().int().min(1).max(256).default(8),
       },
     },
-    ({ input_path, cols, rows, colors }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, colors, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       let total = 0;
       for (const f of frames) total += f.width * f.height;
       const merged = new ImageData(total, 1);
@@ -805,8 +887,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         colors: z.number().int().min(1).max(256).default(8),
         swaps: z
           .array(
@@ -818,8 +899,8 @@ export function registerAllTools(server: McpServer) {
           .min(1),
       },
     },
-    ({ input_path, output_path, cols, rows, colors, swaps }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, output_path, colors, swaps, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       let total = 0;
       for (const f of frames) total += f.width * f.height;
       const merged = new ImageData(total, 1);
@@ -856,8 +937,7 @@ export function registerAllTools(server: McpServer) {
         "Group a sprite's extracted palette into shading ramps — the light-to-dark runs of shades an artist painted for one material (skin, cloth, metal) — by clustering hue in the perceptual OKLCH space, with all near-greys in one achromatic ramp. Run this before sprite_palette_variants to see what is recolourable: every hex it reports for a ramp is a valid `ramps[].base` handle for re-tinting that whole ramp.",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         colors: z
           .number()
           .int()
@@ -875,8 +955,8 @@ export function registerAllTools(server: McpServer) {
           ),
       },
     },
-    ({ input_path, cols, rows, colors, hue_tolerance }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, colors, hue_tolerance, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const palette = extractPalette(mergeFramePixels(frames), colors);
       const ramps = detectRamps(palette, { hueTolerance: hue_tolerance });
       return jsonResult({
@@ -902,8 +982,7 @@ export function registerAllTools(server: McpServer) {
         output_dir: z
           .string()
           .describe("Directory to write the variant PNGs into; created if missing"),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         colors: z
           .number()
           .int()
@@ -935,8 +1014,6 @@ export function registerAllTools(server: McpServer) {
     ({
       input_path,
       output_dir,
-      cols,
-      rows,
       colors,
       hue_tolerance,
       name,
@@ -944,6 +1021,7 @@ export function registerAllTools(server: McpServer) {
       variants,
       hue_variants,
       hue_step,
+      ...gridArgs
     }) => {
       const source = VARIANT_SOURCE.safeParse({ variants, hue_variants });
       if (!source.success) {
@@ -966,7 +1044,7 @@ export function registerAllTools(server: McpServer) {
           }).variants
         : hueShiftVariants(hue_variants ?? 0, { stepDeg: hue_step });
 
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const palette = extractPalette(mergeFramePixels(frames), colors);
       const ramps = detectRamps(palette, { hueTolerance: hue_tolerance });
       const base = name ?? basename(input_path).replace(/\.[^.]+$/, "");
@@ -1025,8 +1103,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         pixel_size: z.number().int().min(1).max(64).default(4),
         colors: z.number().int().min(0).max(256).default(16),
         palette: z.enum(PALETTES.map((p) => p.id) as [string, ...string[]]).default("none"),
@@ -1037,8 +1114,8 @@ export function registerAllTools(server: McpServer) {
           .describe("Scale back up to source size with blocky pixels"),
       },
     },
-    ({ input_path, output_path, cols, rows, pixel_size, colors, palette, dither, upscale }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, output_path, pixel_size, colors, palette, dither, upscale, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const preset = paletteById(palette);
       const paletteRgb = preset.colors.length > 0 ? preset.colors.map(hexToRgb) : undefined;
 
@@ -1077,8 +1154,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         source: z.enum(["alpha", "luminance", "mixed"]).default("alpha"),
         strength: z.number().default(1),
         mix: z.number().min(0).max(1).default(0.5),
@@ -1086,8 +1162,8 @@ export function registerAllTools(server: McpServer) {
         blur: z.number().int().min(0).max(16).default(0),
       },
     },
-    ({ input_path, output_path, cols, rows, source, strength, mix, flip_y, blur }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, output_path, source, strength, mix, flip_y, blur, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const processed = frames.map((f) =>
         generateNormalMap(f, {
           source,
@@ -1119,8 +1195,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         style: z
           .enum(["outer", "inner"])
           .default("outer")
@@ -1148,8 +1223,6 @@ export function registerAllTools(server: McpServer) {
     ({
       input_path,
       output_path,
-      cols,
-      rows,
       style,
       width,
       color,
@@ -1157,8 +1230,9 @@ export function registerAllTools(server: McpServer) {
       connectivity,
       alpha_threshold,
       overflow,
+      ...gridArgs
     }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const cfg: OutlineFxConfig = {
         outline: {
           style,
@@ -1201,8 +1275,7 @@ export function registerAllTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         offset_x: z.number().int().min(-256).max(256).default(2),
         offset_y: z.number().int().min(-256).max(256).default(2),
         color: z.string().regex(HEX_COLOR, "expected a hex colour like #000000").default("#000000"),
@@ -1230,8 +1303,6 @@ export function registerAllTools(server: McpServer) {
     ({
       input_path,
       output_path,
-      cols,
-      rows,
       offset_x,
       offset_y,
       color,
@@ -1239,8 +1310,9 @@ export function registerAllTools(server: McpServer) {
       blur,
       alpha_threshold,
       overflow,
+      ...gridArgs
     }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const cfg: OutlineFxConfig = {
         shadow: {
           offsetX: offset_x,
@@ -1404,8 +1476,7 @@ export function registerAllTools(server: McpServer) {
         "One-shot: collision + pivot + nine-slice + tags in a single merged JSON. Pass a config object for each section you want — `{}` takes that section's defaults — and omit a section to skip it. The nine-slice section takes explicit insets and guesses any side you leave out — see sprite_generate_nine_slice for what that guess is worth, and use that tool for .9.png input or PNG output.",
       inputSchema: {
         input_path: z.string(),
-        cols: z.number().int().positive().optional(),
-        rows: z.number().int().positive().optional(),
+        ...SHEET_GRID_ARGS,
         collision: z
           .object({
             alpha_threshold: z.number().default(10),
@@ -1444,8 +1515,8 @@ export function registerAllTools(server: McpServer) {
           .optional(),
       },
     },
-    ({ input_path, cols, rows, collision, pivot, nine_slice, tags }) => {
-      const { frames, grid } = loadSheetFromArgs(input_path, cols, rows);
+    ({ input_path, collision, pivot, nine_slice, tags, ...gridArgs }) => {
+      const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const out: Record<string, unknown> = {
         source: input_path,
         frameWidth: frames[0]?.width ?? 0,

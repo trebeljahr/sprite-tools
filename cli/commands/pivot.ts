@@ -1,5 +1,14 @@
 import type { Command } from "commander";
-import { writeJsonOutput, fail, parseIntArg, loadSheet, addHelpExtras } from "../lib/common";
+import {
+  writeJsonOutput,
+  fail,
+  parseIntArg,
+  loadSheet,
+  addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
+} from "../lib/common";
 
 interface PivotPreset {
   id: string;
@@ -28,6 +37,8 @@ export function registerPivotCommand(program: Command) {
     .option("--y <n>", "explicit pivot Y (overrides preset)", (v) => parseIntArg("y", v))
     .option("-o, --output <file>", "output JSON file (default: stdout)");
 
+  addGridOptions(cmd);
+
   addHelpExtras(cmd, {
     examples: [
       "sprite-tools pivot hero.png                                    # default: bottom-center",
@@ -51,14 +62,14 @@ export function registerPivotCommand(program: Command) {
         x?: number;
         y?: number;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
         const preset = PRESETS.find((p) => p.id === opts.preset);
         if (!preset) {
           fail(`--preset must be one of ${PRESETS.map((p) => p.id).join(", ")}`);
         }
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         const pivots = frames.map((f, i) => {
           const x = opts.x !== undefined ? opts.x : Math.round(preset!.nx * (f.width - 1));
           const y = opts.y !== undefined ? opts.y : Math.round(preset!.ny * (f.height - 1));

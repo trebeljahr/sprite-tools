@@ -27,6 +27,19 @@ This handles the failure mode where a sprite has internal transparent areas (a p
 
 Confidence is scored: 0.5 + ACF peak score × 0.4 (primary), 0.6 (gap fallback), 0.4 (size fallback), 0 (none).
 
+**Padding inference** (the sheet's outer margin and the gutter between cells) is a refinement pass over the same activity profiles, run after cols and rows are decided so it can never shift them. Each axis is split into content blocks separated by empty runs, and a margin/gutter is only reported when every block is the same size, every gap between them is identical, and the decomposition closes exactly (`lead + count × cell + (count − 1) × gap + trail === length`). Anything else reports zeros — a wrong gutter is worse than none.
+
+Two deliberate rules:
+
+- **Flush wins.** If the blocks repeat at exactly the flush cell period (`cell + gap === length / count`), the reading is indistinguishable from a flush sheet whose sprites simply do not touch their cell edges — a 32px cell holding a radius-12 circle leaves a 4px lead and 7px interior runs. Report zeros. Only a period that disagrees with the flush cell is evidence of a real gutter.
+- **No gutter, no margin.** An axis with a single cell has no gutter to corroborate a border, so it always reports zeros. Otherwise the whitespace around a lone sprite would be read as margin and crop the frame to its bounding box.
+
+Padding inference never changes confidence.
+
+**Tilesets with no outer margin.** Solid tiles running to the sheet edge put all four corners on tiles, so the corner background reference is a tile colour and no row or column ever reads as empty. When that happens and the alpha channel alone does show empty rows or columns, the activity profiles are re-read by transparency — those empty scanlines are the gutters. A sheet the corner reference already reads has an empty scanline somewhere, so it never takes this path. A sheet with an opaque gutter colour and no margin still has nothing that marks the background; pass `--spacing` explicitly for those.
+
+The arithmetic that consumes the result lives in `grid.ts` (`computeCellGeometry` / `cellRect`), which is also where the divisibility rule is enforced: silent floor when no padding is given, a fit error naming the actual pixel counts when it is.
+
 ## Collision outline (`generateOutline`)
 
 **Moore-neighbor contour tracing** on the alpha channel:

@@ -6,6 +6,9 @@ import {
   parseIntArg,
   loadSheet,
   addHelpExtras,
+  addGridOptions,
+  gridPaddingFromOpts,
+  type GridPaddingOpts,
 } from "../lib/common";
 import { generateOutline } from "../../src/lib/collision/outline";
 
@@ -29,6 +32,8 @@ export function registerCollisionCommand(program: Command) {
     )
     .option("--convex-hull", "reduce each polygon to its convex hull", false)
     .option("-o, --output <file>", "output JSON file (default: stdout)");
+
+  addGridOptions(cmd);
 
   addHelpExtras(cmd, {
     examples: [
@@ -54,10 +59,10 @@ export function registerCollisionCommand(program: Command) {
         tolerance: number;
         convexHull: boolean;
         output?: string;
-      },
+      } & GridPaddingOpts,
     ) => {
       try {
-        const { frames, grid } = loadSheet(input, opts.cols, opts.rows);
+        const { frames, grid } = loadSheet(input, opts.cols, opts.rows, gridPaddingFromOpts(opts));
         const results = frames.map((f, i) => {
           const outline = generateOutline(f, {
             alphaThreshold: opts.alpha,
