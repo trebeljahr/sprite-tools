@@ -55,7 +55,7 @@
     "format:check": "biome format .",
     "cli:build": "tsc -p cli/tsconfig.json && node -e \"require('fs').chmodSync('dist/cli/index.js', 0o755)\"",
     "cli:dev": "tsx cli/index.ts",
-    "mcp:build": "NODE_OPTIONS=--max-old-space-size=8192 tsc -p mcp/tsconfig.json && node -e \"require('fs').chmodSync('dist/mcp/index.js', 0o755)\"",
+    "mcp:build": "tsc -p mcp/tsconfig.json && node -e \"require('fs').chmodSync('dist/mcp/index.js', 0o755)\"",
     "mcp:dev": "tsx mcp/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

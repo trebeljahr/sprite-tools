@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    // Node16, not "node" (node10): under node10 resolution the MCP SDK's zod
-    // schema types never finish checking (tsc ran >1h at 100% CPU). Node16
-    // checks this project in seconds, and with no "type": "module" in
-    // package.json it still emits CommonJS.
+    // Node16, not "node" (node10). Node16 honours package `exports`, so our
+    // `zod` import and the MCP SDK's `zod/v3` import resolve to the same
+    // .d.cts files. node10 split them into .d.ts vs .d.cts copies, forcing
+    // structural comparison of every tool schema until tsc ran out of heap.
+    // With no "type": "module" in package.json it still emits CommonJS.
     "module": "Node16",
     "moduleResolution": "Node16",
     "esModuleInterop": true,
