@@ -1,7 +1,7 @@
 export const metadata = {
   title: "Pixelate — sprite-tools",
   description:
-    "Convert sprites into pixel art with box downscaling, palette quantization, dithering, and alpha cleanup.",
+    "Convert sprites into pixel art with box downscaling, palette quantization, dithering, alpha cleanup, and pixel-art upscaling (Scale2x, Scale3x, Eagle, xBR).",
 };
 
 # Pixelate
@@ -15,6 +15,7 @@ The [**Pixelate**](/pixelate) tab turns any sprite (AI-generated, hand-drawn, ph
 3. Optional **Floyd–Steinberg dither** during palette mapping.
 4. Optional **alpha binarization** to kill soft edges.
 5. Optional **nearest-neighbor upscale** back to source size for blocky "big pixels" display.
+6. Optional **pixel-art upscale** by an explicit integer factor (`nearest`, `scale2x`, `scale3x`, `eagle`, `xbr`), which takes over from step 5 when it is on.
 
 ## Preset palettes
 
@@ -36,12 +37,65 @@ The [**Pixelate**](/pixelate) tab turns any sprite (AI-generated, hand-drawn, ph
 - **Dither** — Floyd–Steinberg error diffusion (gives gradient-heavy sprites a retro stippled look).
 - **Alpha cutoff** — above = fully opaque, below = fully transparent. 0 keeps original alpha.
 
+## Upscaling
+
+Two different things are called "upscale" across these tools, and confusing them is the one real trap here. Read this before touching the **Upscale** card:
+
+- **Restore to source size** — the older idea, and the one the CLI's `--upscale` flag and the MCP `upscale` parameter still mean (both on by default). It does **not** make a sprite bigger than the input: it blows the downscaled result back up to the source canvas dimensions with nearest-neighbor so the pixels read as big blocks. On this page it is display-only — the preview always shows the pixelated frame filling the source dimensions with smoothing off, while the export writes the native low-res PNG.
+- **Upscale factor** — the **Upscale** card here, `--upscale-factor` in the CLI, `upscale_factor` over MCP. This is real magnification: the pixelated frame is multiplied by an integer factor using the filter you pick. Anything above 1 **replaces** the restore step, so the frame is magnified exactly once, the preview canvas switches to holding the actual upscaled pixels, and the export writes them. The preview is still a pan/zoom viewport, so those pixels are shown at whatever zoom the viewport is on — changing the factor keeps the sprite at the same on-screen size rather than jumping, and **Reset view** refits it. The one genuinely 1:1 view is the **Before / after — 1:1** card that appears under the preview, described further down.
+
+The factor starts at **off** (1×), which leaves everything exactly as it was before.
+
+Concretely, on a 512×512 source with `pixelSize: 4`, the pixelated frame is 128×128. At factor off the preview fills 512×512 and the export is a 128×128 PNG. At factor 4 the export is 512×512, built with the filter you chose. At factor 8 it is 1024×1024 — genuinely larger than the source, which the old restore step could never produce.
+
+To upscale an image that is *already* pixel art, turn the earlier steps off: `pixelSize: 1`, `colors: 0`, palette `none`. The card is then a straight pixel-art magnifier.
+
+### Algorithms
+
+| ID | Native factor | What it's good for |
+|---|---|---|
+| `nearest` | 1 (any integer works) | Plain block scaling. Keeps every hard pixel edge exactly as it is — nothing is smoothed, nothing is lost. |
+| `scale2x` | 2 | Scale2x / AdvMAME2x. The well-known baseline: smooths diagonal staircases without touching straight edges. |
+| `scale3x` | 3 | The 3× sibling of Scale2x. Same family, finer corner handling because it has a center pixel to work with. |
+| `eagle` | 2 | Rounds corners harder than Scale2x. Softer, rounder look — but it deletes isolated single pixels (see below). |
+| `xbr` | 2 | xBR level 1 (noblend). The best diagonal reconstruction of the four; curves and slopes come out cleanest. |
+
+The factor is applied as whole passes of the algorithm's native step, and whatever is left over is covered by nearest-neighbor. `scale2x` at ×4 is two Scale2x passes; `scale2x` at ×6 is one Scale2x pass then nearest ×3; `scale3x` at ×9 is two Scale3x passes. So the factors that go through the filter end-to-end are 2, 4, and 8 for the 2× filters, 3 and 9 for Scale3x, and every integer for `nearest`. The **Factor** buttons offer exactly those for the selected algorithm; if a factor carried over from another algorithm doesn't divide evenly, the card spells out the fallback ("Scale2x only reaches 2× steps. 6× = 1 Scale2x pass then nearest ×3").
+
+Every one of these filters only ever **copies an existing source pixel** into the output. No channel is blended, no color is interpolated, and alpha is copied along with RGB. A 16-color sprite comes out with exactly the same 16 colors, and transparency survives untouched — which is why they are safe to run before palette-sensitive steps like atlas packing or a palette swap.
+
+### Which one should I use?
+
+For a lot of pixel art, plain **`nearest`** is the right answer. Hard edges and deliberate single-pixel detail are the art style; smoothing them is a change, not an improvement. If you are scaling a sprite for display at 2× or 4× in a game, `nearest` is what shipped games do.
+
+The other four are a **stylistic choice**, not a quality upgrade. They suit sources with lots of diagonals and curves — pre-rendered art, low-res portraits, tiles that read as smooth shapes — where the staircase edges are an artifact rather than the point. `xbr` reconstructs diagonals most aggressively, `scale2x` is the conservative middle, `scale3x` is the only one that gets you an odd factor. `eagle` rounds hardest and has a documented flaw kept in on purpose: an isolated pixel surrounded by one uniform color satisfies all four of its corner rules and disappears entirely. That is what Eagle does — do not use it on sprites with single-pixel eyes or highlights.
+
+Try them and look. The comparison is fast and the answer is a matter of taste.
+
+### Before / after preview
+
+Once the factor is above 1, a **Before / after — 1:1** card appears under the preview: the pixelated frame on the left, the upscaled result on the right, both drawn at **1:1** with no browser scaling. The two panes are scroll-linked, so the region you scroll to on one stays under the other.
+
+The 1:1 part matters. A filtered upscale viewed through the browser's own resampling tells you nothing, because you are looking at bilinear blur sitting on top of the filter's output. At 1:1 these are the exact pixels the export will contain, so it is worth scrolling to an edge — a shoulder, a diagonal, a lone highlight — before committing to a filter.
+
+### Licensing
+
+Worth knowing if you ship the output, since this is an MIT package:
+
+- **Scale2x / Scale3x** are implemented from the published rule table at [scale2x.it](https://www.scale2x.it/algorithm). The algorithm itself is prior art (EPX, Eric Johnston, LucasArts, 1992). The GPL reference implementation was not used.
+- **Eagle** is implemented from its published rule set.
+- **xBR** level 1 (noblend) is ported from Hyllian's xBR shader, which carries an MIT notice (Copyright © 2011–2014 Hyllian). The notice is reproduced verbatim in the source.
+- **HQx** (hq2x / hq3x / hq4x) is deliberately not included. It is LGPL-2.1 and its 4096-entry interpolation table is inseparable from that source, so it cannot ship inside an MIT-licensed package.
+
 ## Output
 
-PNG. When **Upscale** is on (default), the output keeps the source canvas size with visibly-blocky pixels. Turn it off to get a tiny native-res PNG.
+PNG, single frame or stitched sheet. At upscale factor **off** the export is the native low-res image — `source ÷ pixelSize` on each axis — even though the preview displays it blown up to source size. With a factor above 1 the export is that native size times the factor, exactly what the after pane shows. The size in the preview's corner badge is always the size you will get.
+
+The CLI and MCP surfaces additionally expose the restore-to-source step as `--upscale` / `upscale` (see the [CLI reference](/docs/cli/reference)); a factor above 1 overrides it there too.
 
 ## Tips
 
 - For a modern character sprite, `pixelSize: 4`, `palette: gameboy`, `dither: on` is a great stylized look.
 - If the palette snap bakes in weird colors, the character is probably more varied than a 4-color palette can hold. Bump to PICO-8 or NES.
-- Sheet mode: the downscale runs per-cell, then stitches back into a sheet. That way each sprite pixelates independently and you don't get averaging artifacts across cell boundaries.
+- Sheet mode: the downscale runs per-cell, then stitches back into a sheet. That way each sprite pixelates independently and you don't get averaging artifacts across cell boundaries. The upscale runs per-cell too, so the grid stays exact.
+- Dither and the smoothing filters fight each other: Floyd–Steinberg scatters single pixels on purpose, and Scale2x/Eagle/xBR try to read single pixels as edges. Pick one.

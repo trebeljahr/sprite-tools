@@ -12,6 +12,7 @@ import {
   Grid3x3,
   ImageIcon,
   Loader2,
+  Maximize2,
   Palette,
   Sparkles,
   Upload,
@@ -38,6 +39,13 @@ import { detectSheetGrid, importFromSpriteSheet } from "@/lib/pipeline/import";
 import type { Frame } from "@/lib/pipeline/types";
 import { hexToRgb, pixelate, type PixelateOptions, type RGB } from "@/lib/pixel-art/pixelate";
 import { PALETTES, paletteById } from "@/lib/pixel-art/palettes";
+import {
+  nativeScalesFor,
+  UPSCALE_ALGORITHMS,
+  upscale,
+  upscaleAlgorithmById,
+  type UpscaleAlgorithm,
+} from "@/lib/pixel-art/upscale";
 import { useSharedProjectSource } from "@/lib/project/store";
 import { ToolHeader } from "@/components/tool-header";
 import { SourceBanner } from "@/components/source-banner";
@@ -78,6 +86,24 @@ function imageDataToBlob(data: ImageData): Promise<Blob> {
   });
 }
 
+/**
+ * Mirrors the core module's pass planning so the UI can say, honestly, when a
+ * factor is not reachable by the chosen algorithm alone: native passes are taken
+ * while they divide the factor evenly, and whatever is left is nearest-neighbour.
+ */
+function upscalePlan(algorithm: UpscaleAlgorithm, scale: number) {
+  const info = upscaleAlgorithmById(algorithm);
+  let remainder = Math.max(1, Math.floor(scale));
+  let passes = 0;
+  if (info.nativeFactor > 1) {
+    while (remainder % info.nativeFactor === 0) {
+      passes++;
+      remainder /= info.nativeFactor;
+    }
+  }
+  return { info, passes, remainder };
+}
+
 export default function PixelatePage() {
   const { sourceFile, sourceUrl, setSharedSource } = useSharedProjectSource();
   const [sourceMode, setSourceMode] = useState<SourceMode>("single");
@@ -92,6 +118,10 @@ export default function PixelatePage() {
   const [alphaThreshold, setAlphaThreshold] = useState(0);
   const [showOriginal, setShowOriginal] = useState(false);
 
+  // Upscale defaults to off: "nearest" at 1x leaves the page exactly as it was.
+  const [upscaleAlgorithm, setUpscaleAlgorithm] = useState<UpscaleAlgorithm>("nearest");
+  const [upscaleFactor, setUpscaleFactor] = useState(1);
+
   const [rawFrames, setRawFrames] = useState<RawFrame[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -103,8 +133,12 @@ export default function PixelatePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const viewport = useViewport();
-  const { view, containerRef: previewContainerRef, baseView } = viewport;
+  const { view, containerRef: previewContainerRef, baseView, setView, setBaseView } = viewport;
   const hasAutoFittedRef = useRef(false);
+  // Content dimensions the current zoom was fitted against. Zoom is a
+  // multiplier on the *content* size, so whenever the previewed frame changes
+  // size the same zoom number means a different on-screen size.
+  const fittedSizeRef = useRef<{ w: number; h: number } | null>(null);
 
   const effectiveCols = sourceMode === "single" ? 1 : Math.max(1, sheetCols);
   const effectiveRows = sourceMode === "single" ? 1 : Math.max(1, sheetRows);
@@ -121,6 +155,7 @@ export default function PixelatePage() {
       await setSharedSource(file);
       setCurrentIndex(0);
       hasAutoFittedRef.current = false;
+      fittedSizeRef.current = null;
 
       try {
         const det = await detectSheetGrid(file);
@@ -204,6 +239,7 @@ export default function PixelatePage() {
         setRawFrames(out);
         setCurrentIndex(0);
         hasAutoFittedRef.current = false;
+        fittedSizeRef.current = null;
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
@@ -240,13 +276,40 @@ export default function PixelatePage() {
   }, [rawFrames, pixelSize, colorCount, dither, palette, alphaThreshold]);
 
   // -----------------------------------------------------------------
+  // Derived: upscaled frames — runs after pixelation, and at factor 1
+  // is the identity so nothing extra is computed.
+  // -----------------------------------------------------------------
+  const upscaleActive = upscaleFactor > 1;
+  const outputFrames = useMemo(() => {
+    if (!upscaleActive) return pixelatedFrames;
+    return pixelatedFrames.map((f) =>
+      upscale(f, { algorithm: upscaleAlgorithm, scale: upscaleFactor }),
+    );
+  }, [pixelatedFrames, upscaleActive, upscaleAlgorithm, upscaleFactor]);
+
+  const plan = useMemo(
+    () => upscalePlan(upscaleAlgorithm, upscaleFactor),
+    [upscaleAlgorithm, upscaleFactor],
+  );
+  const factorOptions = useMemo(() => {
+    const native = nativeScalesFor(upscaleAlgorithm);
+    return native.includes(upscaleFactor)
+      ? native
+      : [...native, upscaleFactor].sort((a, b) => a - b);
+  }, [upscaleAlgorithm, upscaleFactor]);
+
+  // -----------------------------------------------------------------
   // Canvas rendering — one canvas per frame for preview + thumbs
   // -----------------------------------------------------------------
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rawFrame = rawFrames[currentIndex];
   const pixelatedFrame = pixelatedFrames[currentIndex];
-  const displayW = rawFrame?.width ?? 0;
-  const displayH = rawFrame?.height ?? 0;
+  const outputFrame = outputFrames[currentIndex];
+  // With upscaling on, the output IS the upscale — it replaces the old
+  // blow-back-up-to-source-size step instead of compounding with it.
+  const scaledPreview = upscaleActive && !showOriginal && !!outputFrame;
+  const displayW = scaledPreview ? outputFrame.width : (rawFrame?.width ?? 0);
+  const displayH = scaledPreview ? outputFrame.height : (rawFrame?.height ?? 0);
 
   useEffect(() => {
     const canvas = overlayCanvasRef.current;
@@ -259,6 +322,9 @@ export default function PixelatePage() {
     ctx.clearRect(0, 0, displayW, displayH);
     if (showOriginal || !pixelatedFrame) {
       ctx.putImageData(rawFrame.original, 0, 0);
+    } else if (scaledPreview && outputFrame) {
+      // Canvas is exactly the upscaled size, so this is a 1:1 blit.
+      ctx.putImageData(outputFrame, 0, 0);
     } else {
       // Draw the low-res pixelatedFrame scaled up to source dimensions via
       // a tiny intermediate canvas + drawImage with smoothing off.
@@ -270,7 +336,55 @@ export default function PixelatePage() {
       tctx.putImageData(pixelatedFrame, 0, 0);
       ctx.drawImage(tmp, 0, 0, displayW, displayH);
     }
-  }, [rawFrame, pixelatedFrame, showOriginal, displayW, displayH]);
+  }, [rawFrame, pixelatedFrame, outputFrame, scaledPreview, showOriginal, displayW, displayH]);
+
+  // -----------------------------------------------------------------
+  // Before / after comparison — both panes at 1:1, scroll-linked
+  // -----------------------------------------------------------------
+  const beforeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const afterCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const beforeScrollRef = useRef<HTMLDivElement | null>(null);
+  const afterScrollRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
+  const showComparison = upscaleActive && !!pixelatedFrame && !!outputFrame;
+
+  useEffect(() => {
+    if (!showComparison) return;
+    const paint = (canvas: HTMLCanvasElement | null, data: ImageData | undefined) => {
+      if (!canvas || !data) return;
+      canvas.width = data.width;
+      canvas.height = data.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, data.width, data.height);
+      ctx.putImageData(data, 0, 0);
+    };
+    paint(beforeCanvasRef.current, pixelatedFrame);
+    paint(afterCanvasRef.current, outputFrame);
+  }, [showComparison, pixelatedFrame, outputFrame]);
+
+  // Link the two panes by *image* coordinate, not by scroll percentage, so the
+  // same region of the sprite sits at the same edge in both.
+  const syncScroll = useCallback(
+    (from: "before" | "after") => {
+      if (isSyncingScrollRef.current) return;
+      const before = beforeScrollRef.current;
+      const after = afterScrollRef.current;
+      if (!before || !after) return;
+      isSyncingScrollRef.current = true;
+      if (from === "before") {
+        after.scrollLeft = before.scrollLeft * upscaleFactor;
+        after.scrollTop = before.scrollTop * upscaleFactor;
+      } else {
+        before.scrollLeft = after.scrollLeft / upscaleFactor;
+        before.scrollTop = after.scrollTop / upscaleFactor;
+      }
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false;
+      });
+    },
+    [upscaleFactor],
+  );
 
   // -----------------------------------------------------------------
   // Viewport wiring
@@ -278,12 +392,33 @@ export default function PixelatePage() {
   useEffect(() => {
     if (!rawFrame || hasAutoFittedRef.current) return;
     if (!previewContainerRef.current) return;
+    if (displayW <= 0 || displayH <= 0) return;
     const t = setTimeout(() => {
-      viewport.fitToView(rawFrame.width, rawFrame.height);
+      // Fit what the preview actually draws, which is the upscaled frame
+      // whenever a factor is active — not the raw source frame.
+      viewport.fitToView(displayW, displayH);
+      fittedSizeRef.current = { w: displayW, h: displayH };
       hasAutoFittedRef.current = true;
     }, 100);
     return () => clearTimeout(t);
-  }, [rawFrame, previewContainerRef, viewport]);
+  }, [rawFrame, displayW, displayH, previewContainerRef, viewport]);
+
+  // Keep the preview at a constant on-screen size when the frame it shows
+  // changes dimensions (upscale factor, pixel size, original toggle). Without
+  // this the zoom fitted for a 512x512 frame stays put when factor 8 turns it
+  // into 4096x4096, and the canvas spills far outside the preview box until
+  // the user hits Reset. Rescaling baseView too keeps the zoom readout (which
+  // is a percentage of the fitted zoom) honest.
+  useEffect(() => {
+    const prev = fittedSizeRef.current;
+    if (!prev || displayW <= 0 || displayH <= 0) return;
+    if (prev.w === displayW && prev.h === displayH) return;
+    fittedSizeRef.current = { w: displayW, h: displayH };
+    const ratio = Math.min(prev.w / displayW, prev.h / displayH);
+    if (!Number.isFinite(ratio) || ratio <= 0) return;
+    setView((v) => ({ ...v, zoom: v.zoom * ratio }));
+    setBaseView((v) => ({ ...v, zoom: v.zoom * ratio }));
+  }, [displayW, displayH, setView, setBaseView]);
 
   useEffect(() => {
     const el = previewContainerRef.current;
@@ -316,8 +451,8 @@ export default function PixelatePage() {
   // Export
   // -----------------------------------------------------------------
   const downloadCurrent = async () => {
-    if (!pixelatedFrame || !sourceFile) return;
-    const blob = await imageDataToBlob(pixelatedFrame);
+    if (!outputFrame || !sourceFile) return;
+    const blob = await imageDataToBlob(outputFrame);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     const base = sourceFile.name.replace(/\.[^.]+$/, "");
@@ -330,15 +465,15 @@ export default function PixelatePage() {
   };
 
   const downloadStitched = async () => {
-    if (pixelatedFrames.length === 0 || !sourceFile) return;
-    // Stitch all pixelated frames into a grid that mirrors the source grid.
-    const cellW = pixelatedFrames[0].width;
-    const cellH = pixelatedFrames[0].height;
+    if (outputFrames.length === 0 || !sourceFile) return;
+    // Stitch all processed frames into a grid that mirrors the source grid.
+    const cellW = outputFrames[0].width;
+    const cellH = outputFrames[0].height;
     const cols = sourceMode === "sheet" ? effectiveCols : 1;
     // Size from the grid, not the surviving frame count: importing a sheet drops
-    // empty cells, so pixelatedFrames.length can be short of cols*rows. Deriving rows
+    // empty cells, so outputFrames.length can be short of cols*rows. Deriving rows
     // from it would place the last frames past the bottom edge and lose them.
-    const rows = sourceMode === "sheet" ? effectiveRows : Math.ceil(pixelatedFrames.length / cols);
+    const rows = sourceMode === "sheet" ? effectiveRows : Math.ceil(outputFrames.length / cols);
     const canvas = document.createElement("canvas");
     canvas.width = cellW * cols;
     canvas.height = cellH * rows;
@@ -346,17 +481,17 @@ export default function PixelatePage() {
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
 
-    for (let i = 0; i < pixelatedFrames.length; i++) {
+    for (let i = 0; i < outputFrames.length; i++) {
       const raw = rawFrames[i];
       // Prefer the source cell row/col so sparse sheets stay aligned.
       const c = raw.cellCol ?? i % cols;
       const r = raw.cellRow ?? Math.floor(i / cols);
       const tmp = document.createElement("canvas");
-      tmp.width = pixelatedFrames[i].width;
-      tmp.height = pixelatedFrames[i].height;
+      tmp.width = outputFrames[i].width;
+      tmp.height = outputFrames[i].height;
       const tctx = tmp.getContext("2d");
       if (!tctx) continue;
-      tctx.putImageData(pixelatedFrames[i], 0, 0);
+      tctx.putImageData(outputFrames[i], 0, 0);
       ctx.drawImage(tmp, c * cellW, r * cellH);
     }
 
@@ -637,6 +772,86 @@ export default function PixelatePage() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Maximize2 className="w-4 h-4" />
+                Upscale
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Runs after pixelation. Every filter only copies existing pixels — no new colors.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Algorithm</Label>
+                <Select
+                  value={upscaleAlgorithm}
+                  onValueChange={(v) => v && setUpscaleAlgorithm(v as UpscaleAlgorithm)}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UPSCALE_ALGORITHMS.map((a) => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs">
+                        {a.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">{plan.info.description}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <Label className="text-xs">Factor</Label>
+                  <span className="text-[10px] font-mono">
+                    {upscaleFactor === 1 ? "off" : `${upscaleFactor}×`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-muted/30 border">
+                  {factorOptions.map((f) => (
+                    <button
+                      type="button"
+                      key={f}
+                      onClick={() => setUpscaleFactor(f)}
+                      className={cn(
+                        "flex-1 min-w-10 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        upscaleFactor === f
+                          ? "bg-background shadow-sm text-primary"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {f === 1 ? "Off" : `${f}×`}
+                    </button>
+                  ))}
+                </div>
+                {upscaleActive && plan.remainder > 1 && plan.info.nativeFactor > 1 ? (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-500">
+                    {plan.info.label} only reaches {plan.info.nativeFactor}× steps.{" "}
+                    {plan.passes > 0
+                      ? `${upscaleFactor}× = ${plan.passes} ${plan.info.label} pass${plan.passes > 1 ? "es" : ""} then nearest ×${plan.remainder}.`
+                      : `${upscaleFactor}× falls back to plain nearest.`}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">
+                    {upscaleActive
+                      ? `${plan.info.label} runs ${plan.passes || 1} pass${(plan.passes || 1) > 1 ? "es" : ""} — no nearest fallback.`
+                      : "Off — the pixelated result is exported as-is."}
+                  </p>
+                )}
+              </div>
+
+              {outputFrame && pixelatedFrame && (
+                <p className="text-[10px] text-muted-foreground font-mono">
+                  {pixelatedFrame.width}×{pixelatedFrame.height} → {outputFrame.width}×
+                  {outputFrame.height}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           {rawFrames.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -698,9 +913,9 @@ export default function PixelatePage() {
                 </Button>
               </div>
               <ViewportControls
-                onZoomIn={() => rawFrame && viewport.setZoomIn(rawFrame.width, rawFrame.height)}
-                onZoomOut={() => rawFrame && viewport.setZoomOut(rawFrame.width, rawFrame.height)}
-                onReset={() => rawFrame && viewport.fitToView(rawFrame.width, rawFrame.height)}
+                onZoomIn={() => rawFrame && viewport.setZoomIn(displayW, displayH)}
+                onZoomOut={() => rawFrame && viewport.setZoomOut(displayW, displayH)}
+                onReset={() => rawFrame && viewport.fitToView(displayW, displayH)}
               />
             </CardHeader>
             <CardContent className="space-y-3">
@@ -757,9 +972,10 @@ export default function PixelatePage() {
                       baseZoom={baseView.zoom}
                       className="absolute bottom-2 right-2"
                     />
-                    {pixelatedFrame && (
+                    {outputFrame && (
                       <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded font-mono pointer-events-none">
-                        {pixelatedFrame.width}×{pixelatedFrame.height}
+                        {outputFrame.width}×{outputFrame.height}
+                        {upscaleActive && ` · ${plan.info.label} ${upscaleFactor}×`}
                       </div>
                     )}
                   </>
@@ -785,6 +1001,79 @@ export default function PixelatePage() {
               )}
             </CardContent>
           </Card>
+
+          {showComparison && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Maximize2 className="w-4 h-4" />
+                  Before / after — 1:1
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Actual output pixels, no fit-to-container scaling. Both panes scroll together.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label className="text-xs">Before</Label>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {pixelatedFrame.width}×{pixelatedFrame.height}
+                      </span>
+                    </div>
+                    <div
+                      ref={beforeScrollRef}
+                      onScroll={() => syncScroll("before")}
+                      className={cn(
+                        "h-72 rounded-lg border overflow-auto",
+                        gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
+                      )}
+                    >
+                      <canvas
+                        ref={beforeCanvasRef}
+                        className="block"
+                        style={{
+                          width: pixelatedFrame.width,
+                          height: pixelatedFrame.height,
+                          imageRendering: "pixelated",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label className="text-xs">
+                        After — {plan.info.label} {upscaleFactor}×
+                      </Label>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {outputFrame.width}×{outputFrame.height}
+                      </span>
+                    </div>
+                    <div
+                      ref={afterScrollRef}
+                      onScroll={() => syncScroll("after")}
+                      className={cn(
+                        "h-72 rounded-lg border overflow-auto",
+                        gridTheme === "light" ? "checkerboard-light" : "checkerboard-dark",
+                      )}
+                    >
+                      <canvas
+                        ref={afterCanvasRef}
+                        className="block"
+                        style={{
+                          width: outputFrame.width,
+                          height: outputFrame.height,
+                          imageRendering: "pixelated",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

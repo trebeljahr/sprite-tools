@@ -270,7 +270,21 @@ sprite-tools pixelate <input>
   [--dither]                       # Floyd-Steinberg
   [--alpha-threshold N]
   [--no-upscale]                   # keep native low-res output
+  [--upscale-algo ID]              # nearest|scale2x|scale3x|eagle|xbr, default nearest
+  [--upscale-factor N]             # explicit magnification, default 1 (off)
   [-o FILE]                        # PNG (default: stdout)
+```
+
+Two size controls that are easy to confuse. `--upscale` (on by default, disabled with `--no-upscale`) only restores the pixelated frame to the **source** size with blocky nearest-neighbor pixels — it can never make a sprite bigger than the input. `--upscale-factor N` with `N > 1` is real magnification by an integer factor, and it **replaces** that restore step entirely, so nothing is scaled twice and `--no-upscale` becomes irrelevant. At the default `N = 1` the old behavior is untouched.
+
+`--upscale-algo` picks the filter used by `--upscale-factor`; it does nothing at factor 1. The algorithm's native step is applied as often as it divides the factor evenly and the remainder falls back to nearest-neighbor — `scale2x --upscale-factor 4` is two Scale2x passes, `--upscale-factor 6` is one pass then nearest ×3, `scale3x --upscale-factor 9` is two Scale3x passes. Every filter only copies existing source pixels, so no new colors appear and transparency is preserved exactly. See [Pixelate](/docs/web/pixelate) for what each one looks like and when it is worth using — for a lot of pixel art `nearest` is the right answer.
+
+```bash
+# Pure upscale: no downscale, no quantization, just magnify pixel art 4x with Scale2x
+sprite-tools pixelate hero.png --pixel-size 1 --colors 0 --upscale-algo scale2x --upscale-factor 4 -o hero-4x.png
+
+# Game Boy pixel art, then 2x with xBR
+sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --upscale-algo xbr --upscale-factor 2 -o hero-gb-2x.png
 ```
 
 ## `normal-map`

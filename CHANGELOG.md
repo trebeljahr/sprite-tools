@@ -24,6 +24,8 @@ This project follows semantic versioning for the npm package.
 - Add edge extrusion to atlas packing — the `--extrude N` CLI flag, the `extrude` input on the `sprite_pack_atlas` MCP tool, and an Extrude control in the web atlas packer. Each sprite's edge pixels are repeated into the surrounding gutter, and the amount is clamped to `--padding`, so at padding 0 extrusion is a no-op.
 - Change atlas packing to extrude 1px by default, so atlas PNGs differ from previous output in the gutter pixels around each sprite. Frame rects in the manifest are unchanged; pass `--extrude 0` to restore the old transparent gutter.
 - Fix the web atlas packer exporting the green frame guides into the PNG — every sprite's outermost pixel row shipped tinted. The guides are now preview-only, so the downloaded atlas is pixel-identical to the CLI's.
+- Add pixel-art upscaling to the Pixelate tool, the `pixelate` CLI command, and the `sprite_pixelate` MCP tool — nearest-neighbour plus Scale2x, Scale3x, Eagle, and xBR level 1, so an already-pixelated sprite can be magnified for display without the blur a bilinear resize leaves behind. Every filter only copies existing source pixels, so palettes and transparency come through unchanged.
+- Add `--upscale-algo` / `--upscale-factor` to `pixelate` and `upscale_algo` / `upscale_factor` to `sprite_pixelate`. A factor above 1 is an explicit magnification and replaces the existing `--upscale` / `upscale` restore-to-source-size step, which is unchanged at the default factor of 1.
 - Add GitHub community health files, issue templates, pull request guidance, and dependency update configuration.
 
 ## [0.1.0] - Initial public release

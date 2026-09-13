@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, collision polygons, pivot anchors, animation tags, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, and GIF export.
 
 Three surfaces, one shared pipeline:
 
@@ -25,7 +25,7 @@ Good starting points:
 - [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, or loose frames into a clean sheet.
 - [Background Removal](https://sprites.trebeljahr.com/background-removal) — chroma-key a flat background out of every frame.
 - [Collision](https://sprites.trebeljahr.com/collision) — trace tight polygons for physics engines.
-- [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art.
+- [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art, or upscale existing pixel art with Scale2x, Scale3x, Eagle, or xBR.
 - [Outline & Shadow](https://sprites.trebeljahr.com/outline) — add an outline and a drop shadow to a sprite or a sheet.
 - [Atlas](https://sprites.trebeljahr.com/atlas) — pack loose sprites into one PNG plus JSON.
 - [Docs](https://sprites.trebeljahr.com/docs) — quickstart, CLI reference, MCP setup, schemas, and algorithm notes.
@@ -60,6 +60,9 @@ sprite-tools pixelate hero.png --pixel-size 4 --palette gameboy --dither -o hero
 
 # Add a 2px outline and a soft drop shadow
 sprite-tools outline hero.png --width 2 --shadow --shadow-blur 2 -o hero-fx.png
+
+# Upscale existing pixel art 4x with Scale2x (no downscale, no quantization)
+sprite-tools pixelate hero.png --pixel-size 1 --colors 0 --upscale-algo scale2x --upscale-factor 4 -o hero-4x.png
 
 # Derive a normal map for 2D lighting
 sprite-tools normal-map hero.png -o hero-normal.png

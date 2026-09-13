@@ -25,6 +25,12 @@ import {
 import { generateOutline } from "../src/lib/collision/outline";
 import { pixelate, hexToRgb } from "../src/lib/pixel-art/pixelate";
 import { paletteById, PALETTES } from "../src/lib/pixel-art/palettes";
+import {
+  upscale as upscalePixels,
+  upscaleNearestBy,
+  UPSCALE_ALGORITHMS,
+  type UpscaleAlgorithm,
+} from "../src/lib/pixel-art/upscale";
 import { generateNormalMap } from "../src/lib/normal-map/normal-map";
 import {
   applyOutlineFx,
@@ -134,6 +140,11 @@ const VARIANT_SOURCE = z
   .refine((v) => (v.variants === undefined) !== (v.hue_variants === undefined), {
     message: "supply exactly one of `variants` or `hue_variants`",
   });
+
+// Derived from the core module so the schema can never drift from the algorithms
+// that actually exist; the per-algorithm sentences are the core's own copy.
+const UPSCALE_ALGO_IDS = UPSCALE_ALGORITHMS.map((a) => a.id) as [string, ...string[]];
+const UPSCALE_ALGO_HELP = UPSCALE_ALGORITHMS.map((a) => `${a.id}: ${a.description}`).join(" ");
 
 function jsonResult(payload: unknown) {
   return {
@@ -1099,7 +1110,9 @@ export function registerAllTools(server: McpServer) {
     "sprite_pixelate",
     {
       description:
-        "Downscale a sprite into pixel-art form with optional color quantization, dither, and preset palettes (gameboy, pico8, nes, cga, mono).",
+        "Downscale a sprite into pixel-art form with optional color quantization, dither, and preset palettes (gameboy, pico8, nes, cga, mono). " +
+        "Two independent size controls, do not confuse them: `upscale` (default true) only restores the pixelated result to the ORIGINAL image size with blocky nearest-neighbour pixels, so the output is the same dimensions as the input. " +
+        "`upscale_factor` (default 1 = off) instead MAGNIFIES the pixelated result by an explicit integer factor using `upscale_algo`, and replaces that restore-to-source-size step entirely — use it to make a sprite genuinely larger than the source.",
       inputSchema: {
         input_path: z.string(),
         output_path: z.string(),
@@ -1112,9 +1125,35 @@ export function registerAllTools(server: McpServer) {
           .boolean()
           .default(true)
           .describe("Scale back up to source size with blocky pixels"),
+        upscale_algo: z
+          .enum(UPSCALE_ALGO_IDS)
+          .default("nearest")
+          .describe(
+            `Filter used when upscale_factor > 1; ignored otherwise. All of them only copy existing source pixels, so no new colors are invented and transparency is preserved. ${UPSCALE_ALGO_HELP}`,
+          ),
+        upscale_factor: z
+          .number()
+          .int()
+          .min(1)
+          .max(9)
+          .default(1)
+          .describe(
+            "Explicit magnification applied after pixelation, e.g. 4 = four times as wide and tall as the pixelated frame. 1 (default) disables it and leaves the `upscale` behavior alone. Any value > 1 overrides `upscale`. Factors that are not a whole power of the algorithm's native step (2 for scale2x/eagle/xbr, 3 for scale3x) finish with a nearest-neighbour pass, so the pure ones are 2/4/8 for the 2x filters and 3/9 for scale3x — 9 is the ceiling here for that reason.",
+          ),
       },
     },
-    ({ input_path, output_path, pixel_size, colors, palette, dither, upscale, ...gridArgs }) => {
+    ({
+      input_path,
+      output_path,
+      pixel_size,
+      colors,
+      palette,
+      dither,
+      upscale,
+      upscale_algo,
+      upscale_factor,
+      ...gridArgs
+    }) => {
       const { frames, grid } = loadSheetFromArgs(input_path, gridArgs);
       const preset = paletteById(palette);
       const paletteRgb = preset.colors.length > 0 ? preset.colors.map(hexToRgb) : undefined;
@@ -1127,9 +1166,17 @@ export function registerAllTools(server: McpServer) {
           dither: dither ? "floyd-steinberg" : "none",
           alphaThreshold: 0,
         });
+        // An explicit magnification replaces the implicit restore-to-source-size
+        // upscale; factor 1 leaves the original behavior untouched.
+        if (upscale_factor > 1) {
+          return upscalePixels(small, {
+            algorithm: upscale_algo as UpscaleAlgorithm,
+            scale: upscale_factor,
+          });
+        }
         if (!upscale) return small;
         const scale = Math.max(1, Math.round(f.width / small.width));
-        return upscaleNearest(small, scale);
+        return upscaleNearestBy(small, scale);
       });
 
       const out =
@@ -1140,7 +1187,19 @@ export function registerAllTools(server: McpServer) {
         source: input_path,
         output_path,
         grid,
-        options: { pixel_size, colors, palette, dither, upscale },
+        width: out.width,
+        height: out.height,
+        frameWidth: processed[0]?.width ?? 0,
+        frameHeight: processed[0]?.height ?? 0,
+        options: {
+          pixel_size,
+          colors,
+          palette,
+          dither,
+          upscale,
+          upscale_algo,
+          upscale_factor,
+        },
       });
     },
   );
@@ -1681,28 +1740,4 @@ function blit(src: ImageData, dst: ImageData, dx: number, dy: number) {
     const dstRow = ((dy + y) * dst.width + dx) * 4;
     dst.data.set(src.data.subarray(srcRow, srcRow + src.width * 4), dstRow);
   }
-}
-
-function upscaleNearest(img: ImageData, f: number): ImageData {
-  if (f <= 1) return img;
-  const out = new ImageData(img.width * f, img.height * f);
-  for (let y = 0; y < img.height; y++) {
-    for (let x = 0; x < img.width; x++) {
-      const si = (y * img.width + x) * 4;
-      const r = img.data[si];
-      const g = img.data[si + 1];
-      const b = img.data[si + 2];
-      const a = img.data[si + 3];
-      for (let dy = 0; dy < f; dy++) {
-        for (let dx = 0; dx < f; dx++) {
-          const di = ((y * f + dy) * out.width + x * f + dx) * 4;
-          out.data[di] = r;
-          out.data[di + 1] = g;
-          out.data[di + 2] = b;
-          out.data[di + 3] = a;
-        }
-      }
-    }
-  }
-  return out;
 }

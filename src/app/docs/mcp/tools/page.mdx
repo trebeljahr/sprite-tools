@@ -392,11 +392,17 @@ Inputs:
   colors?: number,       // 0..256, default 16
   palette?: "none" | "gameboy" | "gameboy-pocket" | "mono" | "pico8" | "cga" | "nes",
   dither?: boolean,
-  upscale?: boolean      // default true
+  upscale?: boolean,     // default true — restore to SOURCE size, blocky
+  upscale_algo?: "nearest" | "scale2x" | "scale3x" | "eagle" | "xbr",   // default "nearest"
+  upscale_factor?: number   // 1..9, default 1 (off) — explicit magnification
 }
 ```
 
-Writes PNG. Returns `{ source, output_path, grid, options }`.
+`upscale` and `upscale_factor` are two different size controls. `upscale` (default `true`) only scales the pixelated frame back up to the **original image size** with nearest-neighbor blocks, so the output matches the input dimensions. `upscale_factor` above 1 is genuine magnification by that integer factor using `upscale_algo`, and it **replaces** the restore-to-source step, so the frame is never scaled twice and `upscale` no longer applies. At the default `1` nothing changes.
+
+`upscale_algo` is ignored at factor 1. The algorithm's native step (2 for `scale2x`/`eagle`/`xbr`, 3 for `scale3x`) is applied as often as it divides the factor evenly, and any remainder is nearest-neighbor — so the factors that run through the filter end to end are 2, 4 and 8 for the 2× filters and 3 and 9 for `scale3x`, which is why the cap is 9. All five filters only copy existing source pixels, so no new colors are invented and transparency is preserved exactly. Details and picking guidance are in the [Pixelate guide](/docs/web/pixelate).
+
+Writes PNG. Returns `{ source, output_path, grid, width, height, frameWidth, frameHeight, options }`. `width`/`height` are the written file's dimensions and `frameWidth`/`frameHeight` a single frame's, so a sheet reports both — there is no need to re-open the PNG to learn how big the result is.
 
 ## `sprite_generate_normal_map`
 
