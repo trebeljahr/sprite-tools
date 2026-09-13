@@ -328,6 +328,45 @@ Do not treat it as an error, a partial run, or something to configure away. `rul
 
 The MCP tool adds one field the CLI does not: `ok`, which is `summary.errors === 0`.
 
+## Aseprite
+
+The `aseprite` CLI command and the `sprite_read_aseprite` MCP tool write a header for the sheet PNG they composited, plus the document data a PNG does not carry.
+
+```ts
+interface AsepriteOutput extends Omit<Header, "source" | "sourceWidth" | "sourceHeight"> {
+  source: string | null;         // the written sheet PNG; null when no sheet file was written
+  sourceWidth: number | null;    // pixel size of that PNG; null with --no-sheet / no output_path
+  sourceHeight: number | null;
+  asepriteFile: string;          // the .ase / .aseprite that was read, "-" for stdin
+  frameCount: number;            // exported frames
+  documentFrameCount: number;    // frames in the file
+  canvas: { width: number; height: number };
+  colorDepth: 32 | 16 | 8;
+  pixelRatio: { width: number; height: number };
+  tag: string | null;
+  frameDurations?: Array<number | null>;  // ms per exported frame; all numbers for a file Aseprite wrote
+  tags: Array<{
+    name: string; from: number; to: number;
+    direction: "forward" | "reverse" | "pingpong" | "pingpong-reverse";
+    repeat: number;              // 0 = not set
+    color: string | null;
+  }>;
+  frames: Array<{ index: number; sourceIndex: number; durationMs: number }>;
+  layers: Array<{
+    index: number; name: string; type: "image" | "group" | "tilemap";
+    opacity: number; blendMode: string;
+    visible: boolean;            // the layer's own toggle
+    effectivelyVisible: boolean; // false inside a hidden group
+    reference: boolean;          // reference layers never render
+    childLevel: number; parentIndex: number | null;
+  }>;
+  palette: string[];             // "#rrggbb" or "#rrggbbaa"
+  warnings: string[];
+}
+```
+
+`frameDurations` is the same key as in [Tags](#framedurations). Tags carry no `fps`, because Aseprite stores timing only per frame. The MCP tool adds `output_path`, `sheetWidth`, `sheetHeight`, `frames_dir`, `frame_paths`, and `options`. See [Aseprite files](/docs/reference/aseprite#output-fields) for the field notes.
+
 ## Merging outputs
 
 Because namespaces don't collide:
@@ -347,7 +386,7 @@ The payload keys never collide, but `options` is a shared top-level key: the las
 
 That merged document is the input to `sprite-tools export` (and the `sprite_export_engine` MCP tool). The exporter accepts any of the shapes on this page:
 
-- one command's output — `CollisionOutput`, `PivotOutput`, `TagsOutput`
+- one command's output — `CollisionOutput`, `PivotOutput`, `TagsOutput`, `AsepriteOutput`
 - a `jq -s add` merge of several of them
 - a `MetaOutput`
 - an `AtlasManifest`
@@ -358,6 +397,7 @@ Sections that are absent are skipped rather than defaulted, so a tags-only docum
 Two values the exporter resolves rather than copies:
 
 - **Texture size** — for a header document, the size read from the `source` PNG when the file exists, else `sourceWidth`/`sourceHeight`. The grid is checked against that size, and a mismatch is an error. With neither, it falls back to `frameWidth × grid.cols` by `frameHeight × grid.rows` plus `grid.margin` and the `grid.spacing` gutters. For a manifest it is the manifest's own `width`/`height`. Unity's sprite rects are computed against that height, so a wrong `grid` mirrors the whole sheet vertically with no error.
-- **Per-frame duration** — `round(1000 / fps)` of the first tag covering the frame, or of the `--fps` default for frames no tag covers.
+- **Per-frame duration** — the frame's [`frameDurations`](#framedurations) entry when it has one. Otherwise `round(1000 / fps)` of the first tag covering the frame, or of the `--fps` default for frames no tag covers.
+- **Texture name** — `--texture`, else the manifest's `atlas`, else the basename of `source`. A header with `source: null` and no `--texture` is an error.
 
 See [engine export](/docs/reference/engine-export) for what each format does with the document, and where the conversions are lossy.

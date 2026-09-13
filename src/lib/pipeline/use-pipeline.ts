@@ -1,7 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { importFromFiles, importFromSpriteSheet, importFromVideo } from "./import";
+import {
+  importFromAseprite,
+  importFromFiles,
+  importFromSpriteSheet,
+  importFromVideo,
+} from "./import";
 import {
   autoCrop as runAutoCrop,
   chromaKey as runChromaKey,
@@ -14,6 +19,7 @@ import {
   type Frames,
   type PipelineStep,
   type Progress,
+  type AsepriteImportConfig,
   type AutoCropConfig,
   type ChromaKeyConfig,
   type DedupeStepConfig,
@@ -235,6 +241,12 @@ export function buildImportSheetStep(config: SheetSliceConfig, sourceName?: stri
 export function buildImportFilesStep(count: number, sourceName?: string): PipelineStep {
   return { id: nextStepId(), kind: "import-files", config: { count, sourceName } };
 }
+export function buildImportAsepriteStep(
+  config: AsepriteImportConfig,
+  sourceName?: string,
+): PipelineStep {
+  return { id: nextStepId(), kind: "import-aseprite", config: { ...config, sourceName } };
+}
 
 // -----------------------------------------------------------------
 // Step-level cache
@@ -252,7 +264,12 @@ interface CacheEntry {
 }
 
 function isImportStep(kind: PipelineStep["kind"]): boolean {
-  return kind === "import-video" || kind === "import-sheet" || kind === "import-files";
+  return (
+    kind === "import-video" ||
+    kind === "import-sheet" ||
+    kind === "import-files" ||
+    kind === "import-aseprite"
+  );
 }
 
 // -----------------------------------------------------------------
@@ -331,6 +348,11 @@ export function usePipeline() {
             case "import-files": {
               if (!state.source.images) throw new Error("No images source");
               produced = await importFromFiles(state.source.images);
+              break;
+            }
+            case "import-aseprite": {
+              if (!state.source.file) throw new Error("No Aseprite source");
+              produced = await importFromAseprite(state.source.file, step.config);
               break;
             }
             case "chroma-key": {

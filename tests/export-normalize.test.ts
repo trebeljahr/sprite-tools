@@ -321,3 +321,84 @@ describe("frameDurations", () => {
     expect(Object.values(frames).map((f) => f.duration)).toEqual([250, 83, 83, 40]);
   });
 });
+
+describe("normalizeExportInput — pingpong-reverse and repeat", () => {
+  const sheet = (tags: unknown[]) => ({
+    source: "hero.png",
+    frameWidth: 8,
+    frameHeight: 8,
+    grid: { cols: 4, rows: 1, detected: false },
+    frameCount: 4,
+    tags,
+  });
+
+  it("keeps pingpong-reverse instead of flattening it to forward", () => {
+    const doc = normalizeExportInput(
+      sheet([
+        { name: "a", from: 0, to: 3, direction: "pingpong-reverse" },
+        // Aseprite's own JSON spelling round-trips to the same direction.
+        { name: "b", from: 0, to: 3, direction: "pingpong_reverse" },
+        { name: "c", from: 0, to: 3, direction: "sideways" },
+      ]),
+    );
+    expect(doc.tags.map((t) => t.direction)).toEqual([
+      "pingpong-reverse",
+      "pingpong-reverse",
+      "forward",
+    ]);
+  });
+
+  it("carries a positive repeat count, from a number or Aseprite's string", () => {
+    const doc = normalizeExportInput(
+      sheet([
+        { name: "a", from: 0, to: 1, repeat: 3 },
+        { name: "b", from: 0, to: 1, repeat: "2" },
+        { name: "c", from: 0, to: 1, repeat: 0 },
+        { name: "d", from: 0, to: 1, repeat: -1 },
+        { name: "e", from: 0, to: 1 },
+      ]),
+    );
+    expect(doc.tags.map((t) => t.repeat)).toEqual([3, 2, undefined, undefined, undefined]);
+    expect(doc.tags[2]).not.toHaveProperty("repeat");
+  });
+});
+
+describe("normalizeExportInput — documents with no sheet file", () => {
+  const noSheet = {
+    source: null,
+    sourceWidth: null,
+    sourceHeight: null,
+    frameWidth: 8,
+    frameHeight: 8,
+    grid: { cols: 2, rows: 1, detected: false },
+    frameCount: 2,
+  };
+
+  it("refuses to invent a texture name for `source: null`", () => {
+    expect(() => normalizeExportInput(noSheet)).toThrow(/source: null.*no sheet image/);
+  });
+
+  it("exports once the caller names the texture", () => {
+    const doc = normalizeExportInput(noSheet, { texture: "hero.png" });
+    expect(doc.texture).toBe("hero.png");
+    expect([doc.textureWidth, doc.textureHeight]).toEqual([16, 8]);
+  });
+
+  it("still defaults the texture for a document that simply omits source", () => {
+    const { source: _omit, ...rest } = noSheet;
+    expect(normalizeExportInput(rest).texture).toBe("spritesheet.png");
+  });
+
+  it("accepts a tool result whose output_path is the sheet it describes", () => {
+    // sprite_read_aseprite writes the sheet its grid describes, so output_path
+    // and source name the same file.
+    const doc = normalizeExportInput({
+      ...noSheet,
+      source: "out/hero.png",
+      output_path: "out/hero.png",
+      sourceWidth: 16,
+      sourceHeight: 8,
+    });
+    expect(doc.texture).toBe("hero.png");
+  });
+});

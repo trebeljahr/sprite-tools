@@ -139,6 +139,102 @@ GRID=$(sprite-tools detect sheet.png | jq -r '.grid | "--cols \(.cols) --rows \(
 sprite-tools collision sheet.png $GRID --tolerance 4 -o c.json
 ```
 
+## Aseprite file to sheet, collision, and pivots
+
+Start from the `.aseprite` working file instead of a PNG export. `aseprite` writes the sheet and reports the grid it used, so the next commands do not have to detect it:
+
+```bash
+sprite-tools ase hero.aseprite -o hero-sheet.png --json hero.json
+
+GRID=$(jq -r '.grid | "--cols \(.cols) --rows \(.rows)"' hero.json)
+sprite-tools collision hero-sheet.png $GRID --tolerance 4 -o hero-collision.json
+sprite-tools pivot hero-sheet.png $GRID --preset bottom-center -o hero-pivot.json
+
+jq -s 'add' hero-collision.json hero-pivot.json hero.json > hero-meta.json
+```
+
+`hero-meta.json` holds the Aseprite `tags`, `frameDurations`, `layers`, and `palette` next to `collision` and `pivots`. `hero.json` goes last in the merge, so its `source`, `sourceWidth`, and `sourceHeight` win. They name `hero-sheet.png` and its size. The `.aseprite` path is in `asepriteFile`. `sprite-tools export hero-meta.json` reads the result, and a Unity or Phaser export also gets the pivots.
+
+To skip the intermediate PNG, pipe one tag straight into `meta`. Read the tag's frame count first, because the sheet is one row by default:
+
+```bash
+N=$(sprite-tools ase hero.aseprite --tag run --no-sheet | jq '.frameCount')
+
+sprite-tools ase hero.aseprite --tag run -o - --json run.json \
+  | sprite-tools meta - --cols "$N" --rows 1 \
+      --collision --tolerance 4 --pivot bottom-center \
+  > run-physics.json
+
+jq -s 'add' run-physics.json run.json > run-meta.json
+```
+
+`-o -` sends the PNG down the pipe, so `--json` has to name a file. In `run.json` the tag ranges are rebased onto the exported frames: `run` reads `from: 0`, and each `frames[].sourceIndex` points back to the frame in the `.aseprite` file. Decode warnings go to stderr, so they stay visible while stdout is piped.
+
+The piped sheet has no filename, so `run.json` has `source: null`, and so does `run-meta.json`. To export that merge, name the texture yourself: `sprite-tools export run-meta.json --format godot --texture run.png`.
+
+## Aseprite file to a Godot SpriteFrames resource
+
+Go from the `.aseprite` working file to a Godot 4 `SpriteFrames` resource in two commands. The first writes the sheet and its metadata. The second reads that metadata:
+
+```bash
+sprite-tools ase hero.aseprite -o hero-sheet.png --json hero.json
+sprite-tools export hero.json --format godot --res-path res://art/hero-sheet.png -o hero.tres
+```
+
+Copy `hero-sheet.png` to `art/` in the Godot project, next to `hero.tres`, and let the editor import it.
+
+What carries over from the `.aseprite` file:
+
+- The texture. `hero.json` has `source: "hero-sheet.png"` and the PNG's size, so the `.tres` references the sheet you wrote. `--res-path` sets the path inside the project; without it the path is `res://hero-sheet.png`.
+- One animation per tag, sorted by name. A `reverse`, `pingpong`, or `pingpong-reverse` tag is baked into the frame order.
+- Frame timing. `export` reads the top-level `frameDurations` array, one value per frame in milliseconds.
+
+For a 64×64 file with 500 ms frames, a `Loop` tag (`pingpong`, frames 0–2), and an `Animation 2` tag (`reverse`, frames 1–2), the `[resource]` block is:
+
+```
+[resource]
+animations = [{
+"frames": [{
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_r1mdz")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_xxgd0")
+}],
+"loop": true,
+"name": &"Animation 2",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_6laii")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_xxgd0")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_r1mdz")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_xxgd0")
+}],
+"loop": true,
+"name": &"Loop",
+"speed": 10.0
+}]
+```
+
+Aseprite tags have no fps, so `speed` is the `--fps` default of 10. Each `duration` is a multiple of `1/speed`: 5.0 at speed 10 is 500 ms. `--fps 2` gives `speed: 2.0` and `duration: 1.0`, which is the same 500 ms.
+
+To export only some layers or one tag, filter at the first step. `--tag` rebases the tag ranges and `frameDurations` onto the exported frames, so the second command does not change:
+
+```bash
+sprite-tools ase hero.aseprite --tag Loop --layer body -o loop.png --json loop.json
+sprite-tools export loop.json --format godot -o loop.tres
+```
+
+`export` stops with an error on a `--no-sheet` document, because its `source` is `null` and there is no texture to reference. Write the sheet with `-o`, or pass `--texture hero-sheet.png`.
+
 ## Pin nine-slice borders on a folder of UI panels
 
 Every panel in a UI kit usually shares one border thickness, and you already know what it is. Pass it rather than letting the detector guess:

@@ -8,22 +8,46 @@ export const metadata = {
 
 [Open Sheet Builder](/spritesheet)
 
-Sheet Builder turns video, GIFs, existing sprite sheets, or loose frame images into a clean exported sheet.
+Sheet Builder turns video, GIFs, existing sprite sheets, or Aseprite files into a clean exported sheet.
 
 ## When to use it
 
 - You have a short animation and need individual frames.
 - You have an existing sheet and want to split, crop, restitch, or export a different layout.
+- You have an `.ase` or `.aseprite` working file and want its frames without exporting from Aseprite first.
 - You want chroma-key cleanup before sending frames into Collision, Pivot, Tags, Atlas, or GIF.
 
 ## Workflow
 
-1. Choose **Video** or **Sheet**.
+1. Choose **Video**, **Sheet**, or **Aseprite**.
 2. Drop, paste, or upload your source.
 3. Tune background removal, crop, grid, and selected frames.
 4. Export a stitched PNG sheet or a ZIP of individual frames.
 
 When you arrive from [AI Animation](/docs/web/animate), the generated video is passed into Sheet Builder automatically.
+
+## Aseprite files
+
+The **Aseprite** tab reads `.ase` and `.aseprite` files in the browser. Dropping one on an upload area, or pasting one, switches to this tab. Browsers do not report a file type for Aseprite files, so the `.ase` or `.aseprite` extension decides the route.
+
+After you pick a file, the panel shows the canvas size, frame count, and colour depth. Before you import, you can:
+
+- Turn individual layers on or off.
+- Switch on **Include hidden layers**.
+- Pick one **Animation tag** to import only its frames, or keep **All frames**.
+
+Some layers cannot add pixels, so their chips are dashed and disabled: reference layers, tilemap layers, and hidden layers while **Include hidden layers** is off. Hover a dashed chip to see the reason. The panel then reads "Dashed layers cannot add pixels to the import. Hover one to see why."
+
+Press **Import Frames** to composite the frames. After an import, a change to the layers, the tag, or **Include hidden layers** re-imports right away. A tag change also clears the frame selection, because the frame list is different. A newly picked file still waits for **Import Frames**. Each frame is the size of the Aseprite canvas. Background removal starts in **Transparent Background (Cutout)** mode, because the frames already have transparency, and a chroma key would remove artwork.
+
+Anything the reader could not decode fully is listed under **Decode notes**, for example a tilemap layer or a group blend mode it did not apply. See [Aseprite files](/docs/reference/aseprite) for what is supported. The notes also report what the import did with your choices:
+
+- `Tag "X" covers frames A-B; clamped to C-D.` The tag names frames past the end of the file.
+- `Tag "X" is not in this file; every frame was imported.`
+- `None of the selected layers exist in this file; every layer was imported.`
+- `Every selected layer is hidden, a reference layer or a tilemap, so the imported frames are empty.`
+
+A tag that covers no frame of the file at all stops the import with the error `Tag "X" covers frames A-B, but the file has N frame(s).`
 
 ## Margin and spacing
 
@@ -63,6 +87,7 @@ sprite-tools slice tileset.png --cols 8 --rows 6 --margin 1 --spacing 2 --out-di
 sprite-tools trim sprite.png --padding 1 -o tight.png
 sprite-tools atlas frames/*.png -o atlas.png --json atlas.json
 sprite-tools dedupe sheet.png --threshold 1 --tags tags.json --tags-out tags-deduped.json --sheet clean.png
+sprite-tools ase hero.aseprite --tag run -o run-sheet.png --json run.json
 ```
 
 The browser tool is the best fit for manual frame selection, visual crop tuning, and video-to-sheet cleanup.

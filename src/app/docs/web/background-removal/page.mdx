@@ -1,7 +1,7 @@
 export const metadata = {
   title: "Background removal — sprite-tools",
   description:
-    "Chroma-key the background out of a video, a sprite sheet, or loose images in the browser, then auto-crop and export PNGs, a ZIP, or a stitched sheet.",
+    "Chroma-key the background out of a video, a sprite sheet, an Aseprite file, or loose images in the browser, then auto-crop and export PNGs, a ZIP, or a stitched sheet.",
 };
 
 # Background Removal
@@ -14,19 +14,21 @@ Background Removal is a browser-only tool that does one thing: key a background 
 
 - A render, screen capture, or generated video sits on a flat colour and you want transparent PNGs.
 - You have a sheet or a folder of frames and only need the background gone — nothing else.
+- You have an `.ase` or `.aseprite` file whose frames have a flat background layer to key out.
 - You want the same cleanup the Sheet Builder does, but with fewer controls in the way.
 
 Use [Lasso](/docs/web/lasso) instead when the background is not a colour you can key — a photograph, a painted scene, anything where the sprite and the backdrop share colours.
 
 ## Workflow
 
-1. Pick a source: **Video**, **Sheet**, or **Images**. Dropping or pasting a file anywhere on the page picks the tab for you — a video goes to Video, several images go to Images, a single image goes to Sheet.
+1. Pick a source: **Video**, **Sheet**, **Images**, or **Aseprite**. Dropping or pasting a file anywhere on the page picks the tab for you — a video goes to Video, several images go to Images, a single image goes to Sheet, and an `.ase` or `.aseprite` file goes to Aseprite. When a multi-file drop or pick mixes `.ase` files with images, the images load, and a toast names the skipped files, for example "Skipped 2 Aseprite files; import them from the Aseprite tab."
 2. Import the frames.
    - **Video** — set the extraction FPS (1–60, default 10) and press **Extract Raw Frames**.
    - **Sheet** — columns and rows are auto-detected from the image and shown as a hint; correct them if the guess is off, then press **Split Sheet**. Sample sprites are available if you just want to try it.
    - **Images** — select any number of files and press **Load Images**. They are imported in filename order.
+   - **Aseprite** — pick an `.ase` or `.aseprite` file. The panel shows its canvas size, frame count, and colour depth. Choose which layers to composite, whether to include hidden layers, and optionally one animation tag, then press **Import Frames**. Reference, tilemap, and hidden layers that cannot add pixels appear dashed and disabled; hover one to see why. After an import, a change to the layers, the tag, or **Include hidden layers** re-imports right away. The run includes the duplicate-frame step when **Remove duplicates** is on. Anything the file reader could not decode fully is listed under **Decode notes** — see [Aseprite files](/docs/reference/aseprite) and the [Sheet Builder notes](/docs/web/spritesheet#aseprite-files).
 3. Tune the settings. Every change re-runs the pipeline automatically, and only the step you touched: an auto-crop tweak does not redo the key.
-4. Check the result. **Compare** shows the original frame next to the keyed one; the light/dark toggle swaps the checkerboard behind the preview so you can see soft edges against either.
+4. Check the result. **Compare** shows the original frame next to the keyed one (for an Aseprite source the original side reads "Aseprite frames are composited from layers, so there is no original image to show"); the light/dark toggle swaps the checkerboard behind the preview so you can see soft edges against either.
 5. Export — a ZIP of PNGs, a stitched sheet, or a single PNG when there is only one frame.
 
 Video files stay local to this page. A sheet is shared with the other tools, so you can send the same source into Collision, Pivot, Tags, Atlas, or GIF without re-importing it.

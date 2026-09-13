@@ -28,6 +28,7 @@ import { registerDetectCommand } from "./commands/detect";
 import { registerSliceCommand } from "./commands/slice";
 import { registerTrimCommand } from "./commands/trim";
 import { registerDedupeCommand } from "./commands/dedupe";
+import { registerAsepriteCommand } from "./commands/aseprite";
 import { registerChromaCommand } from "./commands/chroma";
 import { registerInfoCommand } from "./commands/info";
 import { registerLintCommand } from "./commands/lint";
@@ -54,6 +55,7 @@ program.addHelpText(
     "  slice      split a sheet into per-cell PNGs on disk              (files)",
     "  trim       auto-crop transparent padding                         (PNG)",
     "  dedupe     find + drop duplicate / near-duplicate frames         (JSON + PNG)",
+    "  aseprite   read .ase/.aseprite → sheet PNG + metadata JSON       (PNG + JSON)",
     "",
     "Metadata (all share top-level {source, frameWidth, frameHeight, grid}):",
     "  collision  per-frame collision polygons                          (JSON)",
@@ -106,6 +108,7 @@ registerDetectCommand(program);
 registerSliceCommand(program);
 registerTrimCommand(program);
 registerDedupeCommand(program);
+registerAsepriteCommand(program);
 registerCollisionCommand(program);
 registerPivotCommand(program);
 registerTagsCommand(program);

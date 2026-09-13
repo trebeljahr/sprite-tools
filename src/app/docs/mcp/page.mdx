@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP server
 
-`sprite-tools-mcp` exposes all 22 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
+`sprite-tools-mcp` exposes all 23 tools over the [Model Context Protocol](https://modelcontextprotocol.io), so Claude Desktop (or any MCP-speaking agent) can drive the sprite pipeline directly — no shelling out, no stdout parsing, typed inputs and structured results.
 
 ## Why use it over the CLI
 
@@ -54,3 +54,4 @@ See the full [tool catalog](/docs/mcp/tools) for every tool's input schema and o
 | `sprite_add_shadow` | Offset, blurred drop shadow |
 | `sprite_pack_atlas` | Bin-pack multiple sprites + manifest |
 | `sprite_export_engine` | Godot, Unity, Aseprite or Phaser/PixiJS file from metadata |
+| `sprite_read_aseprite` | Read a .ase/.aseprite file: tags, durations, layers, palette, optional sheet PNG |

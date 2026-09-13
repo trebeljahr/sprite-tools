@@ -2,13 +2,30 @@
 
 import * as React from "react";
 import { useRef, useState } from "react";
-import { Upload, Loader2, Scissors, Grid3x3, Wand2, ChevronRight } from "lucide-react";
+import {
+  Upload,
+  Loader2,
+  Scissors,
+  Grid3x3,
+  Layers,
+  TriangleAlert,
+  Wand2,
+  ChevronRight,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   type CellGeometry,
@@ -19,7 +36,9 @@ import {
   isZeroPadding,
   ZERO_PADDING,
 } from "@/lib/pipeline/grid";
-import { ensurePreviewUrl, type Frame } from "@/lib/pipeline/types";
+import type { AseDocument } from "@/lib/aseprite/types";
+import { asepriteLayerChoices, readAsepriteMeta, toggleAsepriteLayer } from "@/lib/pipeline/import";
+import { type AsepriteImportConfig, ensurePreviewUrl, type Frame } from "@/lib/pipeline/types";
 
 // -----------------------------------------------------------------
 // <FrameImg>: render a pipeline Frame as an <img> with lazy preview URL.
@@ -530,6 +549,365 @@ export function SheetSource({
           <Grid3x3 className="mr-2 h-4 w-4" />
         )}
         Split Sheet
+      </Button>
+      {running && progressLabel && (
+        <div className="space-y-2 pt-2">
+          <div className="flex justify-between text-xs font-medium uppercase tracking-wider">
+            <span className="text-muted-foreground">{progressLabel}</span>
+            <span className="text-muted-foreground">{progressPct}%</span>
+          </div>
+          <Progress value={progressPct} className="h-1.5" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------
+// Aseprite source
+// -----------------------------------------------------------------
+// Unlike the other two sources this one has to parse its file before it can
+// render anything — an .ase has no <img>/<video> preview and the layer and tag
+// pickers only exist once the document is known. That parse-plus-options state
+// is identical on every page that offers the tab, so it lives in a hook here
+// rather than being copy-pasted into each page.
+
+export interface AsepriteSourceState {
+  file: File | null;
+  /** The parsed document for `file` — never a previous file's. */
+  doc: AseDocument | null;
+  error: string | null;
+  parsing: boolean;
+  includeHidden: boolean;
+  setIncludeHidden: (v: boolean) => void;
+  /** null means every layer; never an empty array. */
+  layerNames: string[] | null;
+  toggleLayer: (name: string) => void;
+  tag: string | null;
+  setTag: (v: string | null) => void;
+  config: AsepriteImportConfig;
+  pick: (f: File) => void;
+  clear: () => void;
+}
+
+export interface UseAsepriteSourceOptions {
+  /**
+   * Called from the event handler of every include-hidden / layer / tag change
+   * with the resulting config and the file it applies to, so a page can push
+   * it into an import step that already ran. Deliberately not an effect that
+   * mirrors state into the pipeline: an effect would fight undo, re-applying
+   * the picker's config the moment undo restores an older one.
+   */
+  onConfigChange?: (config: AsepriteImportConfig, file: File) => void;
+}
+
+const ALL_TAGS = "__all__";
+
+function toConfig(
+  includeHidden: boolean,
+  layerNames: string[] | null,
+  tag: string | null,
+): AsepriteImportConfig {
+  return {
+    includeHiddenLayers: includeHidden,
+    layerNames: layerNames ?? undefined,
+    tag: tag ?? undefined,
+  };
+}
+
+type ParseResult =
+  | { file: File; doc: AseDocument; error: null }
+  | { file: File; doc: null; error: string };
+
+export function useAsepriteSource(options: UseAsepriteSourceOptions = {}): AsepriteSourceState {
+  const { onConfigChange } = options;
+  const [file, setFile] = useState<File | null>(null);
+  // The parse result remembers which File it belongs to. `doc`, `error` and
+  // `parsing` are derived by comparing it against the current file, so a slow
+  // parse of an earlier pick can never show up as the newer file's document,
+  // and picking a new file hides the old layers immediately.
+  const [result, setResult] = useState<ParseResult | null>(null);
+  const [includeHidden, setIncludeHiddenState] = useState(false);
+  const [layerNames, setLayerNames] = useState<string[] | null>(null);
+  const [tag, setTagState] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!file) return;
+    let active = true;
+    readAsepriteMeta(file)
+      .then((doc) => {
+        if (active) setResult({ file, doc, error: null });
+      })
+      .catch((e: unknown) => {
+        if (active) {
+          setResult({ file, doc: null, error: e instanceof Error ? e.message : String(e) });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [file]);
+
+  const current = result && result.file === file ? result : null;
+  const doc = current?.doc ?? null;
+  const error = current?.error ?? null;
+  const parsing = file !== null && current === null;
+
+  const pick = React.useCallback((f: File) => {
+    setFile(f);
+    setLayerNames(null);
+    setTagState(null);
+  }, []);
+
+  const clear = React.useCallback(() => {
+    setFile(null);
+    setResult(null);
+    setLayerNames(null);
+    setTagState(null);
+  }, []);
+
+  const notify = (config: AsepriteImportConfig) => {
+    if (file && doc) onConfigChange?.(config, file);
+  };
+
+  const setIncludeHidden = (v: boolean) => {
+    setIncludeHiddenState(v);
+    notify(toConfig(v, layerNames, tag));
+  };
+
+  const toggleLayer = (name: string) => {
+    if (!doc) return;
+    const next = toggleAsepriteLayer(layerNames, name, asepriteLayerChoices(doc, includeHidden));
+    if (next === layerNames) return;
+    setLayerNames(next);
+    notify(toConfig(includeHidden, next, tag));
+  };
+
+  const setTag = (v: string | null) => {
+    setTagState(v);
+    notify(toConfig(includeHidden, layerNames, v));
+  };
+
+  return {
+    file,
+    doc,
+    error,
+    parsing,
+    includeHidden,
+    setIncludeHidden,
+    layerNames,
+    toggleLayer,
+    tag,
+    setTag,
+    config: toConfig(includeHidden, layerNames, tag),
+    pick,
+    clear,
+  };
+}
+
+export interface AsepriteSourceProps {
+  state: AsepriteSourceState;
+  uploadZoneProps: UploadZoneDragProps;
+  isDragging: boolean;
+  /** The page's own handler, so a file picked here resets the same page state a dropped one does. */
+  onFile: (f: File) => void;
+  onRun: () => void;
+  running: boolean;
+  progressLabel: string;
+  progressPct: number;
+}
+
+export function AsepriteSource({
+  state,
+  uploadZoneProps,
+  isDragging,
+  onFile,
+  onRun,
+  running,
+  progressLabel,
+  progressPct,
+}: AsepriteSourceProps) {
+  const { doc, file, error, parsing, layerNames } = state;
+  const layerChoices = doc ? asepriteLayerChoices(doc, state.includeHidden) : [];
+  const isLayerOn = (name: string) => layerNames === null || layerNames.includes(name);
+
+  // The importer and compositor append to `doc.warnings` in place (group blend
+  // modes that got flattened, cels it had to skip, a clamped tag), so notes
+  // that only exist after a run never reach the DOM off an unchanged `doc`
+  // reference. Re-snapshot whenever a run ends. The snapshot remembers its
+  // document: comparing lengths alone would keep showing the previous file's
+  // notes when the new file happens to have the same number of them.
+  const [warningSnapshot, setWarningSnapshot] = useState<{
+    doc: AseDocument | null;
+    list: string[];
+  }>({ doc: null, list: [] });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `running` is the trigger, not a value read here — the importer only appends while a run is in flight
+  React.useEffect(() => {
+    setWarningSnapshot((prev) =>
+      prev.doc === doc && prev.list.length === (doc?.warnings.length ?? 0)
+        ? prev
+        : { doc, list: doc ? [...doc.warnings] : [] },
+    );
+  }, [doc, running]);
+  const warnings =
+    warningSnapshot.doc === doc ? warningSnapshot.list : doc ? [...doc.warnings] : [];
+
+  return (
+    <div className="space-y-4">
+      <UploadZone
+        isDragging={isDragging}
+        hasFile={false}
+        uploadZoneProps={uploadZoneProps}
+        accept=".ase,.aseprite"
+        onChange={(files) => onFile(files[0])}
+      >
+        <div className="text-center">
+          <Layers className="w-8 h-8 text-muted-foreground mb-2 mx-auto" />
+          <p className="text-sm text-muted-foreground">
+            {file ? file.name : "Upload / drop .ase or .aseprite"}
+          </p>
+        </div>
+      </UploadZone>
+
+      {parsing && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
+        </p>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      {doc && (
+        <>
+          <div className="rounded-md border bg-muted/20 px-3 py-2 space-y-1 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Canvas</span>
+              <span className="font-medium">
+                {doc.width}×{doc.height}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Frames</span>
+              <span className="font-medium">{doc.frameCount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Colour depth</span>
+              <span className="font-medium">
+                {doc.colorDepth} bpp
+                {doc.colorDepth === 8 ? ` · ${doc.palette.length}-colour palette` : ""}
+              </span>
+            </div>
+          </div>
+
+          {layerChoices.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                Layers
+                {layerNames
+                  ? ` (${layerNames.length}/${layerChoices.filter((c) => !c.disabledReason).length})`
+                  : ""}
+              </Label>
+              <div className="flex flex-wrap gap-1">
+                {layerChoices.map((c) => (
+                  <button
+                    type="button"
+                    key={c.index}
+                    // aria-disabled, not disabled: a disabled button swallows the
+                    // hover in some browsers, and the title is the only place the
+                    // reason is shown. toggleLayer ignores these clicks anyway.
+                    onClick={() => state.toggleLayer(c.name)}
+                    aria-disabled={!!c.disabledReason}
+                    title={c.disabledReason ? `${c.name}: ${c.disabledReason}` : c.name}
+                    className={cn(
+                      "px-2 py-0.5 rounded border text-[11px] transition-colors",
+                      c.disabledReason
+                        ? "border-dashed border-muted-foreground/20 text-muted-foreground/60 italic cursor-not-allowed"
+                        : isLayerOn(c.name)
+                          ? "bg-primary/10 border-primary/40 text-foreground"
+                          : "border-muted-foreground/20 text-muted-foreground line-through",
+                    )}
+                  >
+                    {"·".repeat(c.childLevel)}
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+              {layerChoices.some((c) => c.disabledReason) && (
+                <p className="text-[10px] text-muted-foreground">
+                  Dashed layers cannot add pixels to the import. Hover one to see why.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <Label className="text-xs" htmlFor="ase-hidden">
+              Include hidden layers
+            </Label>
+            <Switch
+              id="ase-hidden"
+              checked={state.includeHidden}
+              onCheckedChange={state.setIncludeHidden}
+            />
+          </div>
+
+          {doc.tags.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Animation tag</Label>
+              <Select
+                value={state.tag ?? ALL_TAGS}
+                onValueChange={(v) => state.setTag(v === ALL_TAGS ? null : v)}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  {/* Base UI renders the raw value unless told the label, which
+                      would show the ALL_TAGS sentinel to the user. */}
+                  <SelectValue>
+                    {(v: string) => {
+                      if (v === ALL_TAGS) return `All frames (${doc.frameCount})`;
+                      const t = doc.tags.find((tag) => tag.name === v);
+                      return t ? `${t.name} · ${t.from}–${t.to} · ${t.direction}` : v;
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_TAGS}>All frames ({doc.frameCount})</SelectItem>
+                  {doc.tags.map((t) => (
+                    <SelectItem key={`${t.name}-${t.from}`} value={t.name}>
+                      {t.name} · {t.from}–{t.to} · {t.direction}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                <TriangleAlert className="w-3 h-3" />
+                Decode notes
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      <Button onClick={onRun} disabled={running || !doc} className="w-full">
+        {running ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Layers className="mr-2 h-4 w-4" />
+        )}
+        Import Frames
       </Button>
       {running && progressLabel && (
         <div className="space-y-2 pt-2">

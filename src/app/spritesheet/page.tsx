@@ -23,6 +23,7 @@ import {
   Redo2,
   Video,
   Grid3x3,
+  Layers,
   FileArchive,
   Sparkles,
 } from "lucide-react";
@@ -54,9 +55,10 @@ import {
   buildChromaKeyStep,
   buildAutoCropStep,
   buildManualCropStep,
+  buildImportAsepriteStep,
 } from "@/lib/pipeline/use-pipeline";
 import { stitchSheet, exportAsZip } from "@/lib/pipeline/export";
-import { detectSheetGrid, type SheetDetection } from "@/lib/pipeline/import";
+import { detectSheetGrid, isAsepriteFilename, type SheetDetection } from "@/lib/pipeline/import";
 import {
   type GridMargin,
   type GridSpacing,
@@ -74,10 +76,12 @@ import {
 import { composeCrops, rasterizeFrames } from "@/lib/pipeline/transforms";
 import { findDuplicateFrames } from "@/lib/pipeline/dedupe-core";
 import {
+  AsepriteSource,
   describeGridPadding,
   FrameImg,
-  VideoSource,
   SheetSource,
+  useAsepriteSource,
+  VideoSource,
 } from "@/components/pipeline-source";
 
 // -----------------------------------------------------------------
@@ -139,7 +143,7 @@ const calculateSmartColumns = (count: number) => {
   return Math.ceil(Math.sqrt(count));
 };
 
-type SourceTab = "video" | "sheet";
+type SourceTab = "video" | "sheet" | "aseprite";
 
 // -----------------------------------------------------------------
 // Main content
@@ -204,6 +208,24 @@ function SpritesheetContent() {
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Layer / tag / hidden-layer changes after an import re-run that import in
+  // place, so the frames on screen always match the picker. Only when the
+  // pipeline is still showing this very file: a newly picked file waits for
+  // Import Frames like every other source.
+  const aseprite = useAsepriteSource({
+    onConfigChange: (config, file) => {
+      const step = pipeline.state.steps.find((s) => s.kind === "import-aseprite");
+      if (!step || step.kind !== "import-aseprite" || pipeline.state.source?.file !== file) return;
+      // A different tag is a different frame list, so indices selected in the
+      // old one would point at unrelated frames.
+      if ((step.config.tag ?? null) !== (config.tag ?? null)) {
+        setSelectedIndices(new Set());
+        setPreviewIndex(0);
+      }
+      pipeline.updateStep(step.id, { ...config, sourceName: file.name }, true);
+    },
+  });
 
   // ------- Viewport -------
   const previewViewport = useViewport();
@@ -317,7 +339,26 @@ function SpritesheetContent() {
     setBrState((prev) => ({ ...prev, backgroundMode: "chroma-transparent" }));
   };
 
+  const handleAsepriteFile = (file: File) => {
+    if (!isAsepriteFilename(file.name)) {
+      toast.error("Unsupported file type. Please upload a .ase or .aseprite file.");
+      return;
+    }
+    aseprite.pick(file);
+    clearSourceState();
+    // An .ase composites onto a transparent canvas already — chroma-keying it
+    // would eat the artwork, so start in passthrough like the sheet source.
+    setBrState((prev) => ({ ...prev, backgroundMode: "transparent-cutout" }));
+  };
+
   const handleSheetFile = async (file: File) => {
+    // Extension, not MIME: browsers leave `type` empty for .ase files, so the
+    // image guard below would reject one with a misleading message.
+    if (isAsepriteFilename(file.name)) {
+      setSourceTab("aseprite");
+      handleAsepriteFile(file);
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       toast.error("Unsupported file type. Please upload an image.");
       return;
@@ -353,7 +394,10 @@ function SpritesheetContent() {
   };
 
   const handleSingleFile = (file: File) => {
-    if (file.type.startsWith("video/")) {
+    if (isAsepriteFilename(file.name)) {
+      setSourceTab("aseprite");
+      handleAsepriteFile(file);
+    } else if (file.type.startsWith("video/")) {
       setSourceTab("video");
       handleVideoFile(file);
     } else if (file.type.startsWith("image/")) {
@@ -428,6 +472,15 @@ function SpritesheetContent() {
         buildManualCropStep(crop),
       ];
       void src;
+    } else if (tab === "aseprite") {
+      if (!aseprite.file) return;
+      pipeline.setSource({ file: aseprite.file });
+      steps = [
+        buildImportAsepriteStep(aseprite.config, aseprite.file.name),
+        buildChromaKeyStep(chromaConfigFromBr(brState)),
+        buildAutoCropStep(autoCropConfigFromBr(brState)),
+        buildManualCropStep(crop),
+      ];
     } else {
       if (!sheetFile && !sheetUrl) return;
       pipeline.setSource({ file: sheetFile ?? undefined, url: sheetUrl ?? undefined });
@@ -756,23 +809,30 @@ function SpritesheetContent() {
       )
     : 0;
 
-  const hasSource = sourceTab === "sheet" ? !!sheetUrl : !!videoUrl;
+  const hasSource =
+    sourceTab === "sheet" ? !!sheetUrl : sourceTab === "aseprite" ? !!aseprite.doc : !!videoUrl;
+  const sourceNoun =
+    sourceTab === "sheet" ? "sprite sheet" : sourceTab === "aseprite" ? "Aseprite file" : "video";
   const tutorialSteps: TutorialStep[] = useMemo(
     () => [
       {
-        label: sourceTab === "sheet" ? "Pick a sprite sheet" : "Pick a video",
+        label: `Pick ${sourceTab === "aseprite" ? "an" : "a"} ${sourceNoun}`,
         hint:
           sourceTab === "sheet"
             ? "Drop a sheet image into the upload area on the left — or use the preloaded sample."
-            : "Drop a video file into the upload area on the left.",
+            : sourceTab === "aseprite"
+              ? "Drop a .ase or .aseprite file into the upload area on the left."
+              : "Drop a video file into the upload area on the left.",
         done: hasSource,
       },
       {
-        label: sourceTab === "sheet" ? "Split into frames" : "Extract frames",
+        label: sourceTab === "video" ? "Extract frames" : "Split into frames",
         hint:
           sourceTab === "sheet"
             ? "Confirm the columns/rows, then click Split Sheet."
-            : "Set the FPS, then click Extract Raw Frames.",
+            : sourceTab === "aseprite"
+              ? "Pick the layers and tag you want, then click Import Frames."
+              : "Set the FPS, then click Extract Raw Frames.",
         done: showResults && allFrames.length > 0,
       },
       {
@@ -781,7 +841,7 @@ function SpritesheetContent() {
         done: hasDownloaded,
       },
     ],
-    [sourceTab, hasSource, showResults, allFrames.length, hasDownloaded],
+    [sourceTab, sourceNoun, hasSource, showResults, allFrames.length, hasDownloaded],
   );
   const tutorial = useTutorial({ id: "spritesheet", steps: tutorialSteps });
 
@@ -793,7 +853,7 @@ function SpritesheetContent() {
           Sheet Builder
         </h1>
         <p className="text-muted-foreground">
-          Video, sprite sheets, or individual images — chroma key, crop, stitch, and export.
+          Video, sprite sheets, or Aseprite files — chroma key, crop, stitch, and export.
         </p>
         <div className="flex items-center justify-center gap-2 mt-3">
           <Button
@@ -836,15 +896,16 @@ function SpritesheetContent() {
             <CardHeader className="pb-3">
               <CardTitle>Source</CardTitle>
               <CardDescription className="text-xs">
-                Start from a video, an existing sprite sheet, or individual images.
+                Start from a video, an existing sprite sheet, or an .ase/.aseprite file.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/30 border">
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/30 border">
                 {(
                   [
                     { id: "video" as const, label: "Video", Icon: Video },
                     { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
+                    { id: "aseprite" as const, label: "Aseprite", Icon: Layers },
                   ] as const
                 ).map(({ id, label, Icon }) => (
                   <button
@@ -893,6 +954,18 @@ function SpritesheetContent() {
                   isDragging={isDragging}
                   onFile={handleSheetFile}
                   onRun={() => runFromSource("sheet")}
+                  running={pipeline.state.running}
+                  progressLabel={pipeline.state.progress?.step ?? ""}
+                  progressPct={progressPct}
+                />
+              )}
+              {sourceTab === "aseprite" && (
+                <AsepriteSource
+                  state={aseprite}
+                  uploadZoneProps={uploadZoneProps}
+                  isDragging={isDragging}
+                  onFile={handleAsepriteFile}
+                  onRun={() => runFromSource("aseprite")}
                   running={pipeline.state.running}
                   progressLabel={pipeline.state.progress?.step ?? ""}
                   progressPct={progressPct}

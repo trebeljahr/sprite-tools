@@ -64,6 +64,7 @@ export const DOCS_SECTIONS: DocSection[] = [
     items: [
       { href: "/docs/reference/json-schemas", label: "JSON output schemas" },
       { href: "/docs/reference/engine-export", label: "Engine export formats" },
+      { href: "/docs/reference/aseprite", label: "Aseprite files" },
       { href: "/docs/reference/algorithms", label: "Algorithm notes" },
       { href: "/docs/reference/contributing", label: "Contributing" },
     ],

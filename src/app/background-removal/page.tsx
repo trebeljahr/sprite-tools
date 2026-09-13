@@ -4,7 +4,14 @@ import {
   BackgroundRemovalSettings,
   type BackgroundRemovalState,
 } from "@/components/background-removal-settings";
-import { FrameImg, SheetSource, UploadZone, VideoSource } from "@/components/pipeline-source";
+import {
+  AsepriteSource,
+  FrameImg,
+  SheetSource,
+  UploadZone,
+  useAsepriteSource,
+  VideoSource,
+} from "@/components/pipeline-source";
 import { SampleSprites } from "@/components/sample-sprites";
 import { SourceBanner } from "@/components/source-banner";
 import { ToolHeader } from "@/components/tool-header";
@@ -18,7 +25,7 @@ import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls"
 import { useViewport } from "@/hooks/use-viewport";
 import { track } from "@/lib/analytics";
 import { exportAsZip, frameToPngBlob, stitchSheet } from "@/lib/pipeline/export";
-import { detectSheetGrid } from "@/lib/pipeline/import";
+import { detectSheetGrid, isAsepriteFilename } from "@/lib/pipeline/import";
 import {
   type AutoCropConfig,
   type BackgroundMode,
@@ -30,6 +37,7 @@ import {
   buildAutoCropStep,
   buildChromaKeyStep,
   buildDedupeStep,
+  buildImportAsepriteStep,
   buildImportFilesStep,
   buildImportSheetStep,
   buildImportVideoStep,
@@ -56,7 +64,7 @@ import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type SourceTab = "video" | "sheet" | "images";
+type SourceTab = "video" | "sheet" | "images" | "aseprite";
 
 const DEFAULT_SETTINGS: BackgroundRemovalState = {
   backgroundMode: "chroma-transparent",
@@ -185,6 +193,17 @@ function SourceFrameView({
     );
   }
 
+  // An .ase has no per-frame source image to show: the only "before" is the
+  // composited frame, which the pipeline does not keep once it is keyed. Say
+  // that instead of the generic empty state, which reads like a bug.
+  if (tab === "aseprite") {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-muted-foreground text-xs">
+        Aseprite frames are composited from layers, so there is no original image to show
+      </div>
+    );
+  }
+
   const url = frame.metadata?.filename ? imageUrlByName.get(frame.metadata.filename) : undefined;
   if (!url) return empty;
   return <img src={url} alt="" className="absolute inset-0 w-full h-full object-contain" />;
@@ -210,6 +229,17 @@ export default function BackgroundRemovalPage() {
   const [sheetDims, setSheetDims] = useState<{ w: number; h: number } | null>(null);
   const [detectedGrid, setDetectedGrid] = useState<{ cols: number; rows: number } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  // Settings on this page are live, so the Aseprite picker is too: a layer,
+  // tag or hidden-layer change re-runs the import that is on screen. Only
+  // while the pipeline still holds this very file — a newly picked file waits
+  // for Import Frames like every other source.
+  const aseprite = useAsepriteSource({
+    onConfigChange: (config, file) => {
+      const step = pipeline.state.steps.find((s) => s.kind === "import-aseprite");
+      if (!step || pipeline.state.source?.file !== file) return;
+      pipeline.updateStep(step.id, { ...config, sourceName: file.name }, true);
+    },
+  });
 
   // Duplicate removal is a real pipeline step here — this page has no frame
   // grid to deselect things in, so the chain itself has to do the dropping.
@@ -318,22 +348,53 @@ export default function BackgroundRemovalPage() {
     setVideoFile(file);
   }, []);
 
+  const handleAsepriteFile = useCallback(
+    (file: File) => {
+      if (!isAsepriteFilename(file.name)) {
+        toast.error("Unsupported file type. Please upload a .ase or .aseprite file.");
+        return;
+      }
+      aseprite.pick(file);
+    },
+    // `aseprite` is a fresh object every render; `pick` is the stable callback.
+    [aseprite.pick],
+  );
+
   const handleSheetFile = useCallback(
     (file: File) => {
+      // Extension, not MIME: browsers report an empty `type` for .ase files, so
+      // the image guard below would reject one with a misleading message.
+      if (isAsepriteFilename(file.name)) {
+        setSourceTab("aseprite");
+        aseprite.pick(file);
+        return;
+      }
       if (!file.type.startsWith("image/")) {
         toast.error("Unsupported file type. Please upload an image.");
         return;
       }
       void setSharedSource(file);
     },
-    [setSharedSource],
+    [setSharedSource, aseprite.pick],
   );
 
   const handleImageFiles = useCallback((files: File[]) => {
     const images = files.filter((f) => f.type.startsWith("image/"));
+    // .ase files have no image MIME type, so the filter above drops them;
+    // say so rather than losing them without a word.
+    const skippedAse = files.filter((f) => isAsepriteFilename(f.name)).length;
     if (images.length === 0) {
-      toast.error("No image files in that selection.");
+      toast.error(
+        skippedAse > 0
+          ? "Aseprite files import from the Aseprite tab."
+          : "No image files in that selection.",
+      );
       return;
+    }
+    if (skippedAse > 0) {
+      toast.warning(
+        `Skipped ${skippedAse} Aseprite file${skippedAse === 1 ? "" : "s"}; import ${skippedAse === 1 ? "it" : "them"} from the Aseprite tab.`,
+      );
     }
     setImageFiles(images);
   }, []);
@@ -346,10 +407,15 @@ export default function BackgroundRemovalPage() {
       const images = files.filter((f) => f.type.startsWith("image/"));
       if (images.length > 1) {
         setSourceTab("images");
-        setImageFiles(images);
+        handleImageFiles(files);
         return;
       }
       const file = files[0];
+      if (isAsepriteFilename(file.name)) {
+        setSourceTab("aseprite");
+        handleAsepriteFile(file);
+        return;
+      }
       if (file.type.startsWith("video/")) {
         setSourceTab("video");
         handleVideoFile(file);
@@ -362,7 +428,7 @@ export default function BackgroundRemovalPage() {
       }
       toast.error("Unsupported file type.");
     },
-    [handleVideoFile, handleSheetFile],
+    [handleVideoFile, handleSheetFile, handleAsepriteFile, handleImageFiles],
   );
 
   useEffect(() => {
@@ -411,7 +477,14 @@ export default function BackgroundRemovalPage() {
         ],
         false,
       );
-    } else {
+    } else if (tab === "aseprite") {
+      if (!aseprite.file) return;
+      pipeline.setSource({ file: aseprite.file });
+      pipeline.setSteps(
+        [buildImportAsepriteStep(aseprite.config, aseprite.file.name), chroma, ...tail],
+        false,
+      );
+    } else if (tab === "images") {
       if (imageFiles.length === 0) return;
       pipeline.setSource({ images: imageFiles });
       pipeline.setSteps([buildImportFilesStep(imageFiles.length), chroma, ...tail], false);
@@ -577,7 +650,7 @@ export default function BackgroundRemovalPage() {
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
       <ToolHeader
         title="Background Removal"
-        description="Chroma-key the background out of a video, a sprite sheet, or a pile of images — then crop and export."
+        description="Chroma-key the background out of a video, a sprite sheet, an Aseprite file, or a pile of images — then crop and export."
         icon={Eraser}
         category="extract"
         docs="background-removal"
@@ -592,16 +665,17 @@ export default function BackgroundRemovalPage() {
             <CardHeader className="pb-3">
               <CardTitle>Source</CardTitle>
               <CardDescription className="text-xs">
-                A video, a sprite sheet, or individual image files.
+                A video, a sprite sheet, an .ase/.aseprite file, or individual images.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted/30 border">
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-muted/30 border">
                 {(
                   [
                     { id: "video" as const, label: "Video", Icon: Video },
                     { id: "sheet" as const, label: "Sheet", Icon: Grid3x3 },
                     { id: "images" as const, label: "Images", Icon: Images },
+                    { id: "aseprite" as const, label: "Aseprite", Icon: Layers },
                   ] as const
                 ).map(({ id, label, Icon }) => (
                   <button
@@ -712,6 +786,19 @@ export default function BackgroundRemovalPage() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {sourceTab === "aseprite" && (
+                <AsepriteSource
+                  state={aseprite}
+                  uploadZoneProps={uploadZoneProps}
+                  isDragging={isDragging}
+                  onFile={handleAsepriteFile}
+                  onRun={() => runFromSource("aseprite")}
+                  running={running}
+                  progressLabel={progressLabel}
+                  progressPct={progressPct}
+                />
               )}
             </CardContent>
           </Card>

@@ -428,3 +428,23 @@ describe("toPhaserAtlas — edges and determinism", () => {
     expect(JSON.parse(JSON.stringify(atlas))).toEqual(atlas);
   });
 });
+
+describe("toPhaserAtlas — pingpong-reverse", () => {
+  it("bakes the reversed round trip and tags it in Aseprite's spelling", () => {
+    const doc = normalizeExportInput({
+      source: "hero.png",
+      frameWidth: 8,
+      frameHeight: 8,
+      grid: { cols: 4, rows: 1, detected: false },
+      frameCount: 4,
+      tags: [{ name: "bounce", from: 0, to: 3, direction: "pingpong-reverse" }],
+    });
+    const atlas = toPhaserAtlas(doc);
+    expect(atlas.animations).toEqual({
+      bounce: ["hero_3", "hero_2", "hero_1", "hero_0", "hero_1", "hero_2"],
+    });
+    expect(atlas.meta.frameTags).toEqual([
+      { name: "bounce", from: 0, to: 3, direction: "pingpong_reverse" },
+    ]);
+  });
+});

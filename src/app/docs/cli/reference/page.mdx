@@ -145,6 +145,104 @@ Auto-crops transparent padding. JSON shape:
   "trim": {x,y,width,height}, "paddingKept" }
 ```
 
+## `aseprite`
+
+```
+sprite-tools aseprite <input>          # alias: ase
+  [-o FILE]                        # sheet PNG (default: <basename>-sheet.png, - for stdout)
+  [--json FILE]                    # metadata JSON (default: stdout)
+  [--cols N]                       # sheet columns (default: every frame in one row)
+  [--tag NAME]                     # export only the frames of this animation tag
+  [--layer NAME]                   # repeatable: composite only these layers
+  [--include-hidden]               # composite layers hidden in Aseprite too
+  [--no-sheet]                     # metadata only, write no PNG
+  [--scale N]                      # integer nearest-neighbor upscale, default 1
+```
+
+Reads an Aseprite working file (`.ase` or `.aseprite`) directly, so you do not need an export from Aseprite first. It composites every frame at canvas size, writes the frames as a row-major sheet PNG, and emits the document metadata a PNG does not carry: tags, per-frame durations, the layer tree, and the palette. `<input>` may be `-` to read the file from stdin. The magic number is checked, not the extension.
+
+What gets composited:
+
+- Every visible image layer, with its blend mode, layer opacity, and cel opacity. See [Aseprite files](/docs/reference/aseprite) for what is and is not supported.
+- `--include-hidden` adds layers that are hidden in Aseprite, including layers inside a hidden group.
+- `--layer` picks layers by exact name and is repeatable. Naming a group selects every layer inside it. An unknown name is an error that lists the available names.
+- Reference layers are never composited, the same as an Aseprite export. `--include-hidden` and `--layer` do not bring them back.
+- A `--layer` selection that renders no pixels exits 1 instead of writing an empty sheet. That happens when every named layer is a reference layer, or hidden without `--include-hidden`. When another named layer does render, each such layer adds a warning instead. See [Layer selection](/docs/reference/aseprite#layer-selection) for the messages.
+
+Output files:
+
+- Without `-o`, the sheet is written to `<basename>-sheet.png` in the current directory. With stdin input the default is `aseprite-sheet.png`.
+- `-o -` writes the PNG to stdout. The JSON also goes to stdout by default, so `-o -` requires `--json FILE` (or `--no-sheet`). Otherwise the command exits with an error before it reads the input.
+- `--no-sheet` writes no PNG. `-o` is then ignored and only the JSON is written.
+
+JSON shape:
+
+```json
+{ "source": "sheet.png" | null,
+  "sourceWidth": N | null, "sourceHeight": N | null,
+  "asepriteFile": "hero.aseprite",
+  "frameWidth", "frameHeight",
+  "grid": {cols, rows, detected: false},
+  "frameCount", "documentFrameCount",
+  "canvas": {width, height},
+  "colorDepth": 32 | 16 | 8,
+  "pixelRatio": {width, height},
+  "tag": "name" | null,
+  "frameDurations": [ms, ...],
+  "tags":   [{ name, from, to,
+               direction: "forward"|"reverse"|"pingpong"|"pingpong-reverse",
+               repeat, color: "#rrggbb"|null }, ...],
+  "frames": [{ index, sourceIndex, durationMs }, ...],
+  "layers": [{ index, name, type: "image"|"group"|"tilemap",
+               opacity, blendMode, visible, effectivelyVisible, reference,
+               childLevel, parentIndex }, ...],
+  "palette": ["#rrggbb" | "#rrggbbaa", ...],
+  "warnings": [...] }
+```
+
+- `source` is the sheet PNG this JSON describes, and `sourceWidth` / `sourceHeight` are its pixel size, including `--cols` and `--scale`. With `--no-sheet` all three are `null`. With `-o -` the PNG has no filename, so `source` is `null` and the size is still set.
+- `asepriteFile` is the `.ase` / `.aseprite` file that was read, or `"-"` for stdin.
+- `frameWidth` / `frameHeight` are the size of one cell in the PNG you got, so they include `--scale`. `canvas` is the unscaled Aseprite canvas.
+- `grid` is the layout of the written sheet. `detected` is always `false`, because the layout comes from `--cols` and the frame count rather than from detection. Pass `grid.cols` and `grid.rows` to any sheet command that reads the PNG.
+- `frameCount` counts the exported frames. `documentFrameCount` counts every frame in the file. `pixelRatio` is the file's pixel aspect ratio.
+- `frameDurations` has one duration in milliseconds per exported frame. It is the same key the `tags` and `meta` commands write; see [JSON schemas](/docs/reference/json-schemas#framedurations). `gif --tags-json` and `export` read it.
+- `frames[].durationMs` is the same per-frame duration. `frames[].sourceIndex` is the frame's index in the `.aseprite` document.
+- `tags[].repeat` is the Aseprite repeat count. `0` means the file does not set one. Tags have no `fps`, because Aseprite stores timing only per frame.
+- `layers[].visible` is the layer's own eye toggle. `effectivelyVisible` is `false` when the layer or any enclosing group is hidden. `reference` is `true` for a reference layer, which never renders. `layers[]` lists every layer, including groups, tilemap layers, and reference layers.
+- `palette` is the palette in effect at frame 0. Entries are `#rrggbb`, or `#rrggbbaa` when the entry is not fully opaque. Indexed sprites whose palette changes between frames are still decoded per frame.
+
+Because `source` names the sheet PNG, the JSON is a sheet metadata document. [`export`](#export) turns it into an engine file with no extra flags, and `gif hero-sheet.png --cols N --tags-json hero.json` plays its tags with the file's durations. A `--no-sheet` document needs `export --texture NAME`, because it names no image.
+
+### Tag remapping
+
+`--tag NAME` exports only that tag's frame range. Every tag range in the JSON is then rebased onto the exported frames, so the numbers index the sheet you got:
+
+- `from` and `to` become 0-based positions in the exported sheet.
+- A tag that only partly overlaps the exported range is clipped to it.
+- A tag that lies entirely outside the exported range is left out.
+- `frames[].sourceIndex` still points back into the original document.
+
+For example, in a file with a `reverse` tag on frames 4–7, `--tag reverse` gives a 4-frame sheet, `"tags": [{"name": "reverse", "from": 0, "to": 3, ...}]`, and `sourceIndex` values 4 to 7. Without `--tag`, ranges are the file's own. An unknown tag name is an error that lists the available tags.
+
+### Warnings
+
+Some content in a file can decode only partly. A tilemap layer, a skipped chunk type, or a damaged cel are examples. The command does not fail on these. It writes one line per warning to stderr as `sprite-tools: warning: <message>`, and it also puts the same messages in the JSON `warnings` array. The stderr lines appear when stdout is piped into `jq` or another command, so a partial decode is always visible. The exit code stays 0. The [Aseprite files](/docs/reference/aseprite#warnings) page lists the common messages.
+
+A file that cannot be read at all exits 1 with a message. Examples are a bad magic number, an unsupported colour depth, and a file cut off partway through a frame.
+
+```bash
+sprite-tools ase hero.aseprite                                     # hero-sheet.png + JSON on stdout
+sprite-tools ase hero.aseprite -o hero-sheet.png --json hero.json
+sprite-tools ase hero.aseprite --cols 4 --scale 2 -o hero-sheet.png --json hero.json
+sprite-tools ase hero.aseprite --tag run -o run.png --json run.json
+sprite-tools ase hero.aseprite --layer body --layer sword -o armed.png --json armed.json
+sprite-tools ase hero.aseprite --no-sheet | jq '.tags'
+sprite-tools ase hero.aseprite -o - --json hero.json | sprite-tools collision - --cols 8 --rows 1
+sprite-tools export hero.json --format godot -o hero.tres           # hero.json from the second line
+```
+
+The `tags` key has the same name as the `tags` command's output, with a different item shape: it has `repeat` and `color` and no `fps`. If you merge the two with `jq -s 'add'`, the file that comes last wins that key. The `source`, `sourceWidth`, `sourceHeight`, `grid`, `frameWidth`, `frameHeight`, and `frameDurations` keys follow the same rule. A document written with `-o -` has `source: null`, so a merge with it last also has `source: null`, and `export` then needs `--texture`. The [Aseprite recipe](/docs/cli/recipes#aseprite-file-to-sheet-collision-and-pivots) merges this JSON with `collision` and `pivot` output.
+
 ## `collision`
 
 ```
@@ -565,7 +663,7 @@ sprite-tools meta hero.png --collision --pivot bottom-center --tag idle=0-5 \
 
 A flag that belongs to another format is an error, not a silent no-op: `--ppu` on a Godot export exits 1 with `--ppu only applies to --format unity, not godot`. `--variant` on a Unity export is an error too, since Unity has one output shape.
 
-The texture filename is `--texture`, else the manifest's `atlas`, else the basename of `source`. Frames no tag covers show for `round(1000 / --fps)` ms. With no tags at all, Godot gets one animation named `default` over every frame.
+The texture filename is `--texture`, else the manifest's `atlas`, else the basename of `source`. A grid document with `source: null` (for example `aseprite --no-sheet` output) names no image, so it is an error unless `--texture` is given. Frames no tag covers show for `round(1000 / --fps)` ms. With no tags at all, Godot gets one animation named `default` over every frame.
 
 For PixiJS, keep the default `--variant hash`: Pixi needs `frames` to be an object, and an array loads with frames named `"0"`, `"1"`, … instead of your names.
 
@@ -642,7 +740,7 @@ Read that as a diagnosis rather than a literal command line: the flags are per-a
 
 ## Stdin / stdout
 
-Any `<input>` accepts `-` to read PNG bytes from stdin. Any `-o` accepts `-` to write to stdout. Chain:
+Any `<input>` accepts `-` to read PNG bytes from stdin. `aseprite` reads `.aseprite` bytes there instead. Any `-o` accepts `-` to write to stdout. Chain:
 
 ```bash
 cat hero.png | sprite-tools trim - -o - | sprite-tools collision -

@@ -14,7 +14,6 @@
 // Pure NormalizedDoc -> object. No filesystem access, no pixel math.
 
 import {
-  type Direction,
   type ExportPoint,
   type ExportRect,
   type ExportSize,
@@ -22,6 +21,7 @@ import {
   type NormalizedFrame,
   basename,
   expandTagFrameIndices,
+  toAsepriteDirection,
 } from "./types";
 
 /** `frames` as an object keyed by name (JSONHash) or as an array (JSONArray). */
@@ -91,7 +91,11 @@ export interface PhaserFrameTag {
   from: number;
   /** Inclusive. */
   to: number;
-  direction: Direction;
+  /**
+   * Aseprite's spelling (`pingpong_reverse`), because `meta.frameTags` is
+   * Aseprite's structure and only Aseprite-shaped readers look at it.
+   */
+  direction: ReturnType<typeof toAsepriteDirection>;
 }
 
 export interface PhaserAtlasMeta {
@@ -221,7 +225,7 @@ function buildMeta(doc: NormalizedDoc, opts: PhaserExportOptions): PhaserAtlasMe
       name: tag.name,
       from: tag.from,
       to: tag.to,
-      direction: tag.direction,
+      direction: toAsepriteDirection(tag.direction),
     }));
   }
 
@@ -230,9 +234,9 @@ function buildMeta(doc: NormalizedDoc, opts: PhaserExportOptions): PhaserAtlasMe
 
 /**
  * Pixi's `animations` map. Directions are baked into the frame order because
- * Pixi has no direction concept: `reverse` reverses the list and `pingpong`
+ * Pixi has no direction concept: `reverse` reverses the list, `pingpong`
  * appends the interior frames backwards (Aseprite's convention — endpoints are
- * not repeated).
+ * not repeated), and `pingpong-reverse` is that round trip started from `to`.
  */
 function buildAnimations(doc: NormalizedDoc, names: string[]): Record<string, string[]> {
   // A Map, not an object: `in` on a plain object also sees Object.prototype, so

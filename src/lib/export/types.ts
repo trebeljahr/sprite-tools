@@ -20,7 +20,13 @@ import {
 import type { SheetDetection } from "../pipeline/detect";
 import { normalizeFrameDurations } from "../animation/durations";
 
-export type Direction = "forward" | "reverse" | "pingpong";
+/**
+ * Playback order of a tag. `pingpong-reverse` is Aseprite's fourth loop
+ * direction (tag direction id 3): the ping-pong round trip, started from `to`.
+ * Aseprite's own JSON writes it as `pingpong_reverse`; sprite-tools documents
+ * use the hyphen, as the .aseprite reader reports it.
+ */
+export type Direction = "forward" | "reverse" | "pingpong" | "pingpong-reverse";
 
 export interface ExportRect {
   x: number;
@@ -47,6 +53,11 @@ export interface ExportTag {
   to: number;
   direction: Direction;
   fps: number;
+  /**
+   * Aseprite's tag repeat count — play the tag this many times, then stop.
+   * Only present when positive; absent means "unspecified" (loop).
+   */
+  repeat?: number;
 }
 
 /**
@@ -150,11 +161,18 @@ export interface RawTag {
   to?: number;
   direction?: string;
   fps?: number;
+  /** Aseprite repeat count. Aseprite's own JSON writes it as a string ("3"). */
+  repeat?: number | string;
 }
 
 /** `collision` / `pivot` / `tags` / `meta` output, or any `jq -s add` merge of them. */
 export interface SpriteMetaDocument {
-  source?: string;
+  /**
+   * The sheet image this document describes. An explicit `null` means no
+   * image file exists for it (`sprite-tools ase --no-sheet`, or a sheet written
+   * to stdout), so the texture name has to come from the caller.
+   */
+  source?: string | null;
   /** Pixel size of `source`, recorded by the metadata commands. */
   sourceWidth?: number;
   sourceHeight?: number;
@@ -254,7 +272,11 @@ export function normalizeExportInput(
   // header-shaped block, but its `source`, `grid` and padding describe the
   // INPUT image while the pixels they wrote live at `output_path`, re-stitched
   // flush. Exporting it would point the engine at the wrong image.
-  if (typeof rec.output_path === "string") {
+  //
+  // `sprite_read_aseprite` is the exception that proves the rule: it writes the
+  // sheet it describes, so its `output_path` IS its `source` and the grid is
+  // the output's own.
+  if (typeof rec.output_path === "string" && rec.output_path !== rec.source) {
     throw new Error(
       `export: this document describes an image written to ${JSON.stringify(rec.output_path)}, ` +
         "not metadata for a sheet — its grid is the input's. Run a metadata command " +
@@ -426,6 +448,17 @@ function buildFromGrid(rec: Record<string, unknown>, opts: NormalizeExportOption
   // declared 0 is honoured and falls through to the zero-frames error below.
   const count = declared !== null && declared >= 0 ? Math.min(Math.floor(declared), cells) : cells;
 
+  // `source: null` is a document stating that no sheet file exists. Falling
+  // back to "spritesheet.png" would hand the engine a texture reference that
+  // was never written, so without an explicit texture name this is an error.
+  if (rec.source === null && opts.texture === undefined) {
+    throw new Error(
+      "export: the document says `source: null` — no sheet image was written for it " +
+        "(e.g. `sprite-tools ase --no-sheet`, or a sheet sent to stdout), so there is no " +
+        "texture to reference. Re-run the metadata command with a sheet file (`-o sheet.png`), " +
+        "or pass the texture filename explicitly (CLI --texture, MCP `texture`).",
+    );
+  }
   const texture =
     opts.texture ??
     (typeof rec.source === "string" && rec.source ? basename(rec.source) : null) ??
@@ -548,20 +581,38 @@ function normalizeTags(raw: unknown, frameCount: number, defaultFps: number): Ex
     const lo = Math.floor(Math.min(a, b));
     const hi = Math.floor(Math.max(a, b));
     if (hi < 0 || lo > last) continue;
-    tags.push({
+    const tag: ExportTag = {
       name: rec.name,
       from: Math.max(0, lo),
       to: Math.min(last, hi),
       direction: normalizeDirection(rec.direction),
       fps: asPositive(rec.fps) ?? defaultFps,
-    });
+    };
+    const repeat = asRepeat(rec.repeat);
+    if (repeat !== null) tag.repeat = repeat;
+    tags.push(tag);
   }
   return tags;
 }
 
 function normalizeDirection(raw: unknown): Direction {
-  if (raw === "reverse" || raw === "pingpong") return raw;
+  if (raw === "reverse" || raw === "pingpong" || raw === "pingpong-reverse") return raw;
+  // Aseprite's JSON spelling, so an Aseprite-exported frameTags list round-trips.
+  if (raw === "pingpong_reverse") return "pingpong-reverse";
   return "forward";
+}
+
+/** Positive whole repeat count from a number or Aseprite's numeric string; else null. */
+function asRepeat(raw: unknown): number | null {
+  const n = typeof raw === "string" && /^\d+$/.test(raw.trim()) ? Number(raw) : asFinite(raw);
+  return n !== null && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Aseprite's JSON vocabulary for a direction (`convert_anidir_to_string` in anidir.cpp). */
+export function toAsepriteDirection(
+  direction: Direction,
+): "forward" | "reverse" | "pingpong" | "pingpong_reverse" {
+  return direction === "pingpong-reverse" ? "pingpong_reverse" : direction;
 }
 
 function attachPivots(raw: unknown, frames: NormalizedFrame[]): void {
@@ -697,14 +748,21 @@ export function sheetDocumentFromDetection(
 /**
  * Frame indices a tag plays, in playback order. `pingpong` bakes to
  * from..to, to-1..from+1 — endpoints are not repeated, matching Aseprite (and
- * unlike Godot's native LOOP_PINGPONG, which replays them).
+ * unlike Godot's native LOOP_PINGPONG, which replays them). `pingpong-reverse`
+ * is the same round trip started from the other end: to..from, from+1..to-1.
  */
 export function expandTagFrameIndices(tag: ExportTag): number[] {
   const forward: number[] = [];
   for (let i = tag.from; i <= tag.to; i++) forward.push(i);
-  if (tag.direction === "reverse") return forward.slice().reverse();
+  const backward = forward.slice().reverse();
+  if (tag.direction === "reverse") return backward;
   if (tag.direction === "pingpong" && forward.length > 2) {
     return forward.concat(forward.slice(1, -1).reverse());
+  }
+  if (tag.direction === "pingpong-reverse") {
+    // Two frames bounce to the same cycle as a plain loop, but it still has to
+    // start on `to` — that is the whole difference from `pingpong`.
+    return backward.length > 2 ? backward.concat(backward.slice(1, -1).reverse()) : backward;
   }
   return forward;
 }

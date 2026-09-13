@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 22 MCP tools.
+Full input/output schema for each of the 23 MCP tools.
 
 ## Grid args on sheet tools
 
@@ -666,7 +666,7 @@ Inputs:
 
 The document may be one command's output, several merged with `jq -s add`, a `meta` result, an `atlas` manifest, or a header+manifest hybrid. Collision polygons, pivots and tags attach by frame index; missing sections are skipped.
 
-For a grid document, the tool reads the width and height of the PNG that `source` names from its header, when the file exists, and falls back to `sourceWidth`/`sourceHeight` in the document. `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags` and `sprite_generate_meta` record both. A grid that does not match that size is an error. A document with an `output_path` (the result of an image-writing tool such as `sprite_remove_background`) is refused, because its `grid` describes the input image.
+For a grid document, the tool reads the width and height of the PNG that `source` names from its header, when the file exists, and falls back to `sourceWidth`/`sourceHeight` in the document. `sprite_generate_collision`, `sprite_generate_pivot`, `sprite_generate_tags` and `sprite_generate_meta` record both. A grid that does not match that size is an error. A document with an `output_path` (the result of an image-writing tool such as `sprite_remove_background`) is refused, because its `grid` describes the input image. A `sprite_read_aseprite` result is the exception: its `output_path` equals its `source`, because it describes the sheet it wrote. A grid document with `source: null` names no image, so it is an error unless `texture` is given.
 
 With `output_path`, writes the file and returns:
 
@@ -691,6 +691,70 @@ Notes:
 - The tool does **not** read an existing `.meta` back. Overwriting one in a Unity project with a fresh guid detaches every reference to that asset — read its `guid:` line and pass it as `unity.guid`.
 - Godot `.tres` files carry no pivots and no collision; the format has no field for either. They are still read out of the document (they set Unity pivots and physics shapes) but nothing reaches the Godot output.
 - See [engine export](/docs/reference/engine-export) for generated examples of every format, the coordinate conventions, and each format's limitations.
+
+## `sprite_read_aseprite`
+
+Reads an Aseprite working file (`.ase` / `.aseprite`) and returns its tags, per-frame durations, layer tree, and palette. It can also composite the frames and write them as a sheet PNG, one PNG per frame, or both. With neither `output_path` nor `frames_dir`, it writes nothing to disk.
+
+Inputs:
+
+```ts
+{
+  input_path: string,                      // absolute path to a .ase or .aseprite file
+  output_path?: string,                    // write the frames as one sprite sheet PNG
+  frames_dir?: string,                     // write one PNG per exported frame
+  filename_pattern?: string,               // inside frames_dir, default "frame_%02d.png"
+  cols?: number,                           // sheet columns; default: every frame in one row
+  tag?: string,                            // export only this animation tag's frames
+  layers?: string[],                       // composite only these layer names
+  include_hidden?: boolean,                // default false
+  scale?: number                           // 1..16 nearest-neighbour upscale, default 1
+}
+```
+
+Returns JSON:
+
+```json
+{ "source": "/abs/sheet.png"|null,
+  "sourceWidth"|null, "sourceHeight"|null,
+  "asepriteFile": "/abs/hero.aseprite",
+  "frameWidth", "frameHeight",
+  "grid": {cols, rows, detected: false},
+  "frameCount", "documentFrameCount",
+  "canvas": {width, height},
+  "colorDepth": 32 | 16 | 8,
+  "pixelRatio": {width, height},
+  "tag": "name"|null,
+  "frameDurations": [ms, ...],
+  "tags":   [{ name, from, to,
+               direction: "forward"|"reverse"|"pingpong"|"pingpong-reverse",
+               repeat, color: "#rrggbb"|null }, ...],
+  "frames": [{ index, sourceIndex, durationMs }, ...],
+  "layers": [{ index, name, type: "image"|"group"|"tilemap",
+               opacity, blendMode, visible, effectivelyVisible, reference,
+               childLevel, parentIndex }, ...],
+  "palette": ["#rrggbb" | "#rrggbbaa", ...],
+  "warnings": [...],
+  "output_path"|null, "sheetWidth"|null, "sheetHeight"|null,
+  "frames_dir"|null, "frame_paths": [...],
+  "options": { tag, layers, include_hidden, scale, cols, filename_pattern } }
+```
+
+Every key before `output_path` is the same document the CLI's [`sprite-tools aseprite`](/docs/cli/reference#aseprite) writes. The keys from `output_path` on are MCP-only.
+
+Notes:
+
+- `source` is the sheet PNG written to `output_path`, not the `.aseprite` file. `sourceWidth` / `sourceHeight` are its pixel size and equal `sheetWidth` / `sheetHeight`. Without `output_path` all three are `null`, also when `frames_dir` is set. The file that was read is `asepriteFile`.
+- `frameDurations` has one duration in milliseconds per exported frame. It is the key `sprite_generate_tags` and `sprite_generate_meta` write; see [JSON schemas](/docs/reference/json-schemas#framedurations). `frames[].durationMs` carries the same numbers. Tags have no `fps`.
+- `tag` works like the CLI's `--tag`. `frameCount` counts the exported frames and `documentFrameCount` counts every frame in the file. The returned `tags` ranges are rebased onto the exported frames, so they are 0-based and index the sheet you got. Tags outside the export are left out. `frames[].sourceIndex` points back into the file.
+- `layers` matches exact names. A group name selects every layer inside it. An unknown name is an error that lists the available names: `layers "X": no such layer. Available: ...` or `tag "X": no such tag. Available: ...`.
+- `include_hidden` adds layers hidden in Aseprite. `effectivelyVisible` is `false` for a layer that is hidden itself or sits in a hidden group. `reference` is `true` for a reference layer.
+- Reference layers are never composited, the same as an Aseprite export. `include_hidden` and `layers` do not bring them back.
+- A `layers` selection that renders no pixels is an error: every named layer is a reference layer, or hidden without `include_hidden: true`. When another named layer does render, each such layer adds a warning instead. See [Layer selection](/docs/reference/aseprite#layer-selection).
+- `frameWidth` / `frameHeight` include `scale`. `canvas` is the unscaled canvas size.
+- `filename_pattern` needs a `%d` placeholder (`%02d`, `%03d`, ...) when more than one frame is exported. Without one, the call fails before it writes any file.
+- `warnings` is always present. Check it: a tilemap layer or a damaged cel leaves a sheet with missing content and a warning, not an error. The common messages are listed on the [Aseprite files](/docs/reference/aseprite#warnings) page.
+- With `output_path`, pass the result (inline as `metadata`, or saved to a file) to [`sprite_export_engine`](#sprite_export_engine). The engine file references the written sheet by name and size and keeps the frame durations and tag directions, including `pingpong-reverse`. Without `output_path`, pass `texture` too.
 
 ## Common notes
 

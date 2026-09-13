@@ -45,8 +45,11 @@ export interface GodotExportOptions {
   loopMode?: GodotLoopMode;
   /**
    * `"bake"` (default) writes a pingpong tag as an explicit `from..to,
-   * to-1..from+1` frame list, closed with `from` when the animation does not loop. `"native"` writes `LOOP_PINGPONG` instead, and
-   * only takes effect together with `loopMode: "int"` and a looping animation.
+   * to-1..from+1` frame list, closed with `from` when the animation does not loop
+   * (a pingpong-reverse tag: `to..from, from+1..to-1`, closed with `to`).
+   * `"native"` writes `LOOP_PINGPONG` instead — over a backwards frame list for
+   * pingpong-reverse — and only takes effect together with `loopMode: "int"`
+   * and a looping animation.
    */
   pingpong?: GodotPingPongMode;
   /** Name of the fallback animation used when the doc carries no tags. Default `"default"`. */
@@ -236,17 +239,25 @@ function planTag(
   // the frame order; `pingpong` bakes to from..to,to-1..from+1 (Aseprite's
   // shape) unless the caller opted into 4.7's LOOP_PINGPONG, which is NOT
   // equivalent — the engine replays each endpoint for a second full duration.
-  const bakePingPong = tag.direction === "pingpong" && !nativePingPong;
-  const indices =
-    tag.direction === "reverse" || bakePingPong
-      ? expandTagFrameIndices(tag)
-      : forwardRange(tag.from, tag.to);
-  // The baked list stops at from+1 because a looping animation wraps back to
-  // `from` on its own. A one-shot never wraps, so it has to close the round
-  // trip itself or it comes to rest one frame short of where it started.
-  if (bakePingPong && !loop && tag.to > tag.from) indices.push(tag.from);
+  const isPingPong = tag.direction === "pingpong" || tag.direction === "pingpong-reverse";
+  const bakePingPong = isPingPong && !nativePingPong;
+  const useNative = isPingPong && nativePingPong;
+  let indices: number[];
+  if (tag.direction === "reverse" || bakePingPong) {
+    indices = expandTagFrameIndices(tag);
+  } else if (useNative && tag.direction === "pingpong-reverse") {
+    // LOOP_PINGPONG bounces off whichever end the list starts from, so listing
+    // the range backwards is exactly "ping-pong, starting from `to`".
+    indices = forwardRange(tag.from, tag.to).reverse();
+  } else {
+    indices = forwardRange(tag.from, tag.to);
+  }
+  // The baked list stops one short of its first frame because a looping
+  // animation wraps back to it on its own. A one-shot never wraps, so it has to
+  // close the round trip itself or it comes to rest one frame short of where it
+  // started — `from` for pingpong, `to` for pingpong-reverse.
+  if (bakePingPong && !loop && tag.to > tag.from) indices.push(indices[0]);
 
-  const useNative = tag.direction === "pingpong" && nativePingPong;
   return {
     name: tag.name,
     indices,

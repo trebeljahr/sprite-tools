@@ -15,7 +15,13 @@
 //     has no per-frame pivot key at all; `meta.slices[].keys[].pivot` is the
 //     only pivot the format has ever carried.
 
-import { basename, type NormalizedDoc, type NormalizedFrame, stripExtension } from "./types";
+import {
+  basename,
+  type NormalizedDoc,
+  type NormalizedFrame,
+  stripExtension,
+  toAsepriteDirection,
+} from "./types";
 
 /** `--format json-hash` (Aseprite's default) or `--format json-array`. */
 export type AsepriteFormat = "hash" | "array";
@@ -86,10 +92,14 @@ export interface AsepriteArrayFrameEntry extends AsepriteFrameEntry {
 }
 
 /**
- * Aseprite's direction vocabulary. `pingpong_reverse` exists in Aseprite 1.3+
- * but has no source in our `Direction` union, so this exporter never emits it.
+ * Aseprite's direction vocabulary, verbatim from `convert_anidir_to_string`
+ * (src/doc/anidir.cpp). Our `pingpong-reverse` is written with the underscore.
+ *
+ * Caveat for Phaser users: `AnimationManager.createFromAseprite` only
+ * recognises `reverse` and `pingpong` and plays `pingpong_reverse` forward. The
+ * file is still correct Aseprite JSON; the gap is in that reader.
  */
-export type AsepriteDirection = "forward" | "reverse" | "pingpong";
+export type AsepriteDirection = "forward" | "reverse" | "pingpong" | "pingpong_reverse";
 
 export interface AsepriteFrameTag {
   name: string;
@@ -98,6 +108,11 @@ export interface AsepriteFrameTag {
   /** Inclusive. */
   to: number;
   direction: AsepriteDirection;
+  /**
+   * Written only when the tag has a repeat count, and as a string — Aseprite's
+   * writer emits `"repeat": "3"`, not a number (DocExporter::createDataFile).
+   */
+  repeat?: string;
 }
 
 export interface AsepriteSliceKey {
@@ -184,7 +199,8 @@ export function toAsepriteJson(
       name: tag.name,
       from: tag.from,
       to: tag.to,
-      direction: tag.direction,
+      direction: toAsepriteDirection(tag.direction),
+      ...(tag.repeat !== undefined ? { repeat: String(tag.repeat) } : {}),
     }));
   }
 

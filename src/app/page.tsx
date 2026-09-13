@@ -184,7 +184,7 @@ export default function HomePage() {
             <div>
               <CardTitle className="text-base">CLI</CardTitle>
               <CardDescription className="text-xs">
-                17 composable subcommands. Pipe-friendly.
+                20 composable subcommands. Pipe-friendly.
               </CardDescription>
             </div>
           </CardHeader>

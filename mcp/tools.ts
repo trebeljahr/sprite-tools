@@ -7,7 +7,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
 
 import { loadPng, savePng, stitchSheet } from "../cli/lib/image-io";
@@ -112,6 +112,15 @@ import {
   type DeepPartial,
   type LintConfig,
 } from "../src/lib/lint";
+import { compositeFrames, isAsepriteFile, parseAseprite } from "../src/lib/aseprite";
+// Not from the ../src/lib/aseprite barrel on purpose: that barrel is browser-safe
+// and pulling node:zlib through it would break the web bundle.
+import { inflateNode } from "../src/lib/aseprite/inflate-node";
+import {
+  buildAsepriteMetadata,
+  resolveAsepriteLayers,
+  resolveAsepriteRange,
+} from "../cli/commands/aseprite";
 
 // -----------------------------------------------------------------
 // Helpers
@@ -2414,6 +2423,168 @@ export function registerAllTools(server: McpServer) {
         return { path: p, filename: f.filename, bytes: f.bytes };
       });
       return jsonResult({ path: output_path, ...summary, files: written });
+    },
+  );
+
+  // ------- read_aseprite -------
+  server.registerTool(
+    "sprite_read_aseprite",
+    {
+      description:
+        "Read an Aseprite working file (.ase / .aseprite) directly — the artist's source, not an export. Returns everything a PNG throws away: the named animation tags with their frame ranges, loop direction and repeat count, the per-frame durations in milliseconds, the layer tree (names, nesting, blend modes, opacity, visibility) and the palette. Optionally composites the frames and writes them as a sprite sheet PNG (`output_path`) and/or one PNG per frame (`frames_dir`); omit both to inspect the file without touching disk. Use this instead of asking for a PNG export when you need to know how a sprite animates, which layers exist, or how long each frame is held. `tag` exports just one animation; the returned `tags` ranges are then rebased onto the exported frames (0-based, indexing the sheet you got) and each frame's `sourceIndex` points back into the file. `layers` composites only the named layers (a group name selects every layer inside it), `include_hidden` brings back layers hidden in Aseprite. Palette entries are `#rrggbb`, or `#rrggbbaa` when not fully opaque. Always check the returned `warnings` — tilemap layers are unsupported and get skipped, so a sheet can legitimately come back missing content. Reference layers never composite; `layers` naming only reference or hidden layers (without `include_hidden`) is an error, and `layers[].reference` / `effectivelyVisible` tell them apart. The result is a sheet metadata document like sprite_generate_meta's: `source` / `sourceWidth` / `sourceHeight` describe the written sheet PNG (all null without `output_path`), `asepriteFile` is the file that was read, and `frameDurations` holds each exported frame's duration in ms — pass the result (or its file) straight to sprite_export_engine and the engine files keep Aseprite's timings, tag directions (including pingpong-reverse) and the sheet's real name and size.",
+      inputSchema: {
+        input_path: z.string().describe("Absolute path to a .ase or .aseprite file"),
+        output_path: z
+          .string()
+          .optional()
+          .describe("Write the composited frames as one sprite sheet PNG here"),
+        frames_dir: z
+          .string()
+          .optional()
+          .describe("Write one PNG per exported frame into this directory"),
+        filename_pattern: z
+          .string()
+          .default("frame_%02d.png")
+          .describe("printf-style pattern used inside frames_dir, e.g. 'run_%03d.png'"),
+        cols: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Sheet columns; omit to lay every exported frame out in a single row"),
+        tag: z
+          .string()
+          .optional()
+          .describe("Export only the frames of this animation tag; omit for every frame"),
+        layers: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Composite only the layers with these names (a group name selects its children); omit for every visible layer",
+          ),
+        include_hidden: z
+          .boolean()
+          .default(false)
+          .describe("Composite layers that are hidden in Aseprite too"),
+        scale: z
+          .number()
+          .int()
+          .min(1)
+          .max(16)
+          .default(1)
+          .describe("Integer nearest-neighbour upscale applied to every exported frame"),
+      },
+    },
+    async ({
+      input_path,
+      output_path,
+      frames_dir,
+      filename_pattern,
+      cols,
+      tag,
+      layers,
+      include_hidden,
+      scale,
+    }) => {
+      if (!existsSync(input_path)) throw new Error(`${input_path}: no such file`);
+      const buf = readFileSync(input_path);
+      if (buf.length === 0) throw new Error(`${input_path} is empty`);
+      const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      if (!isAsepriteFile(bytes)) {
+        throw new Error(
+          `${input_path}: not an Aseprite file (bad magic number) — expected a .ase or .aseprite ` +
+            "document saved by Aseprite",
+        );
+      }
+
+      // parse + composite as two steps (not decodeAseprite) so `layers` and
+      // `include_hidden` reach the compositor without compositing twice.
+      const doc = await parseAseprite(bytes, { inflate: inflateNode });
+      const selection = resolveAsepriteLayers(doc, layers ?? [], {
+        flag: "layers",
+        includeHidden: include_hidden,
+        hiddenHint: "include_hidden: true",
+      });
+      const all = compositeFrames(doc, {
+        includeHiddenLayers: include_hidden,
+        layerIndices: selection.indices,
+      });
+      if (all.length === 0) throw new Error(`${input_path}: file contains no frames`);
+
+      const range = resolveAsepriteRange(doc, tag, all.length, "tag");
+      const selected = all.slice(range.from, range.to + 1);
+      const images = selected.map((f) => {
+        // Copy rather than `new ImageData(f.pixels, ...)`: the composited buffer
+        // is typed Uint8ClampedArray<ArrayBufferLike>, which the DOM ImageData
+        // constructor signature rejects.
+        const img = new ImageData(f.width, f.height);
+        img.data.set(f.pixels);
+        return upscaleNearestBy(img, scale);
+      });
+
+      // Checked before anything touches disk: a pattern with no %d gives every
+      // frame the same filename, so each write would silently clobber the last
+      // and the caller would get N identical paths back for one surviving PNG.
+      if (frames_dir && images.length > 1 && !/%0?\d*d/.test(filename_pattern)) {
+        throw new Error(
+          `filename_pattern "${filename_pattern}" has no %d placeholder, so all ${images.length} ` +
+            "frames would overwrite one file — use something like 'frame_%02d.png'",
+        );
+      }
+
+      const sheetCols = cols ?? images.length;
+      const sheetRows = Math.ceil(images.length / sheetCols);
+
+      let sheetSize: { width: number; height: number } | null = null;
+      if (output_path) {
+        const sheet = stitchSheet(images, sheetCols, sheetRows);
+        mkdirSync(dirname(output_path), { recursive: true });
+        savePng(sheet, output_path);
+        sheetSize = { width: sheet.width, height: sheet.height };
+      }
+
+      const framePaths: string[] = [];
+      if (frames_dir) {
+        for (let i = 0; i < images.length; i++) {
+          const p = join(frames_dir, formatPattern(filename_pattern, i));
+          // Per file, not once for frames_dir: the pattern may contain subdirectories.
+          mkdirSync(dirname(p), { recursive: true });
+          savePng(images[i], p);
+          framePaths.push(p);
+        }
+      }
+
+      // The document itself comes from the CLI's builder, so the two surfaces
+      // cannot drift: `source` is the written sheet (null without output_path),
+      // and `output_path === source` is what lets sprite_export_engine accept
+      // this result as sheet metadata.
+      const meta = buildAsepriteMetadata({
+        asepriteFile: input_path,
+        doc,
+        frames: all,
+        range,
+        cols: sheetCols,
+        scale,
+        tag: tag ?? null,
+        sheet: output_path && sheetSize ? { path: output_path, ...sheetSize } : null,
+        extraWarnings: selection.warnings,
+      });
+      return jsonResult({
+        ...meta,
+        output_path: output_path ?? null,
+        sheetWidth: sheetSize?.width ?? null,
+        sheetHeight: sheetSize?.height ?? null,
+        frames_dir: frames_dir ?? null,
+        frame_paths: framePaths,
+        options: {
+          tag: tag ?? null,
+          layers: layers ?? null,
+          include_hidden,
+          scale,
+          cols: cols ?? null,
+          filename_pattern,
+        },
+      });
     },
   );
 }

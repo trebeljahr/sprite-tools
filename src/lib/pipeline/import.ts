@@ -1,5 +1,6 @@
 import { type CellGeometry, cellRect, computeCellGeometry } from "./grid";
 import {
+  type AsepriteImportConfig,
   computeStats,
   type Frames,
   nextFrameId,
@@ -274,6 +275,12 @@ export async function importFromFiles(files: File[]): Promise<Frames> {
   const out: Frame[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const f = sorted[i];
+    // Browsers report `type: ""` for .ase/.aseprite, so the image guard below
+    // would drop one without a word. Fail loudly instead — the file is
+    // importable, just not through this step.
+    if (isAsepriteFilename(f.name)) {
+      throw new Error(`${f.name} is an Aseprite file — import it from the Aseprite source tab.`);
+    }
     if (!f.type.startsWith("image/")) continue;
     const bitmap = await fileToBitmap(f);
     out.push({
@@ -284,6 +291,284 @@ export async function importFromFiles(files: File[]): Promise<Frames> {
       sourceIndex: i,
       metadata: { filename: f.name },
     });
+  }
+  return { frames: out, stats: computeStats(out) };
+}
+
+// -----------------------------------------------------------------
+// Aseprite (.ase / .aseprite) → Frames
+// -----------------------------------------------------------------
+// Note the import path: `inflateWeb` (DecompressionStream), never the
+// Node zlib inflater. This module is part of the client bundle, and a
+// Node built-in pulled in here breaks the Turbopack build.
+
+import { compositeFrame, isAsepriteFile, parseAseprite } from "@/lib/aseprite";
+import { inflateWeb } from "@/lib/aseprite/inflate";
+import type { AseDocument } from "@/lib/aseprite/types";
+import { type FrameDuration, normalizeFrameDurations } from "@/lib/animation/durations";
+
+export type { AseDocument };
+
+/** Extensions the source pickers route on. `File.type` is "" for both. */
+export function isAsepriteFilename(name: string): boolean {
+  return /\.(ase|aseprite)$/i.test(name);
+}
+
+// The source picker parses the file to show layers, tags and warnings before
+// the user runs anything, and then the pipeline parses it again to composite.
+// Parsing is the expensive half (every cel is inflated), so keep the document
+// alive per File. A WeakMap keyed on the File is safe: a different upload is a
+// different File object, so a stale document can never be served to a new file,
+// and the entry dies with the File.
+const docByFile = new WeakMap<File, Promise<AseDocument>>();
+
+function parseFile(file: File): Promise<AseDocument> {
+  const cached = docByFile.get(file);
+  if (cached) return cached;
+  const pending = (async () => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!isAsepriteFile(bytes)) {
+      throw new Error(`${file.name} is not an Aseprite file (bad magic number).`);
+    }
+    return await parseAseprite(bytes, { inflate: inflateWeb });
+  })();
+  docByFile.set(file, pending);
+  // Forget a failure: a read can fail for reasons that go away (the file was
+  // replaced on disk mid-read), and a cached rejection would make a retry of
+  // the same File fail forever.
+  pending.catch(() => {
+    if (docByFile.get(file) === pending) docByFile.delete(file);
+  });
+  return pending;
+}
+
+/**
+ * Document metadata for the UI: tags, layers, palette and `warnings`. Frames
+ * alone cannot carry any of it. Shares the parse with importFromAseprite, so
+ * calling this before a run costs nothing extra.
+ */
+export async function readAsepriteMeta(file: File): Promise<AseDocument> {
+  return await parseFile(file);
+}
+
+// Aseprite tag names are free text and end up as export filenames.
+function sanitizeName(name: string): string {
+  return name.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "tag";
+}
+
+// Same dedupe rule the compositor uses: a note that fires on every run (or on
+// every frame) must still show up once.
+function warnOnce(doc: AseDocument, message: string): void {
+  if (!doc.warnings.includes(message)) doc.warnings.push(message);
+}
+
+// -----------------------------------------------------------------
+// Layer picker model
+// -----------------------------------------------------------------
+// DOM-free so the rules that decide what a user may select are testable
+// without a browser, and so the source picker and the importer agree on them.
+
+export interface AsepriteLayerChoice {
+  index: number;
+  name: string;
+  childLevel: number;
+  /** Set when the layer cannot contribute pixels; the picker shows it disabled with this text. */
+  disabledReason?: string;
+}
+
+/**
+ * Every pixel-bearing layer of the document, in file order, with the reason it
+ * cannot be selected when it would never reach the output. Groups are left out
+ * because they hold no pixels of their own; their children are listed instead.
+ */
+export function asepriteLayerChoices(
+  doc: AseDocument,
+  includeHiddenLayers: boolean,
+): AsepriteLayerChoice[] {
+  const out: AsepriteLayerChoice[] = [];
+  for (const l of doc.layers) {
+    if (l.type === "group") continue;
+    let disabledReason: string | undefined;
+    // Order matters: a hidden reference layer is still excluded by being a
+    // reference layer, and turning on hidden layers would not change that.
+    if (l.reference) {
+      disabledReason = "Reference layer: Aseprite never renders it into an export";
+    } else if (l.type === "tilemap") {
+      disabledReason = "Tilemap layer: tilesets are not supported, so it renders empty";
+    } else if (!l.effectivelyVisible && !includeHiddenLayers) {
+      disabledReason = "Hidden in Aseprite: turn on Include hidden layers to use it";
+    }
+    out.push({ index: l.index, name: l.name, childLevel: l.childLevel, disabledReason });
+  }
+  return out;
+}
+
+/**
+ * Next layer selection after the user clicks `name`. `null` means "every
+ * layer" and is returned whenever the selection covers every selectable layer,
+ * so the step config (and its cache key) stays minimal.
+ *
+ * A click on a disabled layer is ignored, and so is a click that would leave
+ * nothing selectable selected: that import would produce a sheet of empty
+ * frames with no hint why.
+ */
+export function toggleAsepriteLayer(
+  current: string[] | null,
+  name: string,
+  choices: AsepriteLayerChoice[],
+): string[] | null {
+  const selectable = [...new Set(choices.filter((c) => !c.disabledReason).map((c) => c.name))];
+  if (!selectable.includes(name)) return current;
+  const base = current ?? selectable;
+  const next = base.includes(name) ? base.filter((n) => n !== name) : [...base, name];
+  if (!next.some((n) => selectable.includes(n))) return current;
+  return selectable.every((n) => next.includes(n)) ? null : next;
+}
+
+// -----------------------------------------------------------------
+// Import plan
+// -----------------------------------------------------------------
+
+export interface AsepriteImportPlan {
+  /** Passed to the compositor; undefined composites every layer. */
+  layerIndices?: number[];
+  frames: { index: number; filename: string; durationMs: FrameDuration }[];
+}
+
+/**
+ * Everything importFromAseprite decides before touching a pixel: which layers,
+ * which frames, and what each frame is called and how long it is held. Pure
+ * apart from appending to `doc.warnings`, which is where every non-fatal note
+ * about this document goes so the source picker can show it.
+ */
+export function planAsepriteImport(
+  doc: AseDocument,
+  config: AsepriteImportConfig,
+  sourceName: string,
+): AsepriteImportPlan {
+  // Names, not indices — see the comment on AsepriteImportConfig. A name that
+  // no longer matches any layer simply drops out, and a selection that matches
+  // nothing is treated as "no filter" so a stale config can't render nothing.
+  let layerIndices: number[] | undefined;
+  if (config.layerNames && config.layerNames.length > 0) {
+    const wanted = new Set(config.layerNames);
+    const matched = doc.layers.filter((l) => wanted.has(l.name));
+    if (matched.length > 0) {
+      layerIndices = matched.map((l) => l.index);
+      const contributes = asepriteLayerChoices(doc, config.includeHiddenLayers).some(
+        (c) => !c.disabledReason && wanted.has(c.name),
+      );
+      if (!contributes) {
+        warnOnce(
+          doc,
+          "Every selected layer is hidden, a reference layer or a tilemap, so the imported frames are empty.",
+        );
+      }
+    } else {
+      warnOnce(doc, "None of the selected layers exist in this file; every layer was imported.");
+    }
+  }
+
+  let from = 0;
+  let to = doc.frameCount - 1;
+  let activeTag: AseDocument["tags"][number] | undefined;
+  if (config.tag !== undefined) {
+    activeTag = doc.tags.find((t) => t.name === config.tag);
+    if (!activeTag) {
+      warnOnce(doc, `Tag "${config.tag}" is not in this file; every frame was imported.`);
+    }
+  }
+  if (activeTag) {
+    // Tag ranges come straight out of the file and are clamped rather than
+    // trusted; a hand-edited .ase can name frames that do not exist.
+    from = Math.max(0, activeTag.from);
+    to = Math.min(doc.frameCount - 1, activeTag.to);
+    if (from > to) {
+      throw new Error(
+        `Tag "${activeTag.name}" covers frames ${activeTag.from}-${activeTag.to}, but the file has ${doc.frameCount} frame(s).`,
+      );
+    }
+    if (from !== activeTag.from || to !== activeTag.to) {
+      warnOnce(
+        doc,
+        `Tag "${activeTag.name}" covers frames ${activeTag.from}-${activeTag.to}; clamped to ${from}-${to}.`,
+      );
+    }
+  }
+
+  // Main's duration model: positive whole milliseconds or null ("no explicit
+  // hold"). Normalising here keeps a zero or corrupt frame duration from
+  // reaching a consumer as a real hold time.
+  const holds = normalizeFrameDurations(
+    doc.frames.map((f) => f.durationMs),
+    doc.frameCount,
+  );
+
+  const base = sanitizeName(sourceName.replace(/\.(ase|aseprite)$/i, ""));
+  const frames: AsepriteImportPlan["frames"] = [];
+  for (let i = from; i <= to; i++) {
+    // Any tag covering this frame, not just the one being imported — a
+    // full-document import still wants its tag names in the exported filenames.
+    const tag = activeTag ?? doc.tags.find((t) => i >= t.from && i <= t.to);
+    const seq = String(i).padStart(4, "0");
+    frames.push({
+      index: i,
+      filename: tag ? `${base}-${sanitizeName(tag.name)}-${seq}.png` : `${base}-${seq}.png`,
+      durationMs: holds?.[i] ?? null,
+    });
+  }
+  return { layerIndices, frames };
+}
+
+/**
+ * Raw straight-alpha RGBA to an ImageBitmap via the house canvas round-trip
+ * (see transforms.ts bitmapToCanvas/canvasToBitmap). `putImageData` writes the
+ * bytes unpremultiplied and without compositing, which is exactly what
+ * Aseprite's cel data already is.
+ */
+async function rgbaToBitmap(rgba: Uint8ClampedArray, w: number, h: number): Promise<ImageBitmap> {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2D context unavailable");
+  // Copy into a fresh ImageData rather than `new ImageData(rgba, w, h)`: the
+  // composited buffer is typed `Uint8ClampedArray<ArrayBufferLike>` and the
+  // ImageData constructor only accepts a plain ArrayBuffer-backed view.
+  const img = new ImageData(w, h);
+  img.data.set(rgba);
+  ctx.putImageData(img, 0, 0);
+  return await createImageBitmap(canvas);
+}
+
+export async function importFromAseprite(
+  file: File,
+  config: AsepriteImportConfig,
+): Promise<Frames> {
+  const doc = await parseFile(file);
+  const plan = planAsepriteImport(doc, config, file.name);
+  const opts = { includeHiddenLayers: config.includeHiddenLayers, layerIndices: plan.layerIndices };
+  const out: Frame[] = [];
+  try {
+    for (const planned of plan.frames) {
+      // One frame at a time: a tag import only pays for its own range, and
+      // only one canvas-sized buffer is alive between bitmaps.
+      const src = compositeFrame(doc, planned.index, opts);
+      const bitmap = await rgbaToBitmap(src.pixels, src.width, src.height);
+      out.push({
+        id: nextFrameId(),
+        bitmap,
+        width: src.width,
+        height: src.height,
+        sourceIndex: planned.index,
+        metadata: { filename: planned.filename, durationMs: planned.durationMs },
+      });
+    }
+  } catch (e) {
+    // The pipeline only disposes frames it gets back; bitmaps made before a
+    // failure would otherwise hold GPU memory until the page is closed.
+    for (const f of out) f.bitmap.close();
+    throw e;
   }
   return { frames: out, stats: computeStats(out) };
 }

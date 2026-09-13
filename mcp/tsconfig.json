@@ -28,8 +28,12 @@
     "../src/lib/pixel-art/**/*.ts",
     "../src/lib/palette/**/*.ts",
     "../src/lib/normal-map/**/*.ts",
+    "../src/lib/outline/**/*.ts",
     "../src/lib/atlas/**/*.ts",
+    "../src/lib/nine-slice/**/*.ts",
+    "../src/lib/aseprite/**/*.ts",
     "../src/lib/pipeline/detect.ts",
+    "../src/lib/pipeline/chroma-core.ts",
     "../src/types/**/*.d.ts"
   ],
   "exclude": ["../node_modules", "../dist", "../.next"]

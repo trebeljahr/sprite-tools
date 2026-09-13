@@ -37,6 +37,20 @@ This project follows semantic versioning for the npm package.
 - Fix the web atlas packer exporting the green frame guides into the PNG — every sprite's outermost pixel row shipped tinted. The guides are now preview-only, so the downloaded atlas is pixel-identical to the CLI's.
 - Add pixel-art upscaling to the Pixelate tool, the `pixelate` CLI command, and the `sprite_pixelate` MCP tool — nearest-neighbour plus Scale2x, Scale3x, Eagle, and xBR level 1, so an already-pixelated sprite can be magnified for display without the blur a bilinear resize leaves behind. Every filter only copies existing source pixels, so palettes and transparency come through unchanged.
 - Add `--upscale-algo` / `--upscale-factor` to `pixelate` and `upscale_algo` / `upscale_factor` to `sprite_pixelate`. A factor above 1 is an explicit magnification and replaces the existing `--upscale` / `upscale` restore-to-source-size step, which is unchanged at the default factor of 1.
+- Read Aseprite working files (`.ase` / `.aseprite`) directly, with no export step. RGBA, grayscale, and indexed files composite with all 19 Aseprite blend modes, layer and cel opacity, and linked cels.
+- Add the `aseprite` CLI command (alias `ase`) and the `sprite_read_aseprite` MCP tool. Both report tags, per-frame durations, the layer tree, and the palette as JSON. The CLI writes a sheet PNG by default; the MCP tool writes a sheet or per-frame PNGs on request.
+- Add an Aseprite source tab to the Sheet Builder and Background Removal pages, with layer, hidden-layer, and animation-tag selection before import.
+- Report unsupported or damaged Aseprite content as warnings. The CLI prints them to stderr and the JSON, the MCP tool returns them, and the web app lists them under Decode notes. Tilemap layers, slices, and a group's own blend mode or opacity are not applied, and each one produces a warning.
+- Make `sprite-tools aseprite` JSON and the `sprite_read_aseprite` result one shared shape. `source` now names the written sheet PNG, and the new `asepriteFile` key names the file that was read.
+- Add `sourceWidth`, `sourceHeight`, and a top-level `frameDurations` array to Aseprite output, so `sprite-tools export` and `sprite_export_engine` read it directly and keep Aseprite's frame durations.
+- Add `documentFrameCount`, `pixelRatio`, and `layers[].effectivelyVisible` to the CLI output, and `layers[].reference` to both surfaces.
+- Stop with an error when a `--layer` / `layers` selection renders no pixels, instead of writing an empty sheet. Naming a reference or hidden layer next to a layer that renders adds a warning.
+- Keep `pingpong-reverse` tags in engine export. Aseprite and Phaser JSON write `pingpong_reverse`, and Godot and Pixi animations bake the frame order starting from `to`.
+- Write a tag's repeat count to Aseprite JSON `frameTags` as `"repeat": "N"`.
+- Fail engine export on a grid document with `source: null` unless a texture name is given.
+- Accept a `sprite_read_aseprite` result in engine export. Its `output_path` equals its `source`, so it no longer counts as image-writing tool output.
+- Show reference layers, tilemap layers, and hidden layers as dashed, disabled chips in the web Aseprite tab. Hidden layers stay enabled while Include hidden layers is on. A layer, tag, or hidden-layer change after an import re-imports right away.
+- Add the dedupe step to Aseprite runs in Background Removal, and warn when a multi-file drop skips `.ase` files.
 - Add GitHub community health files, issue templates, pull request guidance, and dependency update configuration.
 
 ## [0.1.0] - Initial public release

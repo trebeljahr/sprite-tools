@@ -476,3 +476,42 @@ describe("toGodotAtlasTextures", () => {
     expect(bundle).toBe(toGodotAtlasTextures(atlasDoc(), RES_PATH));
   });
 });
+
+describe("toGodotSpriteFrames — pingpong-reverse", () => {
+  const doc = () =>
+    gridDoc({
+      tags: [
+        // Contiguous from frame 0: parseAnimations indexes frames by the order
+        // their sub-resources are emitted, which is sheet order of USED frames.
+        { name: "bounce", from: 0, to: 3, direction: "pingpong-reverse", fps: 10 },
+        { name: "attack", from: 4, to: 7, direction: "pingpong", fps: 10 },
+        { name: "pair", from: 8, to: 9, direction: "pingpong-reverse", fps: 10 },
+      ],
+    });
+  const frames = (out: string, name: string) =>
+    parseAnimations(out).find((a) => a.name === name)?.frames;
+
+  it("bakes the round trip starting from `to`, endpoints not repeated", () => {
+    const out = toGodotSpriteFrames(doc(), RES_PATH);
+    expect(frames(out, "bounce")).toEqual([3, 2, 1, 0, 1, 2]);
+    // Two frames: the same cycle as a loop, but it must start on `to`.
+    expect(frames(out, "pair")).toEqual([9, 8]);
+    // The existing pingpong bake is untouched.
+    expect(frames(out, "attack")).toEqual([4, 5, 6, 7, 6, 5]);
+  });
+
+  it("closes a one-shot on `to`, where it started", () => {
+    const out = toGodotSpriteFrames(doc(), { ...RES_PATH, loop: false });
+    expect(frames(out, "bounce")).toEqual([3, 2, 1, 0, 1, 2, 3]);
+    expect(frames(out, "pair")).toEqual([9, 8, 9]);
+    expect(frames(out, "attack")).toEqual([4, 5, 6, 7, 6, 5, 4]);
+  });
+
+  it("goes native as LOOP_PINGPONG over a backwards list", () => {
+    const out = toGodotSpriteFrames(doc(), { ...RES_PATH, loopMode: "int", pingpong: "native" });
+    const bounce = parseAnimations(out).find((a) => a.name === "bounce");
+    expect(bounce?.loop).toBe("2");
+    expect(bounce?.frames).toEqual([3, 2, 1, 0]);
+    expect(frames(out, "attack")).toEqual([4, 5, 6, 7]);
+  });
+});

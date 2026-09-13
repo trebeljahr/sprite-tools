@@ -3,6 +3,7 @@
 // Authoritative pixels live in ImageBitmap (no re-decode between transforms).
 // Blob URLs are lazily produced via ensurePreviewUrl for React <img> rendering.
 
+import type { FrameDuration } from "../animation/durations";
 import type { GridMargin, GridSpacing } from "./grid";
 
 export type FrameId = string;
@@ -12,6 +13,19 @@ export interface FrameMetadata {
   cellCol?: number;
   filename?: string;
   timestamp?: number;
+  /**
+   * This frame's hold time, in the same model as a tags document's
+   * `frameDurations` entry (src/lib/animation/durations.ts): whole
+   * milliseconds, or null for "no explicit hold, use the tag's fps".
+   *
+   * It rides on the Frame rather than in a frame-indexed array because the
+   * pipeline renumbers frames (select, dedupe) and every transform spreads the
+   * previous Frame's metadata forward, so the value stays attached to its
+   * drawing. Project it back into `frameDurations` by output position at the
+   * point a tags document is written. Absent when the importer cannot know a
+   * duration (video, sheets, loose images).
+   */
+  durationMs?: FrameDuration;
 }
 
 export interface Frame {
@@ -102,12 +116,27 @@ export interface DedupeStepConfig {
 export const DEDUPE_THRESHOLD_HELP =
   "Tolerance is the mean absolute difference per RGBA channel on a 0-255 scale, averaged over every channel of every pixel. 0 requires byte-identical frames. 1 means the average channel differs by 1/255 (~0.4%), the scale of rounding noise from lossy video compression or canvas alpha premultiplication. 2-4 absorbs a handful of stray pixels. Above ~8 visibly different poses start collapsing.";
 
+/**
+ * Layers and tags are named rather than indexed on purpose: this config is the
+ * step cache key (JSON.stringify'd in use-pipeline) and it survives undo/redo,
+ * so it must stay meaningful without a document handy to resolve indices
+ * against. Names also read correctly in a serialized pipeline.
+ */
+export interface AsepriteImportConfig {
+  includeHiddenLayers: boolean;
+  /** Layer names to composite. Undefined imports every layer. */
+  layerNames?: string[];
+  /** Restrict the import to one tag's frame range. Undefined imports every frame. */
+  tag?: string;
+}
+
 // ---- Pipeline step model ----
 
 export type StepKind =
   | "import-video"
   | "import-sheet"
   | "import-files"
+  | "import-aseprite"
   | "chroma-key"
   | "auto-crop"
   | "manual-crop"
@@ -125,6 +154,7 @@ export type PipelineStep =
   | StepBase<"import-video", VideoImportConfig & { sourceName?: string }>
   | StepBase<"import-sheet", SheetSliceConfig & { sourceName?: string }>
   | StepBase<"import-files", { sourceName?: string; count: number }>
+  | StepBase<"import-aseprite", AsepriteImportConfig & { sourceName?: string }>
   | StepBase<"chroma-key", ChromaKeyConfig>
   | StepBase<"auto-crop", AutoCropConfig>
   | StepBase<"manual-crop", { crop: FrameCrop }>

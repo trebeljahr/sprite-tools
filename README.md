@@ -6,12 +6,12 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, GIF export, and engine-native export for Godot, Unity, Aseprite, and Phaser.
+A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, GIF export, `.aseprite` file import, and engine-native export for Godot, Unity, Aseprite, and Phaser.
 
 Three surfaces, one shared pipeline:
 
 - **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 19 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **CLI (`sprite-tools`)** — 20 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -23,7 +23,7 @@ Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools i
 Good starting points:
 
 - [Sheet Lint](https://sprites.trebeljahr.com/lint) — the one to open first: what a sheet is, and what is wrong with it, drawn onto the sheet.
-- [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, or loose frames into a clean sheet.
+- [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, loose frames, or an `.aseprite` file into a clean sheet.
 - [Background Removal](https://sprites.trebeljahr.com/background-removal) — chroma-key a flat background out of every frame.
 - [Collision](https://sprites.trebeljahr.com/collision) — trace tight polygons for physics engines.
 - [Pixelate](https://sprites.trebeljahr.com/pixelate) — convert sprites into limited-palette pixel art, or upscale existing pixel art with Scale2x, Scale3x, Eagle, or xBR.
@@ -56,6 +56,11 @@ sprite-tools meta hero.png \
 
 # Slice a tileset that has a 1px border and 2px gutters between cells
 sprite-tools slice tileset.png --cols 8 --rows 6 --margin 1 --spacing 2 --out-dir tiles
+
+# Read an .aseprite file: one tag as a sheet PNG, plus tags, frame durations, layers, and palette as JSON
+sprite-tools ase hero.aseprite --tag run -o run-sheet.png --json run.json
+# That JSON is sheet metadata, so export reads it and keeps Aseprite's frame durations
+sprite-tools export run.json --format godot -o run.tres
 
 # Chroma-key a flat background out and crop to the content
 sprite-tools chroma hero.png --color '#00ff00' --trim -o hero-cut.png
@@ -121,15 +126,15 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 22 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — 23 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
 **Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
+**CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `aseprite` (alias `ase`), `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
 
-**MCP**: 22 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`).
+**MCP**: 23 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`; `aseprite` is `sprite_read_aseprite`).
 
 ## Docs
 
@@ -140,6 +145,7 @@ Full docs live in the app at [sprites.trebeljahr.com/docs](https://sprites.trebe
 - **Web app guide** — Sheet Builder, Background Removal, Lasso, metadata tools, transforms, exports, and AI flows.
 - **CLI reference** — every flag + output shape.
 - **JSON schemas** — the canonical data contract shared across all surfaces.
+- **Aseprite files** — what the `.ase` / `.aseprite` reader supports, what it skips, and the warnings it reports.
 - **Engine export** — what the Godot / Unity / Aseprite / Phaser files contain, and where each one is lossy.
 - **Algorithm notes** — how grid detection / contour tracing / duplicate detection / bin packing work.
 - **Contributing** — how to add a new tool.

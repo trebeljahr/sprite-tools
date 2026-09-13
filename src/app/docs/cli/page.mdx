@@ -25,6 +25,7 @@ sprite-tools info sheet.png             # quick stats + detected grid
 sprite-tools detect sheet.png           # just the grid
 sprite-tools slice sheet.png --out-dir frames   # one PNG per cell
 sprite-tools trim sprite.png -o tight.png       # remove transparent padding
+sprite-tools ase hero.aseprite --json hero.json # Aseprite file → sheet PNG + metadata
 sprite-tools collision sheet.png -o collision.json
 sprite-tools pivot sheet.png --preset bottom-center -o pivot.json
 sprite-tools tags sheet.png --tag idle=0-5 --tag run=6-11 -o tags.json
@@ -54,6 +55,7 @@ sprite-tools gif sheet.png --fps 12 -o anim.gif
 | `detect`     | JSON: grid (cols, rows, margin, spacing) + confidence |
 | `slice`      | files: one PNG per cell (plus optional JSON index) |
 | `trim`       | PNG: opaque-bounded crop (plus optional trim-metadata JSON) |
+| `aseprite`   | PNG + JSON: sheet from a `.ase`/`.aseprite` file + tags, durations, layers, palette (alias `ase`) |
 | `collision`  | JSON: per-frame polygons |
 | `pivot`      | JSON: per-frame anchor points |
 | `tags`       | JSON: named frame ranges |

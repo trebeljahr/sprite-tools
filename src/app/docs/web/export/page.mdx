@@ -22,7 +22,7 @@ Three routes, all landing in the same editable textarea so everything goes throu
 - **Use current sheet** — the shared project source is an *image*, not metadata, so this can only supply geometry. It reads the sheet's size, runs grid detection, and writes a starter document (`source`, `sourceWidth`, `sourceHeight`, `frameWidth`, `frameHeight`, `grid` with the detected `margin` and `spacing`, `frameCount`, empty `tags`) you then edit or paste tags into. The cell size excludes the detected border and gutters.
 - **Example** — a realistic merged document with three tags, two pivots and a collision polygon, so you can see the output shape without setting anything up.
 
-You can also just type or paste. Anything the CLI accepts works: a `meta` output, a `jq -s add` merge of `collision`/`pivot`/`tags`, an `atlas` manifest, or a header merged with a manifest.
+You can also just type or paste. Anything the CLI accepts works: a `meta` output, a `jq -s add` merge of `collision`/`pivot`/`tags`, an `atlas` manifest, a header merged with a manifest, or the JSON from `sprite-tools aseprite` / `sprite_read_aseprite`. A document with `source: null` (an Aseprite read that wrote no sheet) needs **Texture filename** set.
 
 ## Formats
 

@@ -1,0 +1,125 @@
+export const metadata = {
+  title: "Aseprite files — sprite-tools",
+  description:
+    "What the sprite-tools .ase/.aseprite reader supports, what it skips, and the warnings it reports when a file decodes only in part.",
+};
+
+# Aseprite files
+
+sprite-tools reads Aseprite working files (`.ase` and `.aseprite`) without an export step. The same reader runs in three places:
+
+- The **Aseprite** source tab in the [Sheet Builder](/docs/web/spritesheet) and [Background Removal](/docs/web/background-removal). The file is read in the browser and is not uploaded.
+- The [`aseprite` CLI command](/docs/cli/reference#aseprite) (alias `ase`).
+- The [`sprite_read_aseprite` MCP tool](/docs/mcp/tools#sprite_read_aseprite).
+
+The reader follows the official [Aseprite file format spec](https://github.com/aseprite/aseprite/blob/main/docs/ase-file-specs.md). This page lists what it supports, what it does not, and how it reports the difference.
+
+## Supported
+
+**Colour depths.** RGBA (32 bpp), grayscale (16 bpp), and indexed (8 bpp). Every surface gets straight RGBA pixels, whatever the file's colour depth.
+
+**Blend modes.** All 19 layer blend modes: Normal, Multiply, Screen, Overlay, Darken, Lighten, Color Dodge, Color Burn, Hard Light, Soft Light, Difference, Exclusion, Hue, Saturation, Color, Luminosity, Addition, Subtract, and Divide. The formulas are transcribed from Aseprite's `blend_funcs.cpp`, including its 8-bit integer rounding. Browser canvas blend modes are not used, because they give different results.
+
+- Compositing uses the blend method that Aseprite 1.3 and later use by default. Aseprite's older blend method option is not emulated.
+- In a grayscale sprite, Hue, Saturation, Color, and Luminosity composite as Normal. Aseprite does the same when it renders a grayscale sprite in its own format. Aseprite's on-screen editor preview composites in RGB, so the preview can differ from the output for those four modes.
+
+**Opacity.** Layer opacity and cel opacity, multiplied together. Layer opacity is read only when the file header marks it as valid, as the spec requires.
+
+**Hidden layers.** A hidden layer is left out by default. A layer inside a hidden group is left out too. The CLI's `--include-hidden`, the MCP tool's `include_hidden`, and the web app's **Include hidden layers** switch composite them.
+
+**Reference layers.** A reference layer is never composited. Aseprite shows it only in the editor and leaves it out of every export, so the reader does the same. The include-hidden options and layer selection do not bring it back. It still appears in the layer list, with `reference: true`. See [Layer selection](#layer-selection) for what happens when you select one by name.
+
+**Layer groups.** Groups control visibility, and selecting a group by name selects every layer inside it. A group's own blend mode and opacity are not applied. See [Not supported](#not-supported).
+
+**Cels.** Raw cels, zlib-compressed cels, and linked cels. Cel positions can be negative or run past the canvas edge, and are clipped to the canvas. Render order follows the cel z-index field.
+
+**Indexed colour.** The transparent palette index reads as transparent on normal layers and as an ordinary colour on the background layer. Palettes can change between frames. Each cel is decoded with the palette in effect at the frame it is shown in, including linked cels. The `palette` field in the output is the frame-0 palette. Old-format palette chunks (`0x0004`, and the 6-bit `0x000B`) are read too. A new-format palette chunk (`0x2019`) takes priority over them.
+
+**Tags.** Name, frame range, and colour. Loop direction: `forward`, `reverse`, `pingpong`, and `pingpong-reverse`. The repeat count, where `0` means the file does not set one. The reader reports tags; it does not play them.
+
+**Frame durations.** Per-frame durations in milliseconds. A frame with a duration of 0 uses the header's frame speed, as the spec describes. The CLI and MCP output carry them twice: as `frames[].durationMs`, and as the top-level `frameDurations` array that the rest of sprite-tools reads. See [Output fields](#output-fields).
+
+**Palette.** The palette, as `#rrggbb` hex strings, or `#rrggbbaa` for entries that are not fully opaque.
+
+## Not supported
+
+**Tilemap layers and tilesets.** Tilemap layers render empty. The layer still appears in the layer list with `type: "tilemap"`, and a warning is reported.
+
+**Slices.** Slice chunks (`0x2022`) are skipped with a warning. Slice names, bounds, nine-slice centres, and pivots in the file are not read. The [Nine-slice](/docs/web/nine-slice) and [Pivot](/docs/web/pivot) tools can generate that data from the composited frames instead.
+
+**Colour profiles.** The colour profile chunk, including an embedded ICC profile, is ignored without a warning. Colours are used as they are stored in the file, with no colour management.
+
+**User data.** The text and properties in user data chunks are not read. The only user data used is the tag colour.
+
+**External files.** External file references (`0x2008`), such as external palettes and tilesets, are skipped with a warning.
+
+**Group blend mode and opacity.** Groups are flattened: each image layer blends directly onto the canvas. When a visible group has a blend mode other than Normal or an opacity below 255, that setting is not applied and a warning names the group. Aseprite composites such a group separately first, so the output can differ from Aseprite's.
+
+## Warnings
+
+A file that is readable but not fully supported still decodes. The reader collects a note for each problem, and every surface shows those notes:
+
+- The CLI writes each one to stderr as `sprite-tools: warning: <message>` and includes them in the JSON `warnings` array. The stderr lines stay visible when stdout is piped.
+- The MCP tool always returns a `warnings` array.
+- The web app shows them under **Decode notes** in the Aseprite source panel.
+
+A condition that repeats, such as many tilemap cels in one file, is reported once. The common messages are below. Capital letters, `"Name"`, and `...` mark the parts that change from file to file.
+
+| Message | What happened |
+|---|---|
+| `Tileset chunks (0x2023) are not supported; tilemap layers will render empty` | The file has a tileset. Its tilemap layers are empty in the output. |
+| `Compressed tilemap cels (type 3) are not supported; those cels are omitted` | Cels on tilemap layers were left out. |
+| `Skipped unhandled chunk type 0xTTTT` | A chunk type the reader does not use, such as `0x2022` (slices) or `0x2008` (external files). |
+| `Layer group "Name" carries blend mode "MODE" and opacity N; compositing flattens groups, so the group's own blend mode and opacity were not applied.` | A group setting was ignored. See [Not supported](#not-supported). |
+| `Cel at frame F, layer "Name": zlib inflate failed: ...; the cel was skipped` | A compressed cel is corrupt. That cel is missing from the frame. |
+| `Cel at frame F, layer "Name": expected N bytes for WxH at Dbpp, got M; the cel was skipped` | A cel decompressed to the wrong size. That cel is missing from the frame. |
+| `Frame F chunk C (type 0xTTTT) has a record running past the chunk's declared end (...); the rest of that chunk was ignored` | A chunk is damaged. Records read before the damage are kept. |
+| `Layer N chunk runs past its declared size; its name and any unread fields were defaulted` | A layer chunk is damaged. The layer is kept so later cels stay on the correct layers. |
+| `User data properties block declares N bytes but only M remain in its chunk; the properties were skipped` | A user data chunk is damaged. Its colour, if already read, is kept. |
+| `Cel at frame F references layer index N, which has no layer chunk; it cannot be composited` | A cel points at a layer that does not exist. |
+| `Linked cel at frame F, layer N points at frame S, which has no cel on that layer; the cel was dropped` | A linked cel has no source cel. |
+| `Indexed sprite declares N colours but the file contains no palette chunk; all pixels decode as transparent` | An indexed file has no palette. |
+| `Pixel index N is past the end of the M-entry palette; those pixels decode as transparent` | Some pixels use palette entries that do not exist. |
+| `Unknown blend mode N on layer "Name"; treated as Normal` | The blend mode id is not one of the 19. |
+| `--layer "Name" is a reference layer, which Aseprite never renders into an export; it adds nothing to the sheet` | CLI and MCP only. A selected layer can never render, but another selected layer does. See [Layer selection](#layer-selection). |
+| `--layer "Name" is hidden in Aseprite and needs --include-hidden; it adds nothing to the sheet` | The same, for a hidden layer without the include-hidden option. |
+
+The reader stops with an error, and the CLI exits 1, only when the file cannot be read as a whole. Examples are a wrong magic number, a colour depth other than 32, 16, or 8, and a file cut off partway through a frame.
+
+## Layer selection
+
+The CLI's `--layer` and the MCP tool's `layers` select layers by exact name. Naming a group selects every layer inside it. Some layers cannot add pixels: a reference layer never, and a hidden layer only with `--include-hidden` / `include_hidden: true`.
+
+- If no selected layer can render, the command stops with an error instead of writing an empty sheet. The message says why and lists the image layers that can render:
+
+  ```
+  --layer "Reference": this selection renders no pixels, so the sheet would be empty — "Reference" is a reference layer, which Aseprite never renders into an export. Image layers that can render: "Art"
+  ```
+
+- If at least one selected layer renders, each layer that cannot render adds a warning, and the sheet is written.
+- The MCP messages start with `layers` instead of `--layer`, and say `include_hidden: true` instead of `--include-hidden`.
+- An unknown layer or tag name is an error that lists the available names, for example `--tag "idle": no such tag. Available: "Loop", "Animation 2"`. The MCP messages start with `layers "Name"` and `tag "Name"`.
+
+The web app does not let you make such a selection. Reference layers, tilemap layers, and (while **Include hidden layers** is off) hidden layers appear dashed and disabled in the layer list. See [Sheet Builder](/docs/web/spritesheet#aseprite-files).
+
+## Output fields
+
+The CLI and the MCP tool emit the same JSON document. The MCP tool adds a few keys about the files it wrote. See the [CLI reference](/docs/cli/reference#aseprite) and the [MCP tool catalog](/docs/mcp/tools#sprite_read_aseprite) for the full shapes. These details apply to both:
+
+- `source` is the sheet PNG the document describes, not the `.aseprite` file. `sourceWidth` and `sourceHeight` are that PNG's pixel size. The file that was read is `asepriteFile` (`"-"` for stdin).
+- `source`, `sourceWidth`, and `sourceHeight` are `null` when no sheet was written: CLI `--no-sheet`, or an MCP call without `output_path`. With CLI `-o -` the PNG has no filename, so `source` is `null` but the size is set.
+- `frameDurations` has one entry per exported frame, in milliseconds. It is the same key that `tags` and `meta` write, described in [JSON schemas](/docs/reference/json-schemas#framedurations). Aseprite stores a duration on every frame, so in a file Aseprite wrote every entry is a number.
+- `tags[]` has no `fps`, because Aseprite has no per-tag rate. `tags[].repeat` is the repeat count, `0` when the file does not set one.
+- With a tag selected, tag ranges are rebased onto the exported frames, and `frames[].sourceIndex` points back into the file.
+- `layers[].visible` is the layer's own visibility toggle. `effectivelyVisible` is `false` when the layer or any enclosing group is hidden. `reference` is `true` for a reference layer, which never renders whatever `visible` says.
+
+### Feeding `sprite-tools export`
+
+The document is a sheet metadata document, the same shape the other metadata commands write. [`sprite-tools export`](/docs/reference/engine-export) and `sprite_export_engine` read it with no changes:
+
+- The texture name is the basename of `source`, and the texture size is the PNG's real size.
+- Frame timing comes from `frameDurations`, so engine files keep Aseprite's per-frame durations.
+- Tag directions carry over, including `pingpong-reverse`. Aseprite and Phaser JSON also keep a tag's repeat count.
+- A document with `source: null` has no texture to name. `export` stops with an error unless you pass `--texture` (MCP: `texture`).
+
+The [recipe](/docs/cli/recipes#aseprite-file-to-a-godot-spriteframes-resource) shows the full command sequence.

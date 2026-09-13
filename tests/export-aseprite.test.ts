@@ -198,7 +198,7 @@ describe("toAsepriteJson — meta", () => {
     expect((idle?.to ?? 0) - (idle?.from ?? 0) + 1).toBe(4);
   });
 
-  it("never emits pingpong_reverse, which our Direction union cannot produce", () => {
+  it("never emits pingpong_reverse for a plain pingpong tag", () => {
     const serialized = JSON.stringify(toAsepriteJson(gridDoc()));
     expect(serialized).not.toContain("pingpong_reverse");
     expect(serialized).toContain('"direction":"pingpong"');
@@ -316,5 +316,36 @@ describe("toAsepriteJson — determinism", () => {
     // The grid fixture carries a collision entry on frame 0.
     expect(gridDoc().frames[0].polygon).not.toBeNull();
     expect(JSON.stringify(toAsepriteJson(gridDoc()))).not.toContain("polygon");
+  });
+});
+
+describe("toAsepriteJson — pingpong_reverse and repeat", () => {
+  const doc = () =>
+    normalizeExportInput({
+      source: "hero.png",
+      frameWidth: 8,
+      frameHeight: 8,
+      grid: { cols: 4, rows: 1, detected: false },
+      frameCount: 4,
+      tags: [
+        { name: "bounce", from: 0, to: 3, direction: "pingpong-reverse", repeat: 3 },
+        { name: "idle", from: 0, to: 1, direction: "forward", repeat: 0 },
+      ],
+    });
+
+  it("writes Aseprite's native pingpong_reverse direction", () => {
+    expect(toAsepriteJson(doc()).meta.frameTags?.[0].direction).toBe("pingpong_reverse");
+  });
+
+  it("writes repeat as a string, only when the tag has one, as Aseprite does", () => {
+    const tags = toAsepriteJson(doc()).meta.frameTags;
+    expect(tags?.[0]).toEqual({
+      name: "bounce",
+      from: 0,
+      to: 3,
+      direction: "pingpong_reverse",
+      repeat: "3",
+    });
+    expect(tags?.[1]).not.toHaveProperty("repeat");
   });
 });
