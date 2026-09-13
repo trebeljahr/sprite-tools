@@ -363,7 +363,10 @@ export default function PalettePage() {
     const cellW = frames[0].width;
     const cellH = frames[0].height;
     const cols = sourceMode === "sheet" ? effectiveCols : 1;
-    const rows = Math.ceil(frames.length / cols);
+    // Size from the grid, not the surviving frame count: importing a sheet drops
+    // empty cells, so frames.length can be short of cols*rows. Deriving rows
+    // from it would place the last frames past the bottom edge and lose them.
+    const rows = sourceMode === "sheet" ? effectiveRows : Math.ceil(frames.length / cols);
     const canvas = document.createElement("canvas");
     canvas.width = cellW * cols;
     canvas.height = cellH * rows;
