@@ -10,7 +10,7 @@ import { ViewportControls, ZoomIndicator } from "@/components/viewport-controls"
 import { useViewport } from "@/hooks/use-viewport";
 import { cn, applyChromaKey, applySolidFillChroma, sampleBackground } from "@/lib/utils";
 
-import confetti from "canvas-confetti";
+import { fireConfetti } from "@/lib/confetti";
 import {
   Download,
   Palette,
@@ -342,7 +342,7 @@ export default function LassoPage() {
               behavior: "smooth",
               block: "start",
             });
-            confetti({
+            fireConfetti({
               particleCount: 100,
               spread: 70,
               origin: { y: 0.6 },

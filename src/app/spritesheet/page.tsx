@@ -4,7 +4,7 @@ import * as React from "react";
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import confetti from "canvas-confetti";
+import { fireConfetti } from "@/lib/confetti";
 import {
   Scissors,
   Download,
@@ -608,7 +608,7 @@ function SpritesheetContent() {
         resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 50);
       setTimeout(() => {
-        confetti({
+        fireConfetti({
           particleCount: 150,
           spread: 70,
           origin: { y: 0.9 },
