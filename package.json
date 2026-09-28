@@ -22,6 +22,7 @@
   "bugs": {
     "url": "https://github.com/trebeljahr/sprite-tools/issues"
   },
+  "funding": "https://ricos.site/donate?from=sprite-tools",
   "author": "Rico Trebeljahr",
   "license": "MIT",
   "packageManager": "pnpm@10.33.2",

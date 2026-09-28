@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Github, Package } from "lucide-react";
-import { NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
+import { DONATE_URL, NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
 
 const VERSION = "0.1.0";
 
@@ -22,6 +22,16 @@ export function SiteFooter() {
             rel="noopener noreferrer"
           >
             MIT
+          </Link>
+          <span aria-hidden>·</span>
+          {/* New tab: leaving a tool page would drop the loaded sprites. */}
+          <Link
+            href={DONATE_URL}
+            className="hover:text-foreground transition-colors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Donate
           </Link>
         </div>
         <div className="flex items-center gap-3">

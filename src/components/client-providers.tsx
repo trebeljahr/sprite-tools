@@ -6,16 +6,19 @@
 //     render (no-op if DSN unset or NODE_ENV !== "production").
 //   * ConsentProvider — localStorage-backed analytics consent state.
 //   * ConsentBanner  — renders only when consent is still "pending".
+//   * SupportedParam — records a `?supported=1` return from the donate page.
 
 import "@/lib/error-reporting";
 import { ConsentProvider } from "@/lib/consent";
 import { ConsentBanner } from "@/components/consent-banner";
+import { SupportedParam } from "@/components/supported-param";
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <ConsentProvider>
       {children}
       <ConsentBanner />
+      <SupportedParam />
     </ConsentProvider>
   );
 }
