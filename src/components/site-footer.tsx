@@ -1,3 +1,4 @@
+import { ProjectDonateLink } from "./project-donate-link";
 import Link from "next/link";
 import { Github, Package } from "lucide-react";
 import { DONATE_URL, NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
@@ -25,14 +26,14 @@ export function SiteFooter() {
           </Link>
           <span aria-hidden>·</span>
           {/* New tab: leaving a tool page would drop the loaded sprites. */}
-          <Link
+          <ProjectDonateLink
             href={DONATE_URL}
             className="hover:text-foreground transition-colors"
             target="_blank"
             rel="noopener noreferrer"
           >
             Donate
-          </Link>
+          </ProjectDonateLink>
         </div>
         <div className="flex items-center gap-3">
           <Link
