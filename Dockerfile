@@ -60,6 +60,16 @@ RUN --mount=type=secret,id=dotenvx_private_key,env=DOTENV_PRIVATE_KEY_PRODUCTION
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 WORKDIR /app
 
+# curl for Coolify's health check. Coolify probes the container by
+# running `curl … || wget … || exit 1` INSIDE it, in place of any
+# HEALTHCHECK here, and bookworm-slim ships neither. Without one the
+# probe can never pass and every deploy is rolled back. With it, a
+# deploy is a rolling update: the old container serves until this one
+# is healthy.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV PORT=80
 
