@@ -21,7 +21,7 @@
 # and the image manifest. BuildKit secrets are mounted as tmpfs at build
 # time and never persist. Requires BuildKit (default in modern Docker;
 # the workflow uses docker/setup-buildx-action which enables it).
-ARG NODE_VERSION=24.14.1
+ARG NODE_VERSION=24.21.0
 
 # ---------------------------------------------------------------------------
 # Build

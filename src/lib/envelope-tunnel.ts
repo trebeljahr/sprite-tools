@@ -26,6 +26,7 @@ async function readBody(request: Request, signal: AbortSignal): Promise<Uint8Arr
     void reader.cancel().catch(() => {});
   };
   signal.addEventListener("abort", cancel, { once: true });
+  if (signal.aborted) cancel();
   try {
     while (true) {
       signal.throwIfAborted();
@@ -134,6 +135,7 @@ export function createEnvelopeTunnel(getDsn: () => string | undefined) {
       return reply(controller.signal.aborted ? 504 : 502);
     } finally {
       clearTimeout(timeout);
+      controller.abort();
       request.signal.removeEventListener("abort", abort);
       active--;
     }

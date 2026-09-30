@@ -136,6 +136,17 @@ describe("trusted envelope tunnel", () => {
     expect(cancel).toHaveBeenCalled();
     expect(network).not.toHaveBeenCalled();
   });
+  it("cancels streams when the caller already disconnected", async () => {
+    const cancel = vi.fn();
+    const controller = new AbortController();
+    controller.abort();
+    const input = new Request(request(new ReadableStream({ cancel })), {
+      signal: controller.signal,
+    });
+    expect((await createEnvelopeTunnel(() => dsn)(input)).status).toBe(408);
+    expect(cancel).toHaveBeenCalled();
+    expect(network).not.toHaveBeenCalled();
+  });
   it("aborts stalled upstream requests on deadline", async () => {
     vi.useFakeTimers();
     network.mockImplementation(
