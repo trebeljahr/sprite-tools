@@ -162,7 +162,8 @@ describe("trusted envelope tunnel", () => {
       signal: controller.signal,
     });
     expect((await createEnvelopeTunnel(() => dsn)(input)).status).toBe(408);
-    expect(cancel).toHaveBeenCalled();
+    // Request cloning forwards stream cancellation asynchronously.
+    await vi.waitFor(() => expect(cancel).toHaveBeenCalled());
     expect(network).not.toHaveBeenCalled();
   });
   it("aborts stalled upstream requests on deadline", async () => {
