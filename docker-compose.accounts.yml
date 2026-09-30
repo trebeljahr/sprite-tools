@@ -1,0 +1,31 @@
+# Optional self-hosted database. Use with the base compose file when Hatchkit
+# has not provisioned a dedicated Coolify-managed Postgres for this project.
+# Never expose the database port publicly. Store the password in Coolify env.
+services:
+  app:
+    environment:
+      PGHOST: accounts-db
+      PGDATABASE: sprite_tools
+      PGUSER: sprite_tools
+      PGPASSWORD: ${ACCOUNTS_DB_PASSWORD:?Set a unique database password}
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+  accounts-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sprite_tools
+      POSTGRES_USER: sprite_tools
+      POSTGRES_PASSWORD: ${ACCOUNTS_DB_PASSWORD:?Set a unique database password}
+    volumes:
+      - accounts-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U sprite_tools -d sprite_tools']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  accounts-data:

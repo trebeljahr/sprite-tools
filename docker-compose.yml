@@ -37,6 +37,14 @@ services:
       # uses this to decrypt the committed .env.production at startup
       # so server-side secrets (XAI_API_KEY, etc.) reach Server Actions.
       - DOTENV_PRIVATE_KEY_PRODUCTION
+      - POSTGRES_URL
+      - BETTER_AUTH_SECRET
+      - BETTER_AUTH_URL
+      - LISTMONK_URL
+      - LISTMONK_API_USER
+      - LISTMONK_API_TOKEN
+      - LISTMONK_TX_TEMPLATE_ID
+      - LISTMONK_FROM_EMAIL
     # Coolify gates Traefik/Caddy routing on this. Without a healthcheck
     # traffic can hit the container before next start finishes booting.
     # node-based check (not wget/curl) — the runtime image is node:slim

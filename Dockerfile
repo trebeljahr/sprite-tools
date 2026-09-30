@@ -84,6 +84,9 @@ COPY --from=build /app/pnpm-lock.yaml ./
 COPY --from=build /app/next.config.ts ./
 COPY --from=build /app/.env.production ./
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY --from=build /app/scripts/account-credit.mjs ./scripts/account-credit.mjs
+COPY --from=build /app/db ./db
 
 RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next/cache
 USER node

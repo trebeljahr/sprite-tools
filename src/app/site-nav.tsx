@@ -231,6 +231,9 @@ export function SiteNav() {
           >
             <Github className="h-4.5 w-4.5" />
           </Link>
+          <Link href="/account" className="px-2 text-sm hover:underline">
+            Account
+          </Link>
           <ThemeToggle />
         </div>
       </div>
