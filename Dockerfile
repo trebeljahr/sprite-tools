@@ -85,6 +85,7 @@ COPY --from=build /app/next.config.ts ./
 COPY --from=build /app/.env.production ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY --from=build /app/scripts/start-accounts.sh ./scripts/start-accounts.sh
 COPY --from=build /app/scripts/account-credit.mjs ./scripts/account-credit.mjs
 COPY --from=build /app/db ./db
 
@@ -100,4 +101,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 # DOTENV_PRIVATE_KEY_PRODUCTION from the container env (forwarded by
 # Coolify via docker-compose.yml). next start then sees XAI_API_KEY,
 # NEXT_PUBLIC_*, etc. and binds to PORT=8080 from the ENV above.
-CMD ["./node_modules/.bin/dotenvx", "run", "--", "./node_modules/.bin/next", "start"]
+CMD ["./node_modules/.bin/dotenvx", "run", "--", "sh", "scripts/start-accounts.sh"]

@@ -27,7 +27,10 @@ Email verification is mandatory. Missing email configuration disables accounts;
 verification and reset links are never logged. Sessions are checked against the
 database rather than a cached cookie; reset revokes existing sessions.
 
-Before serving accounts, run `node scripts/db-migrate.mjs` with the runtime
+For the first rollout, set `ACCOUNTS_MIGRATE_ON_START=true` so the container
+runs migrations before starting Next.js and exits if migration fails. The script
+uses an advisory lock and is safe to rerun on subsequent starts. Alternatively,
+before serving accounts, run `node scripts/db-migrate.mjs` with the runtime
 connection variables. The image contains the script and SQL. It takes an advisory
 lock, applies the pinned Better Auth schema, then creates the budget/job tables
 in a transaction. A failure must block the account rollout. Do not run migrations
