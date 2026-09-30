@@ -8,7 +8,7 @@
 # this app has features that require a Node runtime and won't compile
 # under `output: "export"`:
 #   - Server Actions in src/app/actions.ts (xAI video generation)
-#   - Route handler at src/app/_e/route.ts (GlitchTip/Sentry tunnel)
+#   - Route handler at src/app/%5Fe/route.ts (GlitchTip/Sentry tunnel)
 #
 # Env story: .env.production is committed dotenvx-encrypted. The build
 # stage decrypts it via the dotenvx_private_key BuildKit secret (passed
@@ -52,10 +52,10 @@ RUN --mount=type=secret,id=dotenvx_private_key,env=DOTENV_PRIVATE_KEY_PRODUCTION
 # KEY=VALUE for the wrapped command. next build sees the plain values
 # and bakes NEXT_PUBLIC_* into the static client bundle.
 RUN --mount=type=secret,id=dotenvx_private_key,env=DOTENV_PRIVATE_KEY_PRODUCTION \
-    pnpm dlx @dotenvx/dotenvx run -- pnpm build
+    pnpm exec dotenvx run -- pnpm build
 
 # ---------------------------------------------------------------------------
-# Runtime — `next start` on PORT=80.
+# Runtime — `next start` on PORT=8080.
 # ---------------------------------------------------------------------------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 WORKDIR /app
@@ -71,7 +71,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
-ENV PORT=80
+ENV PORT=8080
 
 # Bring across everything `next start` needs to serve the app. The
 # encrypted .env.production travels with the image so dotenvx can
@@ -85,13 +85,16 @@ COPY --from=build /app/next.config.ts ./
 COPY --from=build /app/.env.production ./
 COPY --from=build /app/node_modules ./node_modules
 
-EXPOSE 80
+RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next/cache
+USER node
+
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:80/',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:8080/',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"
 
 # dotenvx decrypts .env.production at startup using
 # DOTENV_PRIVATE_KEY_PRODUCTION from the container env (forwarded by
 # Coolify via docker-compose.yml). next start then sees XAI_API_KEY,
-# NEXT_PUBLIC_*, etc. and binds to PORT=80 from the ENV above.
+# NEXT_PUBLIC_*, etc. and binds to PORT=8080 from the ENV above.
 CMD ["./node_modules/.bin/dotenvx", "run", "--", "./node_modules/.bin/next", "start"]

@@ -9,3 +9,26 @@
 .env.keys
 !.env.example
 !.env.production
+
+# Exclude nested secrets and local/tooling artifacts. The root encrypted
+# production blob remains allowed above; never include its private key.
+**/.env
+**/.env.*
+!.env.production
+!.env.example
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/.npmrc
+**/.netrc
+**/.ssh
+**/.aws
+.git
+.codex
+.agents
+node_modules
+.next
+dist
+coverage
+*.log
