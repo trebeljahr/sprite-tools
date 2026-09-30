@@ -130,23 +130,24 @@ describe("aseprite -> export: durations", () => {
     for (const tag of meta.tags) expect(tag).not.toHaveProperty("fps");
   });
 
-  it.each([
-    10, 12, 7,
-  ])("exports the file's exact durations to Aseprite JSON, Phaser and Godot (export fps %i)", async (defaultFps) => {
-    const { meta } = await readAse("generated/rgba-durations.aseprite");
-    const doc = normalizeExportInput(meta, { defaultFps });
+  it.each([10, 12, 7])(
+    "exports the file's exact durations to Aseprite JSON, Phaser and Godot (export fps %i)",
+    async (defaultFps) => {
+      const { meta } = await readAse("generated/rgba-durations.aseprite");
+      const doc = normalizeExportInput(meta, { defaultFps });
 
-    expect(aseDurations(doc)).toEqual([100, 250, 40, 33]);
+      expect(aseDurations(doc)).toEqual([100, 250, 40, 33]);
 
-    const phaser = toPhaserAtlas(doc, { layout: "array" });
-    expect((phaser.frames as Array<{ duration: number }>).map((f) => f.duration)).toEqual([
-      100, 250, 40, 33,
-    ]);
+      const phaser = toPhaserAtlas(doc, { layout: "array" });
+      expect((phaser.frames as Array<{ duration: number }>).map((f) => f.duration)).toEqual([
+        100, 250, 40, 33,
+      ]);
 
-    // No tags: one fallback animation over every frame.
-    const godot = godotTimings(toGodotSpriteFrames(doc));
-    expect(godot.default.ms).toEqual([100, 250, 40, 33]);
-  });
+      // No tags: one fallback animation over every frame.
+      const godot = godotTimings(toGodotSpriteFrames(doc));
+      expect(godot.default.ms).toEqual([100, 250, 40, 33]);
+    },
+  );
 
   it("indexes frameDurations by exported frame after --tag", async () => {
     const { meta } = await readAse("generated/tags-directions.aseprite", { tag: "reverse" });
