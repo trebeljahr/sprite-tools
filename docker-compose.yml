@@ -45,6 +45,14 @@ services:
       - LISTMONK_API_TOKEN
       - LISTMONK_TX_TEMPLATE_ID
       - LISTMONK_FROM_EMAIL
+      - EMAIL_TRANSPORT
+      - SES_PROJECT_ACCESS_KEY_ID
+      - SES_PROJECT_SECRET_ACCESS_KEY
+      - SES_PROJECT_REGION
+      - SES_PROJECT_IDENTITY_ARN
+      - SES_PROJECT_TENANT
+      - SES_PROJECT_CONFIGURATION_SET
+      - SES_PROJECT_FROM_EMAIL
     # Coolify gates Traefik/Caddy routing on this. Without a healthcheck
     # traffic can hit the container before next start finishes booting.
     # node-based check (not wget/curl) — the runtime image is node:slim

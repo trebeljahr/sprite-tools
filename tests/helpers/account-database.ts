@@ -10,7 +10,7 @@ export function testDatabase() {
     const result = await database.query(sql, params);
     return {
       rows: result.rows,
-      rowCount: result.affectedRows ?? result.rows.length,
+      rowCount: result.rows.length || result.affectedRows || 0,
       command: sql.split(" ")[0],
     };
   }

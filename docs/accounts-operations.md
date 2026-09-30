@@ -17,7 +17,12 @@ separate data migration plan.
 
 Configure the server variables in `.env.accounts.example`. Use a random
 `BETTER_AUTH_SECRET` of at least 32 characters and the exact HTTPS app origin.
-Configure project-scoped Hatchkit Listmonk credentials/template/from address.
+Prefer Hatchkit isolated SES (`EMAIL_TRANSPORT=ses`) with the project-scoped
+`SES_PROJECT_*` configuration. The runtime uses explicit credentials and enforces
+sender identity, region, tenant and configuration set. Tests do not send email;
+non-production delivery is restricted to `EMAIL_TEST_RECIPIENT`. Alternatively
+configure a project-scoped Hatchkit Listmonk user/template/from address with
+`EMAIL_TRANSPORT=listmonk`. Never install the shared relay credential in this app.
 Email verification is mandatory. Missing email configuration disables accounts;
 verification and reset links are never logged. Sessions are checked against the
 database rather than a cached cookie; reset revokes existing sessions.
