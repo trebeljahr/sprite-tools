@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEnvelopeTunnel } from "../src/lib/envelope-tunnel";
+import { createEnvelopeTunnel as createTunnel } from "../src/lib/envelope-tunnel";
+
+const createEnvelopeTunnel = (getDsn: () => string | undefined) =>
+  createTunnel(getDsn, () => "https://sprites.example.com");
 
 const dsn = "https://publickey@errors.example.com/12";
 const envelope = (value = dsn) =>
@@ -126,6 +129,21 @@ describe("trusted envelope tunnel", () => {
       );
     }
     expect(network).not.toHaveBeenCalled();
+  });
+  it("uses the configured public origin behind a reverse proxy", async () => {
+    const input = new Request("http://localhost:8080/_e", {
+      method: "POST",
+      body: envelope(),
+      headers: { origin: "https://sprites.example.com" },
+    });
+    expect((await createEnvelopeTunnel(() => dsn)(input)).status).toBe(200);
+    expect(network).toHaveBeenCalledOnce();
+  });
+  it("forwards binary envelope payloads without text conversion", async () => {
+    const header = new TextEncoder().encode(`${JSON.stringify({ dsn })}\n`);
+    const body = new Uint8Array([...header, 0, 255, 254, 128]);
+    expect((await createEnvelopeTunnel(() => dsn)(request(body))).status).toBe(200);
+    expect(network.mock.calls[0][1]?.body).toEqual(body);
   });
   it("cancels stalled request streams on deadline", async () => {
     vi.useFakeTimers();

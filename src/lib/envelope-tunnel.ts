@@ -55,7 +55,7 @@ async function readBody(request: Request, signal: AbortSignal): Promise<Uint8Arr
 
 // Per-process global budget cannot be bypassed with spoofed forwarding headers.
 // Edge rate limiting is still required for a deployment with multiple replicas.
-export function createEnvelopeTunnel(getDsn: () => string | undefined) {
+export function createEnvelopeTunnel(getDsn: () => string | undefined, getSiteUrl: () => string) {
   let active = 0;
   let windowStart = 0;
   let accepted = 0;
@@ -66,16 +66,17 @@ export function createEnvelopeTunnel(getDsn: () => string | undefined) {
         headers: { "cache-control": "no-store", ...headers },
       });
     let trusted: URL;
+    let siteOrigin: string;
     try {
       trusted = parseDsn(getDsn() ?? "");
+      const site = new URL(getSiteUrl());
+      if (!["https:", "http:"].includes(site.protocol)) return reply(503);
+      siteOrigin = site.origin;
     } catch {
       return reply(503);
     }
     const origin = request.headers.get("origin");
-    if (
-      (origin && origin !== new URL(request.url).origin) ||
-      request.headers.get("sec-fetch-site") === "cross-site"
-    )
+    if ((origin && origin !== siteOrigin) || request.headers.get("sec-fetch-site") === "cross-site")
       return reply(403);
     if (request.headers.has("content-encoding")) return reply(415);
     const size = request.headers.get("content-length");
