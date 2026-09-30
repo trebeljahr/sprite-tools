@@ -1,6 +1,6 @@
 # Accounts and budgets
 
-This Next.js adaptation uses Hatchkit's Better Auth, PostgreSQL and Listmonk
+This Next.js adaptation uses Hatchkit's Better Auth, PostgreSQL and isolated SES
 transactional-email conventions. `hatchkit server add --dry-run --json` reports
 this repository as already fullstack; do not scaffold over its existing app.
 The default Hatchkit starter's Express server is not required by this app.
@@ -39,9 +39,9 @@ configuration and schema presence without reading user records. This is a rollou
 check, not a substitute for checking email delivery and the full sign-in flow.
 
 The existing signed Hatchkit/GHCR deployment workflow remains in place. The
-compose change only forwards account variables. Coordinate the separately owned
-security branch before deployment; these additions do not replace its dependency,
-container-port, or tunnel changes. Never regenerate the pipeline blindly.
+compose change only forwards account variables. The account integration includes
+the security fixes for dependencies, container port and the telemetry tunnel.
+Preserve those fixes when deploying. Never regenerate the pipeline blindly.
 
 ## Credit administration
 
