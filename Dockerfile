@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # Next.js + Coolify image for sprite-tools.
-# Built by .github/workflows/deploy.yml, pushed to GHCR, pulled by
-# Coolify via docker-compose.yml.
+# Built by .github/workflows/deploy.yml and pushed to GHCR.
+# The current Compose app remains live until the Image cutover.
 #
 # Runtime: node + `next start`. NOT nginx + a static export, because
 # this app has features that require a Node runtime and won't compile
@@ -72,6 +72,9 @@ RUN apt-get update \
 
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV SHUTDOWN_DRAIN_SECONDS=20
+ENV HEALTH_CHECK_PATH=/
+ENTRYPOINT ["/usr/local/bin/drain-entrypoint"]
 
 # Bring across everything `next start` needs to serve the app. The
 # encrypted .env.production travels with the image so dotenvx can
@@ -88,6 +91,8 @@ COPY --from=build /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 COPY --from=build /app/scripts/start-accounts.sh ./scripts/start-accounts.sh
 COPY --from=build /app/scripts/account-credit.mjs ./scripts/account-credit.mjs
 COPY --from=build /app/db ./db
+COPY --chmod=755 drain-entrypoint.sh /usr/local/bin/drain-entrypoint
+COPY drain.cjs /usr/local/lib/drain.cjs
 
 RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next/cache
 USER node
