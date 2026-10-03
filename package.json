@@ -1,7 +1,7 @@
 {
   "name": "@trebeljahr/sprite-tools",
   "version": "0.1.0",
-  "description": "Toolkit for turning sprite sheets into game-ready assets \u2014 background removal, collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
+  "description": "Toolkit for turning sprite sheets into game-ready assets — background removal, collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
   "keywords": [
     "sprite",
     "spritesheet",
@@ -70,7 +70,10 @@
     "accounts:credit": "pnpm --filter @sprite-tools/server accounts:credit",
     "dev:client": "dotenvx run -f .env.development.local -f .env --ignore=MISSING_ENV_FILE -- next dev -p 3471",
     "dev:server": "pnpm --filter @sprite-tools/server dev",
-    "build:server": "pnpm --filter @sprite-tools/server build"
+    "build:server": "pnpm --filter @sprite-tools/server build",
+    "backup:status": "hatchkit backup status --project sprite-tools",
+    "backup:list": "hatchkit backup snapshots --project sprite-tools",
+    "backup:restore": "hatchkit backup restore --project sprite-tools"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,md,mdx}": "biome check --write --no-errors-on-unmatched"
