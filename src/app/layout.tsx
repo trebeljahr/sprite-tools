@@ -27,6 +27,9 @@ const plausibleScriptUrl =
 // `export const metadata` — the root values here serve as defaults and
 // as the fallback social preview.
 export const metadata: Metadata = {
+  other: process.env.NEXT_PUBLIC_BUILD_COMMIT
+    ? { "build-commit": process.env.NEXT_PUBLIC_BUILD_COMMIT }
+    : {},
   metadataBase: new URL(getSiteUrl()),
   title: {
     default: "sprite-tools — game-ready 2D sprite toolkit",

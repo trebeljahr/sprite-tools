@@ -83,3 +83,6 @@ venv/
 .env.test
 .envrc.local
 .vercel/
+
+# Immutable identity generated during the image build.
+/public/version.json

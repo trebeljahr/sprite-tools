@@ -3,6 +3,15 @@ import createMDX from "@next/mdx";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  deploymentId: process.env.NEXT_DEPLOYMENT_ID,
+  async headers() {
+    return [
+      {
+        source: "/version.json",
+        headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }],
+      },
+    ];
+  },
   pageExtensions: ["ts", "tsx", "js", "jsx", "md", "mdx"],
 };
 

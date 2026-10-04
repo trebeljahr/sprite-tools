@@ -37,6 +37,11 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+ARG DEPLOYMENT_ID
+ENV NEXT_DEPLOYMENT_ID=${DEPLOYMENT_ID}
+ENV NEXT_PUBLIC_BUILD_COMMIT=${DEPLOYMENT_ID}
+RUN node scripts/write-version.mjs public
+
 # Two separate RUN steps on purpose: BuildKit echoes the entire RUN
 # body into any failure log, so splitting the secret-presence check
 # off means the "secret not supplied" message only surfaces when
@@ -52,7 +57,7 @@ RUN --mount=type=secret,id=dotenvx_private_key,env=DOTENV_PRIVATE_KEY_PRODUCTION
 # KEY=VALUE for the wrapped command. next build sees the plain values
 # and bakes NEXT_PUBLIC_* into the static client bundle.
 RUN --mount=type=secret,id=dotenvx_private_key,env=DOTENV_PRIVATE_KEY_PRODUCTION \
-    pnpm exec dotenvx run -- pnpm build
+    pnpm exec dotenvx run --quiet -f .env.production -- pnpm build
 
 # ---------------------------------------------------------------------------
 # Runtime — `next start` on PORT=8080.
@@ -73,7 +78,8 @@ RUN apt-get update \
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV SHUTDOWN_DRAIN_SECONDS=20
-ENV HEALTH_CHECK_PATH=/
+ENV HEALTH_CHECK_PATH=/api/health/accounts
+STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/local/bin/drain-entrypoint"]
 
 # Bring across everything `next start` needs to serve the app. The
@@ -99,11 +105,11 @@ USER node
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:8080/',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"
+HEALTHCHECK --interval=2s --timeout=5s --start-period=15s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||'8080')+'/api/health/accounts',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
 # dotenvx decrypts .env.production at startup using
 # DOTENV_PRIVATE_KEY_PRODUCTION from the container env (forwarded by
 # Coolify via docker-compose.yml). next start then sees XAI_API_KEY,
 # NEXT_PUBLIC_*, etc. and binds to PORT=8080 from the ENV above.
-CMD ["./node_modules/.bin/dotenvx", "run", "--", "sh", "scripts/start-accounts.sh"]
+CMD ["./node_modules/.bin/dotenvx", "run", "--quiet", "-f", ".env.production", "--", "sh", "scripts/start-accounts.sh"]
