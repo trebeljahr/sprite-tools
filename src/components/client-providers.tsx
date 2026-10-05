@@ -7,10 +7,12 @@
 //   * ConsentProvider — localStorage-backed analytics consent state.
 //   * ConsentBanner  — renders only when consent is still "pending".
 //   * SupportedParam — records a `?supported=1` return from the donate page.
+//   * ReleaseNotice  — asks before reloading a tab whose release expired.
 
 import "@/lib/error-reporting";
 import { ConsentProvider } from "@/lib/consent";
 import { ConsentBanner } from "@/components/consent-banner";
+import { ReleaseNotice } from "@/components/release-notice";
 import { SupportedParam } from "@/components/supported-param";
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
@@ -19,6 +21,7 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
       {children}
       <ConsentBanner />
       <SupportedParam />
+      <ReleaseNotice />
     </ConsentProvider>
   );
 }

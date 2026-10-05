@@ -7,6 +7,23 @@
 # it 5 s later, long before the drain is over. drain.cjs writes its pid
 # to $HATCHKIT_DRAIN_PIDFILE; without one (drain off), the signal goes
 # to the command as usual.
+# Publish this image's browser assets into the shared release volume before
+# Next starts or turns healthy (scripts/RETAINED-ASSETS.md). Descriptor 9 is
+# a shared kernel lease on this release, held by PID 1 until the server exits.
+if [ "${SPRITE_SHARED_ASSETS:-0}" = "1" ]; then
+  set -e
+  release_sha=$(node /usr/local/lib/releases/shared-asset-releases.mjs check)
+  store=/var/lib/sprite-tools-releases
+  mkdir -p "$store/leases"
+  exec 9>"$store/leases/$release_sha.lock"
+  flock -s 9
+  exec 8>"$store/.publish.lock"
+  flock -x 8
+  node /usr/local/lib/releases/shared-asset-releases.mjs publish
+  flock -u 8
+  exec 8>&-
+  set +e
+fi
 export HATCHKIT_DRAIN_PIDFILE="${HATCHKIT_DRAIN_PIDFILE:-/tmp/hatchkit-drain.pid}"
 rm -f "$HATCHKIT_DRAIN_PIDFILE"
 "$@" &

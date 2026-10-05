@@ -99,6 +99,13 @@ COPY --from=build /app/scripts/account-credit.mjs ./scripts/account-credit.mjs
 COPY --from=build /app/db ./db
 COPY --chmod=755 drain-entrypoint.sh /usr/local/bin/drain-entrypoint
 COPY drain.cjs /usr/local/lib/drain.cjs
+# Browser assets every overlapping container serves from the shared release
+# volume; see scripts/RETAINED-ASSETS.md.
+COPY --from=build /app/.next/static ./release-assets/_next/static
+COPY --from=build /app/public/version.json ./release-assets/version.json
+COPY shared-assets.cjs /usr/local/lib/shared-assets.cjs
+COPY scripts/shared-asset-releases.mjs /usr/local/lib/releases/shared-asset-releases.mjs
+ENV SPRITE_SHARED_ASSETS=1
 
 RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next/cache
 USER node
