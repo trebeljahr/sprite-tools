@@ -108,6 +108,10 @@ COPY scripts/shared-asset-releases.mjs /usr/local/lib/releases/shared-asset-rele
 ENV SPRITE_SHARED_ASSETS=1
 
 RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next/cache
+# Coolify cannot set no-new-privileges on a Docker Image app, so the image
+# carries no setuid/setgid programs that could raise privileges instead.
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} + \
+  && test -z "$(find / -xdev -perm /6000 -type f -print -quit)"
 USER node
 
 EXPOSE 8080
