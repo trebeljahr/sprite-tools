@@ -22,14 +22,15 @@ tools (which send prompts + generated images to xAI).
   couldn't reproduce locally. These include stack traces and the URL of
   the page that crashed. No sprite data, no IP logging beyond what the
   origin server naturally sees.
+- **Pageviews** — aggregate page counts via a self-hosted
+  [Plausible](https://plausible.io) instance. No cookies, no cross-site
+  tracking, no ad networks.
 
 ### Only if you accept the banner
 
-- **Anonymous usage analytics** — aggregate pageviews and a handful of
-  named events ("exported GIF", "detected grid", etc.) via a self-hosted
-  [OpenPanel](https://openpanel.dev) instance. No cross-site tracking,
-  no ad networks, no cookies. A single `localStorage` key records your
-  consent choice.
+- **Usage events** — a handful of named events ("exported GIF",
+  "loaded sample", etc.) sent to the same Plausible instance. A single
+  `localStorage` key records your consent choice.
 
 ### Never
 
@@ -47,10 +48,10 @@ this origin; the banner will return on your next visit.
 
 ## Source of truth
 
-Analytics and error reporting are off by default in local development
-and only activate in production. Both require env vars
-(`NEXT_PUBLIC_OPENPANEL_CLIENT_ID`, `NEXT_PUBLIC_GLITCHTIP_DSN`) — if
-you self-host sprite-tools without setting them, neither endpoint is
-contacted.
+Analytics and error reporting are off in local development and only
+activate in production. Plausible only loads on sprites.trebeljahr.com,
+and error reporting requires `NEXT_PUBLIC_GLITCHTIP_DSN` — if you
+self-host sprite-tools on another domain without setting it, neither
+endpoint is contacted.
 
 Repo: [github.com/trebeljahr/sprite-tools](https://github.com/trebeljahr/sprite-tools).
