@@ -82,7 +82,7 @@ async function serve(req, res, pathname, store) {
     relative.length > 1024 ||
     !relative
       .split("/")
-      .every((segment) => /^[a-zA-Z0-9_.-]+$/.test(segment) && segment !== "." && segment !== "..")
+      .every((segment) => /^[a-zA-Z0-9_.~-]+$/.test(segment) && segment !== "." && segment !== "..")
   ) {
     reply(res, 400, "Invalid asset path.");
     return;

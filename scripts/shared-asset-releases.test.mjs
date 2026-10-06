@@ -32,6 +32,8 @@ async function fixture() {
     await writeFile(join(source, "version.json"), JSON.stringify({ commit: id }));
     await writeFile(join(source, "_next/static/chunks", `${id}.js`), `window.revision='${id}';`);
     await writeFile(join(source, "_next/static/chunks/shared.js"), "window.shared=1;");
+    // Turbopack chunk names may contain "~".
+    await writeFile(join(source, "_next/static/chunks", `0${id[0]}~tilde.js`), `tilde-${id}`);
     sources.push(source);
   }
   const held = new Set();
@@ -174,6 +176,9 @@ test("old and new servers serve each other's chunks and refuse mismatched RSC", 
         400,
       );
       assert.equal((await fetch(`${server}/_next/static/chunks/missing.js`)).status, 404);
+      const tilde = await fetch(`${server}/_next/static/chunks/0${ids[1][0]}~tilde.js`);
+      assert.equal(tilde.status, 200);
+      assert.equal(await tilde.text(), `tilde-${ids[1]}`);
       assert.equal(
         (await fetch(`${server}/_next/static/chunks/x.js`, { method: "POST" })).status,
         405,
