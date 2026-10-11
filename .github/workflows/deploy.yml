@@ -1,7 +1,7 @@
-# Build SHA-tagged images without changing the image currently served by Coolify.
-# The signed hook cannot choose an image tag. Deployment stays with the
-# operator until an authorized capability can pin and verify the exact digest.
-name: Build & Verify Release
+# Candidate builds never move a live tag. Deployment requires explicit activation.
+# SPRITE_TOOLS_ROLLOUT_MODE: unset/off, manual, or automatic.
+# The contract is scripts/ROLLING_RELEASE.md.
+name: Build & Release
 
 on:
   push:
@@ -9,12 +9,20 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Build an image, or verify an already deployed release
+        description: Build, deploy a reviewed image, or verify a release
         type: choice
-        options: [build, verify]
+        options: [build, deploy, verify]
         default: build
       target_sha:
-        description: Full commit SHA to verify (required for verify)
+        description: Full commit SHA required for deploy or verify
+        type: string
+        required: false
+      image_digest:
+        description: Exact sha256 image digest from the build artifact (deploy only)
+        type: string
+        required: false
+      expected_current_digest:
+        description: Reviewed current latest digest (deploy only)
         type: string
         required: false
 
@@ -22,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: image-release-main
   cancel-in-progress: false
 
 env:
@@ -30,7 +38,9 @@ env:
 
 jobs:
   build:
-    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify'
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +53,7 @@ jobs:
           node-version: "24"
 
       - name: Release and drain contract tests
-        run: node --test scripts/release.test.mjs scripts/shared-asset-releases.test.mjs
+        run: node --test scripts/release.test.mjs scripts/rolling-release.test.mjs scripts/shared-asset-releases.test.mjs
 
       - uses: docker/setup-buildx-action@v3
 
@@ -103,8 +113,8 @@ jobs:
           path: release.json
           if-no-files-found: error
 
-  # This only observes public HTTP responses. It never queues a deployment,
-  # changes a registry tag, or treats a webhook commit as proof of image identity.
+  # This only observes public HTTP responses. It never queues a deployment
+  # or changes a registry tag.
   verify:
     if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
     runs-on: ubuntu-latest
@@ -120,3 +130,40 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.target_sha }}
         run: node scripts/verify-release.mjs "$EXPECTED_SHA"
+
+  deploy:
+    needs: build
+    if: >-
+      always() && !cancelled() &&
+      github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push' && vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && inputs.operation == 'deploy'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Promote, queue this app, and verify the release
+        env:
+          ROLLOUT_MODE: ${{ vars.SPRITE_TOOLS_ROLLOUT_MODE }}
+          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+          TARGET_DIGEST: ${{ github.event_name == 'push' && needs.build.outputs.digest || inputs.image_digest }}
+          EXPECTED_CURRENT_DIGEST: ${{ inputs.expected_current_digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+          COOLIFY_RESOURCE_UUID: ${{ secrets.COOLIFY_RESOURCE_UUID }}
+          COOLIFY_DEPLOY_SECRET: ${{ secrets.COOLIFY_DEPLOY_SECRET }}
+          COOLIFY_DEPLOY_REPOSITORY: ${{ secrets.COOLIFY_DEPLOY_REPOSITORY }}
+          COOLIFY_DEPLOY_BRANCH: ${{ secrets.COOLIFY_DEPLOY_BRANCH }}
+        run: node scripts/rolling-release.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rollout-${{ github.run_id }}-${{ github.run_attempt }}
+          path: rollout.json
+          if-no-files-found: warn
