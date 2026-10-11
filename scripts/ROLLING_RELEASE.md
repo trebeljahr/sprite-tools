@@ -86,8 +86,9 @@ Before promotion, the controller hashes the target manifest bytes and config,
 checks Linux amd64 and the full OCI revision, matches the full-SHA tag to the
 reviewed digest, and verifies the public baseline against current `latest`. It
 copies the reviewed manifest bytes to `latest`, reads back the digest, and sends
-one signed hook. Queue acceptance must identify this app and one deployment
-UUID.
+one signed hook. A read-back that still shows the previous manifest is repeated
+for four seconds, because a registry read can lag its write. Queue acceptance
+must identify this app and one deployment UUID.
 
 Public verification requires uncached `/version.json`, the homepage
 `build-commit` metadata and `/api/health/accounts` to agree on the full commit
