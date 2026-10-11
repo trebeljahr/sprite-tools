@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
 
@@ -123,7 +123,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Verify the serving commit
@@ -145,7 +145,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Promote, queue this app, and verify the release
