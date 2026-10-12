@@ -7,16 +7,27 @@ const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
 // This proves which build public HTTP serves. The deployment operator must
 // also inspect Coolify's exact deployment and running container image digest.
+// A release needs three to four minutes before only the new build answers:
+// image pull, 15s start period, then the old container's 20s drain. The wait
+// is therefore nine minutes, bounded by time so slow requests cannot extend it.
 export async function verifyRelease(
   commit,
-  { fetch: request = fetch, sleep = pause, attempts = 90, stableSamples = 16 } = {},
+  {
+    fetch: request = fetch,
+    sleep = pause,
+    now = Date.now,
+    attempts = 240,
+    budgetMs = 540000,
+    stableSamples = 16,
+  } = {},
 ) {
   if (!/^[a-f0-9]{40}$/.test(commit ?? "")) {
     throw new Error("Expected a full lowercase Git commit SHA.");
   }
   let consecutive = 0;
   let lastFailure = "No matching build observed.";
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+  const started = now();
+  for (let attempt = 0; attempt < attempts && now() - started < budgetMs; attempt += 1) {
     try {
       const options = {
         method: "GET",

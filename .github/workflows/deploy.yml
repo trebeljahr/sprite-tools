@@ -118,7 +118,7 @@ jobs:
   verify:
     if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

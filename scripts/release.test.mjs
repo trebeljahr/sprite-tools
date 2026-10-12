@@ -133,6 +133,22 @@ test("network failures reset readiness and time out without mutations", async ()
   assert.equal(requests, quick.attempts);
 });
 
+test("verification stops at its time budget when requests are slow", async () => {
+  let clock = 0;
+  const http = fakeHttp({ commits: [OLD_SHA] });
+  await assert.rejects(
+    verifyRelease(SHA, {
+      fetch: http.fetch,
+      sleep: async () => {
+        clock += 60000;
+      },
+      now: () => clock,
+    }),
+    /not the expected commit/,
+  );
+  assert.equal(http.requests.length, 9);
+});
+
 test("preloaded server finishes in-flight work after the drain", {
   timeout: 10000,
 }, async () => {

@@ -92,10 +92,12 @@ must identify this app and one deployment UUID.
 
 Public verification requires uncached `/version.json`, the homepage
 `build-commit` metadata and `/api/health/accounts` to agree on the full commit
-with accounts ready for 16 consecutive samples over at least 30s. This is HTTP
-evidence; `http-verified` is not a claim that the provider job finished or that
-old containers retired. Read-only operation `verify` performs only the public
-checks.
+with accounts ready for 16 consecutive samples over at least 30s. It waits up to
+nine minutes for that: a release needs three to four minutes (image pull, start
+period, drain of the old container) before only the new build answers. This is
+HTTP evidence; `http-verified` is not a claim that the provider job finished or
+that old containers retired. Read-only operation `verify` performs only the
+public checks.
 
 `rolling-started` and `rolling-verified` must both agree with current `latest`
 before another run can mutate anything. A crash, unknown hook outcome, external
