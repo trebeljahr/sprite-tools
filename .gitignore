@@ -86,3 +86,4 @@ venv/
 
 # Immutable identity generated during the image build.
 /public/version.json
+/.wrangler/

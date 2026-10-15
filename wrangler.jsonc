@@ -1,0 +1,22 @@
+// The static client of sprites.trebeljahr.com: an assets-only Worker.
+//
+// No `main`, `routes`, `cache` or `run_worker_first`: each would turn free
+// asset requests into counted Worker requests, and a `routes` key would make
+// `wrangler deploy` manage the zone's routes. The routes are made once outside
+// Wrangler (scripts/ROLLING_RELEASE.md, "Client on Cloudflare"):
+//   sprites.trebeljahr.com/api/*                          -> no Worker (Coolify)
+//   sprites.trebeljahr.com/.well-known/acme-challenge/*   -> no Worker (Traefik)
+//   sprites.trebeljahr.com/*                              -> sprite-tools-client
+// CI uploads a version per commit (`wrangler versions upload`) and activates
+// it after the accounts server is verified (`wrangler versions deploy`).
+{
+  "name": "sprite-tools-client",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./out",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
  * Tell a tab its release has left the server's retained set, without
  * reloading it.
  *
- * During a rolling release both servers share browser assets through the
- * release volume (scripts/RETAINED-ASSETS.md), so an old tab keeps working
- * until its release expires. Tool settings live only in page state, so an
- * automatic reload would silently reset them. The tab asks instead; the
- * loaded project image is kept in IndexedDB and survives the reload.
+ * Each client upload carries the browser files of the releases before it
+ * (scripts/carry-static.mjs) and lists them in /releases.json, so an old tab
+ * keeps working until its release expires. Tool settings live only in page
+ * state, so an automatic reload would silently reset them. The tab asks
+ * instead; the loaded project image is kept in IndexedDB and survives the
+ * reload.
  */
 export function isExpired(commit: string, data: unknown): boolean {
   if (!data || typeof data !== "object") return false;

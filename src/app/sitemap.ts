@@ -74,6 +74,8 @@ function routeQuality(path: string) {
   return { changeFrequency: "weekly" as const, priority: 0.8 };
 }
 
+// Rendered once at build time: the site is a static export.
+export const dynamic = "force-static";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
   const staticRoutes = ["/", ...TOOL_ROUTES, ...(AI_ENABLED ? AI_ROUTES : []), "/privacy"].map(

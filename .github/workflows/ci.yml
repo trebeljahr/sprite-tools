@@ -45,6 +45,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
         env:
-          # Defaults so build never trips on missing dotenvx files
-          # (real prod values come from Vercel project env, not the repo).
+          # Defaults so build never trips on missing dotenvx files (the
+          # deploy workflow decrypts the real .env.production).
           NEXT_PUBLIC_SITE_URL: https://sprites.trebeljahr.com
+      # The static export is uploaded to a Cloudflare Worker: Workers Free
+      # allows 20,000 files per version (carried releases count too) and
+      # 25 MiB per file.
+      - name: Workers static asset limits
+        run: |
+          files=$(find out -type f | wc -l)
+          echo "out/: $files files"
+          test "$files" -le 6000
+          large=$(find out -type f -size +25M)
+          test -z "$large" || { echo "Over 25 MiB: $large"; exit 1; }
+      - run: pnpm build:server

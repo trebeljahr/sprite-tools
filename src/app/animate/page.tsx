@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { generateVideoAction, checkStatusAction } from "../actions";
+import { startVideoGeneration, videoGenerationStatus } from "@/lib/video-api";
 import { AuthWall } from "@/components/auth-wall";
 import { AiGate } from "@/components/ai-gate";
 import Link from "next/link";
@@ -143,7 +143,7 @@ function HomeContent() {
     formData.append("resolution", resolution!);
     formData.append("aspect_ratio", aspectRatio!);
 
-    const result = await generateVideoAction(formData);
+    const result = await startVideoGeneration(formData);
 
     if (result.success && result.id) {
       setRequestId(result.id);
@@ -159,7 +159,7 @@ function HomeContent() {
     if (pollInterval.current) clearInterval(pollInterval.current);
 
     pollInterval.current = setInterval(async () => {
-      const result = await checkStatusAction(id);
+      const result = await videoGenerationStatus(id);
 
       if (result.success && result.data) {
         const { status: currentStatus, video } = result.data;

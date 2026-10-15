@@ -3,3 +3,5 @@
 // in sync.
 export { default } from "./opengraph-image";
 export { size, alt, contentType } from "./opengraph-image";
+
+export const dynamic = "force-static";

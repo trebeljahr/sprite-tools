@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import { verifyRelease } from "../verify-release.mjs";
+import { LEGACY_NEXT_RELEASES, verifyServer } from "../verify-release.mjs";
 
 export const APP = Object.freeze({
   uuid: "amu2xdnabqha4cy3uc9sg501",
@@ -72,11 +72,14 @@ export function queuedDeployment(body) {
 export async function rollingRelease(config, release, dependencies = {}) {
   validateRelease(config, release);
   const request = dependencies.fetch ?? fetch;
+  // The controller releases the accounts server only. The static client is
+  // activated and verified after it (deploy.yml).
   const verify =
     dependencies.verify ??
-    ((sha) =>
-      verifyRelease(sha, {
+    ((sha, { baseline = false } = {}) =>
+      verifyServer(sha, {
         fetch: request,
+        legacy: baseline && LEGACY_NEXT_RELEASES.has(sha),
         ...(dependencies.sleep ? { sleep: dependencies.sleep } : {}),
       }));
   const record = dependencies.record ?? (() => {});
@@ -243,7 +246,8 @@ export async function rollingRelease(config, release, dependencies = {}) {
     );
   }
   // First adoption of an old image without /version.json remains operator-owned.
-  await verify(previousSha);
+  // A pre-split Next baseline has no /api/health; it is checked for readiness.
+  await verify(previousSha, { baseline: true });
   if (target.digest === previous.digest) {
     save("already-serving");
     return report;

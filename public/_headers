@@ -1,0 +1,34 @@
+# Cloudflare Workers static assets: response headers for the exported client
+# (wrangler.jsonc). Limit on Workers Free: 100 rules.
+#
+# Release identity and the carry manifests must never be cached. Hashed
+# chunks under /_next/static/ deliberately get no long max-age: a rule here
+# would also apply to 404s, and a tab asking for a chunk that is missing would
+# keep that 404 for the rule's lifetime. Cloudflare's default
+# (max-age=0, must-revalidate, with an ETag) costs only free revalidations.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/version.json
+  Cache-Control: no-store, max-age=0
+
+/releases.json
+  Cache-Control: no-store, max-age=0
+
+/release-assets.json
+  Cache-Control: no-store, max-age=0
+
+# Metadata images Next exports without a file extension.
+/opengraph-image
+  Content-Type: image/png
+
+/twitter-image
+  Content-Type: image/png
+
+/icon
+  Content-Type: image/png
+
+/apple-icon
+  Content-Type: image/png

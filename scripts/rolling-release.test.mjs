@@ -7,6 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { APP, queuedDeployment, rollingRelease, safeFailure } from "./lib/rolling-release.mjs";
+import { LEGACY_NEXT_RELEASES } from "./verify-release.mjs";
 
 const OLD = "a".repeat(40);
 const NEW = "b".repeat(40);
@@ -420,7 +421,7 @@ test("an already verified image is a read-only no-op", async () => {
 });
 
 // Replaces the injected verifier with the real one against a fake public site.
-function publicSite(p, { ready = () => true } = {}) {
+function publicSite(p, { ready = () => true, legacy = new Set() } = {}) {
   const registry = p.deps.fetch;
   const paths = new Set();
   p.deps.verify = undefined;
@@ -431,14 +432,15 @@ function publicSite(p, { ready = () => true } = {}) {
     paths.add(target.pathname);
     const commit = p.hooks.at(-1) ?? OLD;
     const headers = { "cache-control": "no-store" };
-    if (target.pathname === "/version.json") return Response.json({ commit }, { headers });
+    const ok = ready(commit);
+    const status = ok ? 200 : 503;
     if (target.pathname === "/api/health/accounts") {
-      const ok = ready(commit);
-      return Response.json({ ready: ok }, { status: ok ? 200 : 503, headers });
+      return Response.json({ ready: ok }, { status, headers });
     }
-    return new Response(
-      `<html><head><meta name="build-commit" content="${commit}"/></head>sprite-tools</html>`,
-    );
+    if (target.pathname === "/api/health" && !legacy.has(commit)) {
+      return Response.json({ ready: ok, version: commit }, { status, headers });
+    }
+    return Response.json({ error: "Not found" }, { status: 404, headers });
   };
   return paths;
 }
@@ -450,7 +452,7 @@ test("public verification requires this site's build identity and account readin
     (await rollingRelease(config, healthy.release, healthy.deps)).stage,
     "http-verified",
   );
-  assert.deepEqual([...paths].sort(), ["/", "/api/health/accounts", "/version.json"]);
+  assert.deepEqual([...paths], ["/api/health"]);
 
   const brokenBaseline = platform();
   publicSite(brokenBaseline, { ready: () => false });
@@ -469,6 +471,23 @@ test("public verification requires this site's build identity and account readin
     brokenTarget.release.expectedCurrentDigest,
   );
   assert.equal(brokenTarget.reports.at(-1).stage, "recovery-required");
+});
+
+test("a pre-split Next baseline is accepted on readiness, then the server must name its commit", async () => {
+  const p = platform();
+  const paths = publicSite(p, { legacy: new Set([OLD]) });
+  LEGACY_NEXT_RELEASES.add(OLD);
+  try {
+    assert.equal((await rollingRelease(config, p.release, p.deps)).stage, "http-verified");
+  } finally {
+    LEGACY_NEXT_RELEASES.delete(OLD);
+  }
+  assert.deepEqual([...paths].sort(), ["/api/health", "/api/health/accounts"]);
+
+  const unlisted = platform();
+  publicSite(unlisted, { legacy: new Set([OLD]) });
+  await assert.rejects(rollingRelease(config, unlisted.release, unlisted.deps));
+  assert.equal(writes(unlisted).length, 0);
 });
 
 // Source repositories and deployed image packages intentionally differ for some apps.

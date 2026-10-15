@@ -1,37 +1,15 @@
-# Env & secrets — keep keys out of build context.
-# Excludes everything matching .env / .env.*, then re-includes the
-# encrypted .env.production blob (safe to ship) and .env.example.
-# Added by security sweep: prevents .env.keys from being copied via
-# Dockerfile `COPY . .` into intermediate build layers, GHA caches,
-# or local docker builds.
-.env
-.env.*
-.env.keys
-!.env.example
+# Only the accounts server is built as an image (packages/server/Dockerfile).
+# Allowlist its inputs so source, local env files and keys never enter the
+# build context. The encrypted .env.production is safe to ship; its private
+# key is not.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
 !.env.production
-
-# Exclude nested secrets and local/tooling artifacts. The root encrypted
-# production blob remains allowed above; never include its private key.
-**/.env
-**/.env.*
-!.env.production
-!.env.example
+!packages/server
+packages/server/node_modules
+packages/server/dist
+packages/server/.env*
 **/*.pem
 **/*.key
-**/*.p12
-**/*.pfx
-**/.npmrc
-**/.netrc
-**/.ssh
-**/.aws
-.git
-.codex
-.agents
-.claude
-.hatchkit
-**/.envrc
-node_modules
-.next
-dist
-coverage
-*.log

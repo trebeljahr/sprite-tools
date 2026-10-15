@@ -34,10 +34,11 @@ async function ensureInit(): Promise<SentryModule | null> {
     mod.init({
       dsn: dsn!,
       environment: process.env.NODE_ENV,
-      // Same-origin proxy — see src/app/%5Fe/route.ts. Sidesteps the
+      // Same-origin proxy on the accounts server — see
+      // packages/server/src/routes/envelope.ts. Sidesteps the
       // adblockers that default-block `*.glitchtip.*` and `*.sentry.*`
       // hosts; without this, ~30% of real error reports never arrive.
-      tunnel: "/_e",
+      tunnel: "/api/_e",
       // Intentionally conservative defaults — no session replay, no
       // performance tracing. Flip these on per-feature once you have a
       // reason and a budget for the extra network traffic.

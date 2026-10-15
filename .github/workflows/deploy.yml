@@ -1,6 +1,12 @@
 # Candidate builds never move a live tag. Deployment requires explicit activation.
 # SPRITE_TOOLS_ROLLOUT_MODE: unset/off, manual, or automatic.
 # The contract is scripts/ROLLING_RELEASE.md.
+#
+# Two halves ship from one commit: the accounts server image (Coolify, /api)
+# and the static client (Cloudflare Worker `sprite-tools-client`, every other
+# path). Builds upload both without making either live. The deploy job then
+# releases the server first, and activates the client version only after the
+# server serves this commit.
 name: Build & Release
 
 on:
@@ -35,6 +41,8 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  WRANGLER_VERSION: "4.148.0"
+  SITE: https://sprites.trebeljahr.com
 
 jobs:
   build:
@@ -52,8 +60,8 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Release and drain contract tests
-        run: node --test scripts/release.test.mjs scripts/rolling-release.test.mjs scripts/shared-asset-releases.test.mjs
+      - name: Release contract tests
+        run: node --test scripts/release.test.mjs scripts/rolling-release.test.mjs
 
       - uses: docker/setup-buildx-action@v3
 
@@ -75,23 +83,15 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: packages/server/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
-          # Next's skew protection id, see the Dockerfile.
           build-args: |
-            DEPLOYMENT_ID=${{ github.sha }}
-          # BuildKit secret for decrypting .env.production at build
-          # time. Mounted as tmpfs inside the Dockerfile's RUN step,
-          # never written to a layer or `docker history`. The Dockerfile
-          # exposes it as the DOTENV_PRIVATE_KEY_PRODUCTION env var for
-          # `dotenvx run -- pnpm build`, which decrypts in memory and
-          # bakes NEXT_PUBLIC_* / VITE_* values into the bundle.
-          secrets: |
-            dotenvx_private_key=${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+            COMMIT_SHA=${{ github.sha }}
 
       - name: Record immutable release identity
         env:
@@ -113,12 +113,53 @@ jobs:
           path: release.json
           if-no-files-found: error
 
-  # This only observes public HTTP responses. It never queues a deployment
-  # or changes a registry tag.
+  # Builds the static export and uploads it as a Worker version tagged with
+  # the commit. Uploading does not change what the site serves.
+  client:
+    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the static client
+        env:
+          NEXT_DEPLOYMENT_ID: ${{ github.sha }}
+          NEXT_PUBLIC_BUILD_COMMIT: ${{ github.sha }}
+          DOTENV_PRIVATE_KEY_PRODUCTION: ${{ secrets.DOTENV_PRIVATE_KEY_PRODUCTION }}
+        run: |
+          node scripts/write-version.mjs public
+          pnpm exec dotenvx run --quiet -f .env.production -- pnpm build
+
+      # Open tabs keep asking for their own hashed chunks, and a Worker
+      # version serves only the files it was uploaded with. Carry the files of
+      # the releases the live site still lists, then tell tabs which releases
+      # remain (ReleaseNotice reads /releases.json).
+      - name: Carry earlier releases' browser files
+        run: |
+          node scripts/carry-static.mjs --site "$SITE" --out out --release "$GITHUB_SHA"
+          node scripts/write-releases.mjs out
+
+      - name: Upload the client version (not activated)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes "wrangler@$WRANGLER_VERSION" versions upload --tag "$GITHUB_SHA" --message "$GITHUB_SHA"
+
+  # This only observes public HTTP responses. It never queues a deployment,
+  # changes a registry tag or activates a Worker version.
   verify:
     if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -132,26 +173,27 @@ jobs:
         run: node scripts/verify-release.mjs "$EXPECTED_SHA"
 
   deploy:
-    needs: build
+    needs: [build, client]
     if: >-
       always() && !cancelled() &&
       github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'push' && vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success') ||
+      ((github.event_name == 'push' && vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success' && needs.client.result == 'success') ||
        (github.event_name == 'workflow_dispatch' && inputs.operation == 'deploy'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     permissions:
       contents: read
       packages: write
+    env:
+      TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-      - name: Promote, queue this app, and verify the release
+      - name: Promote, queue the server app, and verify it
         env:
           ROLLOUT_MODE: ${{ vars.SPRITE_TOOLS_ROLLOUT_MODE }}
-          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
           TARGET_DIGEST: ${{ github.event_name == 'push' && needs.build.outputs.digest || inputs.image_digest }}
           EXPECTED_CURRENT_DIGEST: ${{ inputs.expected_current_digest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -167,3 +209,15 @@ jobs:
           name: rollout-${{ github.run_id }}-${{ github.run_attempt }}
           path: rollout.json
           if-no-files-found: warn
+      # The server serves this commit now; a failure below leaves a new server
+      # with the previous client, which is the compatible direction.
+      - name: Activate the client version uploaded for this commit
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx --yes "wrangler@$WRANGLER_VERSION" versions list --json > versions.json
+          version=$(node scripts/client-version.mjs "$TARGET_SHA" versions.json)
+          npx --yes "wrangler@$WRANGLER_VERSION" versions deploy "$version@100%" --yes --message "$TARGET_SHA"
+      - name: Verify the client
+        run: node scripts/verify-release.mjs "$TARGET_SHA" client

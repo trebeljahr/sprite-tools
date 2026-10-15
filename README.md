@@ -166,8 +166,9 @@ Or run the app locally: `pnpm install && pnpm dev`, then open `http://localhost:
 src/lib/**             # pure algorithm modules (ImageData in, JSON/ImageData out)
 cli/commands/**        # CLI wrappers via commander + pngjs
 mcp/tools.ts           # MCP server (Zod schemas)
-src/app/**/page.tsx    # web app routes
+src/app/**/page.tsx    # web app routes (static export, served by a Cloudflare Worker)
 src/app/docs/**        # MDX docs
+packages/server/**     # accounts API under /api (Better Auth + PostgreSQL)
 tests/**.test.ts       # vitest on every algorithm
 ```
 
@@ -180,7 +181,7 @@ git clone https://github.com/trebeljahr/sprite-tools.git
 cd sprite-tools
 pnpm install
 
-# Web app (Next.js)
+# Web app (Next.js) on :3471 and the accounts API on :3472
 pnpm dev                # http://localhost:3471
 
 # CLI / MCP — run uncompiled against TS source

@@ -3,6 +3,8 @@ import { ImageResponse } from "next/og";
 // Social preview card for link unfurls (Hacker News, Twitter/X, Discord,
 // Slack, LinkedIn). 1200×630 is the de-facto standard.
 
+// Rendered once at build time: the site is a static export.
+export const dynamic = "force-static";
 export const alt =
   "sprite-tools — a batteries-included toolkit for turning AI-generated or hand-drawn sprites into game-ready assets";
 export const size = { width: 1200, height: 630 };

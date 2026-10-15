@@ -1,0 +1,37 @@
+{
+  "name": "@sprite-tools/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sprite Tools accounts API: Better Auth, account credits and the error-report tunnel under /api.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/index.js",
+    "dev": "dotenvx run -f .env.development.local -f .env --ignore=MISSING_ENV_FILE -- tsx watch --clear-screen=false src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node dist/migrate-cli.js",
+    "accounts:credit": "node dist/account-credit.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "3.1048.0",
+    "@dotenvx/dotenvx": "^1.75.1",
+    "better-auth": "1.7.6",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20",
+    "@types/pg": "^8.15.5",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}

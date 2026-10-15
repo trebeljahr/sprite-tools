@@ -1,17 +1,15 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { verifyRelease } from "./verify-release.mjs";
+import { clientVersion } from "./client-version.mjs";
+import { LEGACY_NEXT_RELEASES, verifyClient, verifyServer } from "./verify-release.mjs";
+import { writeReleases } from "./write-releases.mjs";
 import { writeVersion } from "./write-version.mjs";
 
 const SHA = "a".repeat(40);
 const OLD_SHA = "b".repeat(40);
-const ROOT = new URL("../", import.meta.url).pathname;
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 test("the build writes an exact commit and rejects moving or abbreviated identities", () => {
   const directory = mkdtempSync(join(tmpdir(), "sprite-tools-version-"));
@@ -29,30 +27,32 @@ test("the build writes an exact commit and rejects moving or abbreviated identit
 
 function fakeHttp({
   commits = [SHA],
+  serverCommits = [SHA],
   cache = "no-store",
+  healthCache = "no-store",
   homepage = 200,
   htmlCommit = SHA,
   accounts = true,
-  alias = 308,
-  dropQuery = false,
 } = {}) {
   let versions = 0;
+  let healths = 0;
   const requests = [];
   return {
     requests,
     fetch: async (url, options) => {
       requests.push({ url, options });
       const target = new URL(url);
-      if (target.hostname !== "sprites.trebeljahr.com") {
-        return new Response(null, {
-          status: alias,
-          headers: { location: `https://sprites.trebeljahr.com/${dropQuery ? "" : target.search}` },
-        });
+      if (target.pathname === "/api/health") {
+        const version = serverCommits[Math.min(healths++, serverCommits.length - 1)];
+        return Response.json(
+          { ready: accounts, version },
+          { status: accounts ? 200 : 503, headers: { "cache-control": healthCache } },
+        );
       }
       if (target.pathname === "/api/health/accounts") {
         return Response.json(
           { ready: accounts },
-          { status: accounts ? 200 : 503, headers: { "cache-control": "no-store" } },
+          { status: accounts ? 200 : 503, headers: { "cache-control": healthCache } },
         );
       }
       if (target.pathname === "/version.json") {
@@ -68,19 +68,23 @@ function fakeHttp({
 }
 
 const quick = { sleep: async () => {}, attempts: 5, stableSamples: 2 };
+const paths = (http) => http.requests.map(({ url }) => new URL(url).pathname);
 
 test("verification tolerates old/new overlap but restarts its stable sample window", async () => {
-  const http = fakeHttp({ commits: [SHA, OLD_SHA, SHA, SHA] });
-  assert.deepEqual(await verifyRelease(SHA, { ...quick, fetch: http.fetch }), {
+  const client = fakeHttp({ commits: [SHA, OLD_SHA, SHA, SHA] });
+  assert.deepEqual(await verifyClient(SHA, { ...quick, fetch: client.fetch }), {
     commit: SHA,
     samples: 2,
   });
-  assert.equal(http.requests.filter(({ url }) => url.includes("/version.json")).length, 4);
-  assert.equal(
-    http.requests.filter(({ url }) => !url.startsWith("https://sprites.trebeljahr.com/")).length,
-    0,
-  );
-  for (const { url, options } of http.requests) {
+  assert.equal(paths(client).filter((path) => path === "/version.json").length, 4);
+  const server = fakeHttp({ serverCommits: [SHA, OLD_SHA, SHA, SHA] });
+  assert.deepEqual(await verifyServer(SHA, { ...quick, fetch: server.fetch }), {
+    commit: SHA,
+    samples: 2,
+  });
+  assert.deepEqual(new Set(paths(server)), new Set(["/api/health"]));
+  for (const { url, options } of [...client.requests, ...server.requests]) {
+    assert.ok(url.startsWith("https://sprites.trebeljahr.com/"));
     assert.equal(options.method, "GET");
     assert.equal(options.redirect, "manual");
     assert.equal(options.cache, "no-store");
@@ -90,37 +94,63 @@ test("verification tolerates old/new overlap but restarts its stable sample wind
 });
 
 test("a queued or perpetually old release never passes HTTP verification", async () => {
-  const http = fakeHttp({ commits: [OLD_SHA] });
   await assert.rejects(
-    verifyRelease(SHA, { ...quick, fetch: http.fetch }),
+    verifyClient(SHA, { ...quick, fetch: fakeHttp({ commits: [OLD_SHA] }).fetch }),
+    /not the expected commit/,
+  );
+  await assert.rejects(
+    verifyServer(SHA, { ...quick, fetch: fakeHttp({ serverCommits: [OLD_SHA] }).fetch }),
     /not the expected commit/,
   );
 });
 
-test("cached version, broken homepage, and stale HTML each fail closed", async () => {
+test("cached responses, broken pages, stale HTML and unready accounts each fail closed", async () => {
   for (const scenario of [
     { cache: "public, max-age=3600" },
     { homepage: 503 },
     { htmlCommit: OLD_SHA },
-    { accounts: false },
   ]) {
     await assert.rejects(
-      verifyRelease(SHA, { ...quick, fetch: fakeHttp(scenario).fetch }),
+      verifyClient(SHA, { ...quick, fetch: fakeHttp(scenario).fetch }),
       /Release did not remain healthy/,
+    );
+  }
+  for (const scenario of [{ accounts: false }, { healthCache: "public, max-age=60" }]) {
+    await assert.rejects(
+      verifyServer(SHA, { ...quick, fetch: fakeHttp(scenario).fetch }),
+      /readiness failed/,
     );
   }
 });
 
+test("a pre-split Next baseline is checked for account readiness only", async () => {
+  assert.ok(LEGACY_NEXT_RELEASES.size >= 1);
+  const http = fakeHttp({ serverCommits: [OLD_SHA] });
+  assert.deepEqual(await verifyServer(OLD_SHA, { ...quick, legacy: true, fetch: http.fetch }), {
+    commit: OLD_SHA,
+    samples: 2,
+  });
+  assert.deepEqual(new Set(paths(http)), new Set(["/api/health/accounts"]));
+  await assert.rejects(
+    verifyServer(OLD_SHA, { ...quick, legacy: true, fetch: fakeHttp({ accounts: false }).fetch }),
+    /readiness failed/,
+  );
+});
+
 test("invalid release identity fails before making any request", async () => {
   const http = fakeHttp();
-  await assert.rejects(verifyRelease("latest", { ...quick, fetch: http.fetch }), /full lowercase/);
+  await assert.rejects(verifyClient("latest", { ...quick, fetch: http.fetch }), /full lowercase/);
+  await assert.rejects(
+    verifyServer(SHA.slice(0, 7), { ...quick, fetch: http.fetch }),
+    /full lowercase/,
+  );
   assert.equal(http.requests.length, 0);
 });
 
 test("network failures reset readiness and time out without mutations", async () => {
   let requests = 0;
   await assert.rejects(
-    verifyRelease(SHA, {
+    verifyServer(SHA, {
       ...quick,
       fetch: async (_url, options) => {
         requests += 1;
@@ -137,7 +167,7 @@ test("verification stops at its time budget when requests are slow", async () =>
   let clock = 0;
   const http = fakeHttp({ commits: [OLD_SHA] });
   await assert.rejects(
-    verifyRelease(SHA, {
+    verifyClient(SHA, {
       fetch: http.fetch,
       sleep: async () => {
         clock += 60000;
@@ -149,86 +179,44 @@ test("verification stops at its time budget when requests are slow", async () =>
   assert.equal(http.requests.length, 9);
 });
 
-test("preloaded server finishes in-flight work after the drain", {
-  timeout: 10000,
-}, async () => {
-  const directory = mkdtempSync(join(tmpdir(), "sprite-tools-drain-"));
-  const server = join(directory, "server.mjs");
-  const wrapper = join(directory, "wrapper.mjs");
-  const pidfile = join(directory, "drain.pid");
-  writeFileSync(
-    server,
-    `
-    import { createServer } from 'node:http';
-    const server = createServer((request, response) => {
-      if (request.url === '/slow') {
-        response.writeHead(200);
-        response.write('accepted\\n');
-        setTimeout(() => response.end('completed\\n'), 1300);
-      } else response.end('ok');
-    });
-    server.listen(0, '127.0.0.1', () => console.log('PORT=' + server.address().port));
-    process.once('SIGTERM', () => server.close(() => process.exit(7)));
-  `,
-  );
-  writeFileSync(
-    wrapper,
-    `
-    import { spawn } from 'node:child_process';
-    const child = spawn(process.execPath, ['--require', process.argv[2], process.argv[3]], { stdio: 'inherit' });
-    process.on('SIGTERM', () => { child.kill('SIGKILL'); process.exit(99); });
-    child.on('exit', code => process.exit(code ?? 98));
-  `,
-  );
-  const child = spawn(
-    "sh",
-    [join(ROOT, "drain-entrypoint.sh"), process.execPath, wrapper, join(ROOT, "drain.cjs"), server],
-    {
-      env: {
-        PATH: process.env.PATH,
-        SHUTDOWN_DRAIN_SECONDS: "0.3",
-        HEALTH_CHECK_PATH: "/api/health/accounts",
-        HATCHKIT_DRAIN_PIDFILE: pidfile,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const exited = once(child, "exit");
-  let output = "";
-  child.stdout.on("data", (data) => {
-    output += data;
-  });
-  child.stderr.on("data", (data) => {
-    output += data;
-  });
+test("the client release list follows the carry manifest, own release first", () => {
+  const directory = mkdtempSync(join(tmpdir(), "sprite-tools-releases-"));
   try {
-    for (let attempt = 0; !output.includes("PORT=") && attempt < 100; attempt += 1) await sleep(20);
-    const port = output.match(/PORT=(\d+)/)?.[1];
-    assert.ok(port, `Fixture did not start: ${output}`);
-    const base = `http://127.0.0.1:${port}`;
-    const options = { signal: AbortSignal.timeout(5000) };
-    assert.equal((await fetch(`${base}/`, options)).status, 200);
-    const accepted = await fetch(`${base}/slow`, options);
-    const started = Date.now();
-    child.kill("SIGTERM");
-    await sleep(80);
-    assert.equal((await fetch(`${base}/api/health/accounts?probe=1`, options)).status, 503);
-    assert.equal((await fetch(`${base}/spritesheet`, options)).status, 200);
-    assert.equal(await accepted.text(), "accepted\ncompleted\n");
-    assert.ok(Date.now() - started > 900, "In-flight request must outlast the drain.");
-    assert.deepEqual(
-      await exited,
-      [7, null],
-      "App exit status must survive delayed signal delivery.",
-    );
-  } finally {
-    try {
-      process.kill(Number(readFileSync(pidfile, "utf8")), "SIGKILL");
-    } catch {
-      /* Fixture already stopped. */
+    const manifest = (releases) =>
+      writeFileSync(
+        join(directory, "release-assets.json"),
+        JSON.stringify({ schema: 1, releases: releases.map((sha) => ({ sha, files: [] })) }),
+      );
+    manifest([SHA, OLD_SHA]);
+    assert.deepEqual(writeReleases(directory), [SHA, OLD_SHA]);
+    assert.deepEqual(JSON.parse(readFileSync(join(directory, "releases.json"))), {
+      schema: 2,
+      releases: [SHA, OLD_SHA],
+    });
+    for (const invalid of [[], ["latest"], [SHA.slice(0, 7)]]) {
+      manifest(invalid);
+      assert.throws(() => writeReleases(directory), /full-SHA releases/);
     }
-    child.kill("SIGKILL");
-    await exited;
+  } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the deploy job activates only the version uploaded for its commit", () => {
+  const version = (id, tag, created) => ({
+    id,
+    annotations: { "workers/tag": tag },
+    metadata: { created_on: created },
+  });
+  const first = "11111111-1111-4111-8111-111111111111";
+  const retry = "22222222-2222-4222-8222-222222222222";
+  const other = "33333333-3333-4333-8333-333333333333";
+  const list = [
+    version(first, SHA, "2026-10-15T10:00:00Z"),
+    version(other, OLD_SHA, "2026-10-15T11:00:00Z"),
+    version(retry, SHA, "2026-10-15T12:00:00Z"),
+  ];
+  assert.equal(clientVersion(SHA, list), retry);
+  assert.throws(() => clientVersion("c".repeat(40), list), /No client version/);
+  assert.throws(() => clientVersion("latest", list), /full lowercase/);
 });
