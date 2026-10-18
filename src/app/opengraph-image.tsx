@@ -46,11 +46,12 @@ export default function OpenGraphImage() {
           background: "rgba(255,255,255,0.04)",
           fontSize: 20,
           color: "#a1a1aa",
-          width: "fit-content",
+          alignSelf: "flex-start",
           marginBottom: 24,
         }}
       >
-        <span style={{ color: "#22c55e", fontSize: 24 }}>◆</span>
+        {/* A drawn diamond: a text glyph would need a font fetched at build time. */}
+        <div style={{ width: 13, height: 13, background: "#22c55e", transform: "rotate(45deg)" }} />
         Game-ready 2D sprite toolkit
       </div>
 
