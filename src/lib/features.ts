@@ -7,9 +7,7 @@
 //   echo 'NEXT_PUBLIC_ENABLE_AI=true' >> .env.local
 
 /**
- * AI Character / AI Animation. Requires real authentication + a credits
- * system + xAI/Pollinations API keys. None of that is wired up yet, so the
- * default is OFF — the Tools nav group and the pages are hidden entirely
- * until someone opts in.
+ * Legacy hosted AI Character UI. Hosted paid video remains disabled.
+ * Video Studio has its own local companion and does not use this flag.
  */
 export const AI_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AI === "true";

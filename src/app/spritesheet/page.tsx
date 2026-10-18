@@ -75,6 +75,7 @@ import {
 } from "@/lib/pipeline/types";
 import { composeCrops, rasterizeFrames } from "@/lib/pipeline/transforms";
 import { findDuplicateFrames } from "@/lib/pipeline/dedupe-core";
+import { isLocalStudio, studioArtifact } from "@/lib/video/client";
 import {
   AsepriteSource,
   describeGridPadding,
@@ -157,6 +158,7 @@ function SpritesheetContent() {
   const [sourceTab, setSourceTab] = useState<SourceTab>("video");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [studioImportError, setStudioImportError] = useState<string | null>(null);
   const [sheetFile, setSheetFile] = useState<File | null>(null);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const [sheetCols, setSheetCols] = useState(8);
@@ -216,7 +218,7 @@ function SpritesheetContent() {
   const aseprite = useAsepriteSource({
     onConfigChange: (config, file) => {
       const step = pipeline.state.steps.find((s) => s.kind === "import-aseprite");
-      if (!step || step.kind !== "import-aseprite" || pipeline.state.source?.file !== file) return;
+      if (step?.kind !== "import-aseprite" || pipeline.state.source?.file !== file) return;
       // A different tag is a different frame list, so indices selected in the
       // old one would point at unrelated frames.
       if ((step.config.tag ?? null) !== (config.tag ?? null)) {
@@ -250,6 +252,7 @@ function SpritesheetContent() {
 
   // Receive ?videoUrl= from the Animate step
   useEffect(() => {
+    if (searchParams.get("videoJob")) return;
     const url = searchParams.get("videoUrl");
     if (url) {
       setVideoUrl(url);
@@ -257,6 +260,13 @@ function SpritesheetContent() {
       toast.success("Animation loaded from AI Animation");
     }
   }, [searchParams]);
+
+  useEffect(
+    () => () => {
+      if (videoUrl?.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
+    },
+    [videoUrl],
+  );
 
   const hasInitedTutorial = useRef(false);
 
@@ -331,6 +341,7 @@ function SpritesheetContent() {
       toast.error("Unsupported file type. Please upload a video.");
       return;
     }
+    setStudioImportError(null);
     setVideoFile(file);
     setVideoUrl(URL.createObjectURL(file));
     clearSourceState();
@@ -338,6 +349,43 @@ function SpritesheetContent() {
     // removal to on (the original behavior).
     setBrState((prev) => ({ ...prev, backgroundMode: "chroma-transparent" }));
   };
+
+  // The query contains only a job ID. The companion bearer stays in sessionStorage.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload only when the requested job changes, not when local crop/selection handlers rerender
+  useEffect(() => {
+    const id = searchParams.get("videoJob");
+    if (!id) return;
+    setStudioImportError(null);
+    if (!isLocalStudio()) {
+      setStudioImportError("Open this job from your local Video Studio to load its saved video.");
+      return;
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      setStudioImportError(
+        "This video job link is invalid. Open the saved job in Video Studio again.",
+      );
+      return;
+    }
+    let active = true;
+    void studioArtifact(id, "video.mp4")
+      .then((blob) => {
+        if (!active) return;
+        setSourceTab("video");
+        handleVideoFile(new File([blob], `video-${id.slice(0, 8)}.mp4`, { type: "video/mp4" }));
+        toast.success("Saved video loaded. Extract frames to select, crop or remove duplicates.");
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setStudioImportError(
+            error instanceof Error
+              ? error.message
+              : "Could not load the saved video. Open local setup and reconnect.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [searchParams]);
 
   const handleAsepriteFile = (file: File) => {
     if (!isAsepriteFilename(file.name)) {
@@ -847,6 +895,14 @@ function SpritesheetContent() {
 
   return (
     <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
+      {studioImportError && (
+        <p role="alert" className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive">
+          {studioImportError}{" "}
+          <a href="/animate" className="underline">
+            Return to Video Studio
+          </a>
+        </p>
+      )}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
           <Scissors className="w-8 h-8 text-primary" />

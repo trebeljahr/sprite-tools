@@ -1,32 +1,83 @@
 export const metadata = {
-  title: "AI Animation — sprite-tools",
-  description:
-    "Turn a character image into an AI motion clip, then send it to Sheet Builder for frame extraction.",
+  title: "Video Studio — sprite-tools",
+  description: "Generate video with local Google or xAI keys, then export a transparent sprite sheet and collision metadata.",
 };
 
-# AI Animation
+# Video Studio
 
-[Open AI Animation](/animate)
+[Open Video Studio](/animate)
 
-AI Animation turns a character image into a short motion clip, then passes that clip into Sheet Builder for frame extraction.
+Start with a text prompt, concept art, or an existing video. Video Studio produces a PNG sheet and JSON metadata with frame timing, pivots, bounds, and collision polygons.
 
-## Availability
+## Start the local companion
 
-This feature is web-only and gated behind sign-in because it calls paid third-party video generation APIs. The CLI package does not include AI video generation.
-
-## Workflow
-
-1. Upload a character image, or arrive from [AI Character](/docs/web/generate).
-2. Describe the motion.
-3. Choose duration, resolution, and aspect ratio.
-4. Generate the clip.
-5. Send the result to [Sheet Builder](/docs/web/spritesheet) to extract frames and export a sheet.
-
-## CLI note
-
-There is no CLI equivalent for AI video generation. Once you have a sheet or frames, the CLI can detect grids, slice frames, generate metadata, pack atlases, and export GIFs:
+Install FFmpeg, including `ffprobe`, and build the project:
 
 ```bash
-sprite-tools meta sheet.png --collision --pivot bottom-center -o meta.json
-sprite-tools gif sheet.png --fps 12 -o preview.gif
+pnpm install --frozen-lockfile
+pnpm build
+pnpm cli:build
+pnpm mcp:build
+node dist/cli/index.js studio
 ```
+
+Open the local setup URL printed in your terminal. The companion chooses an available high port and listens on `127.0.0.1`.
+
+Create a vault passphrase, save your Google or xAI key, and set the total and per-job USD limits. Then open the local Video Studio.
+
+Keys stay in an encrypted file on your machine. Enter them only on the local setup page. Never paste keys into a chat, prompt, or MCP argument.
+
+The vault starts locked after a restart. Unlock it in the setup page to resume provider requests. Existing files remain available locally.
+
+## Generate and cut a video
+
+1. Select a provider and model.
+2. Write a prompt or choose an example.
+3. Drop optional start, end, or reference images into the matching input.
+4. Choose supported duration, resolution, and aspect ratio settings.
+5. Set the background color, sampling rate, and sprite size.
+6. Check the estimate, then generate.
+
+The companion saves the video, extracts frames, removes the selected background, and crops all frames to one shared rectangle. It packs uniform cells into a sheet.
+
+Download the sheet and metadata together. Keep the original video to try different cut settings without another generation charge.
+
+Google reference images use a separate mode from start/end frames. The form validates model restrictions before submission. Model availability still depends on your provider account.
+
+## Choose the loop before exporting
+
+Use the trim start and end times to keep the useful action. Ask for an automatic loop suggestion, then inspect the animated sprite preview and step across its boundary.
+
+Set a frame budget, such as 8 or 12 drawings. Reduction preserves the selected duration; it does not speed up the animation. Adjacent duplicate removal can reduce repeated drawings while keeping their hold time.
+
+Reprocess the saved video to compare settings without another generation charge. Open the video in Sheet Builder for its existing manual frame selection and duplicate controls.
+
+Use 720p as a starting point for detailed game sprites. Character size within the frame and the intended export size matter more than the video resolution alone. 480p remains an option for rough motion tests or small sprites.
+
+## Write a cuttable prompt
+
+Use one subject, one action, a fixed camera, and a flat background color absent from the subject. Keep the full subject inside the frame.
+
+For example:
+
+> A small red robot walks in place, facing right, full body visible. Fixed side-view camera. Solid bright green background, RGB 0,255,0. Even lighting, crisp edges. No floor, shadows, props, text, motion blur, zoom, or camera movement. Keep the robot centered with generous empty space. End near the starting pose.
+
+Generation does not guarantee a perfect loop or clean silhouette. Review the result before using it in a game.
+
+Bounding hitboxes cover all visible pixels, including detached parts. Collision polygons follow one connected silhouette per frame. They are starting points for collision shapes, not authored attack or damage hitboxes. Disconnected parts and holes need review.
+
+## Spending controls
+
+Generation starts disabled with a zero local budget. The companion reserves the estimated USD cost before each submission and allows one active generation.
+
+A failed or uncertain submission keeps its reservation. A timeout does not prove the provider avoided a charge. Reusing a request ID returns the existing job.
+
+Local estimates use the bundled pricing table. Provider billing is authoritative. The local limit covers this companion's saved ledger, not other applications or copies of your key.
+
+Set provider limits as well. Google's project spend cap can have enforcement delays. xAI billing limits apply to a team and may not cap existing prepaid credits.
+
+## Use it from MCP
+
+The local Web app and MCP tools use the same companion, keys, budget, and saved jobs. See [local client setup](/docs/mcp/install) and the [tool catalog](/docs/mcp/tools).
+
+The public website provides instructions. It does not store your provider keys or offer a shared paid-generation endpoint.

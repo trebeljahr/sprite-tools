@@ -6,7 +6,7 @@ export const metadata = {
 
 # MCP tool catalog
 
-Full input/output schema for each of the 23 MCP tools.
+Full input/output schema for the MCP tools.
 
 ## Grid args on sheet tools
 
@@ -761,3 +761,31 @@ Notes:
 - All paths are **absolute** by convention — MCP doesn't inherit a working directory from the chat.
 - Metadata returns are JSON strings (one content block). Parse with `JSON.parse()` on the client side.
 - Image-producing tools write to `output_path` and return metadata about the write (so the agent knows where the file is).
+
+## Video Studio tools
+
+These tools require the local companion. See [setup](/docs/mcp/install) and [Video Studio](/docs/web/animate).
+
+| Tool | Action |
+| --- | --- |
+| `sprite_video_capabilities` | Read model controls, price estimates, vault status, budget, and saved jobs. |
+| `sprite_video_generate` | Submit one provider request and automatically process the result into a sprite sheet and metadata. |
+| `sprite_video_status` | Read or wait for an existing job without a new paid submission. |
+| `sprite_video_import` | Process a local MP4 with no provider call. |
+| `sprite_video_reprocess` | Change extraction settings using an existing job's saved video. |
+
+`generate` takes a stable UUID `request_id`, `provider`, `model`, `prompt`, `duration_seconds`, `resolution`, and `aspect_ratio`.
+
+Optional image arguments are `first_frame_path`, `last_frame_path`, and `reference_image_paths`. They must name local PNG/JPEG files. Generation uploads these images and the prompt to the selected provider.
+
+`processing` accepts `fps`, `frameWidth`, `backgroundColor`, `tolerance`, `softness`, `spill`, `choke`, `columns`, `padding`, and `name`. The default is 8 fps, 128-pixel frame width, green background, and eight columns.
+
+Loop controls use `startSeconds`, `endSeconds`, `loopMode` (`full` or `auto`), `loopMinSeconds`, `loopMaxSeconds`, `maxFrames`, and optional `dedupeThreshold`. A frame budget preserves the chosen interval duration. Adjacent duplicate reduction preserves hold times and pose order. Inspect auto-selected loops before shipping.
+
+The extraction limit is 120 frames. Model-specific input combinations are validated before generation. Call `sprite_video_capabilities` for the current model list.
+
+`wait_seconds` waits up to 30 seconds. A pending response is a resumable job, not a reason to generate again. Reuse the same `request_id` after a lost response.
+
+Completed jobs return `videoPath`, `sheetPath`, and `metadataPath` under `artifacts`. Use the metadata with `sprite_export_engine` for engine files.
+
+A provider timeout can leave a job `uncertain`. Its budget remains reserved because the provider may have accepted the request. The companion does not automatically resubmit it.

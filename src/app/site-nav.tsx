@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 // of metadata / transform / export tools go behind a single "Tools" dropdown
 // so the navbar stops wrapping on narrow screens.
 const PRIMARY = [
+  { href: "/animate", label: "Video Studio" },
   { href: "/spritesheet", label: "Sheet Builder" },
   { href: "/docs", label: "Docs" },
 ];
@@ -40,10 +41,7 @@ interface ToolLink {
 const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   {
     label: "AI (sign-in required)",
-    items: [
-      { href: "/generate", label: "AI Character", hint: "generate sprite art", paid: true },
-      { href: "/animate", label: "AI Animation", hint: "animate a character", paid: true },
-    ],
+    items: [{ href: "/generate", label: "AI Character", hint: "generate sprite art", paid: true }],
   },
   {
     label: "Extract",

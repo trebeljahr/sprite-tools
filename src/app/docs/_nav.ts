@@ -40,7 +40,7 @@ export const DOCS_SECTIONS: DocSection[] = [
       { href: "/docs/web/gif", label: "GIF export" },
       { href: "/docs/web/export", label: "Engine export" },
       { href: "/docs/web/generate", label: "AI Character" },
-      { href: "/docs/web/animate", label: "AI Animation" },
+      { href: "/docs/web/animate", label: "Video Studio" },
     ],
   },
   {
@@ -55,7 +55,7 @@ export const DOCS_SECTIONS: DocSection[] = [
     label: "MCP server",
     items: [
       { href: "/docs/mcp", label: "MCP overview" },
-      { href: "/docs/mcp/install", label: "Install in Claude Desktop" },
+      { href: "/docs/mcp/install", label: "Connect a local client" },
       { href: "/docs/mcp/tools", label: "Tool catalog" },
     ],
   },

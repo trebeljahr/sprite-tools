@@ -70,7 +70,7 @@ Some MCP clients prefer an explicit `node` command with the compiled server path
 
 ## 3. Restart Claude Desktop
 
-Fully quit and reopen. You should see `sprite-tools` in the MCP servers list; click it and the 23 tools appear.
+Fully quit and reopen. You should see `sprite-tools` in the MCP servers list; click it and the sprite tools appear.
 
 ## 4. Try it
 
@@ -85,3 +85,51 @@ Claude will call `sprite_detect_grid`, then `sprite_generate_collision`, and wri
 - **"command not found"** when starting — MCP servers run with a minimal PATH. Use the absolute `node` + `args` form in your config.
 - **Tools don't appear** — quit Claude Desktop fully (⌘Q / Alt+F4 + confirm). Restart. Check the MCP server logs in Claude's UI.
 - **"No bytes on stdin" / path errors** — MCP tools take file paths, not stdin. Make sure the paths you pass to the model are absolute.
+
+## Video generation from a local client
+
+Build the current source and start the companion first:
+
+```bash
+pnpm build
+pnpm cli:build
+pnpm mcp:build
+node dist/cli/index.js studio
+```
+
+Use the printed setup link to save keys in the encrypted vault and set spending limits. Keep the companion running. MCP and the local Web app share its jobs and budget.
+
+Use an absolute compiled server path in your client:
+
+```json
+{
+  "mcpServers": {
+    "sprite-tools": {
+      "command": "/absolute/path/to/node",
+      "args": ["/absolute/path/to/sprite-tools/dist/mcp/index.js"]
+    }
+  }
+}
+```
+
+For Codex or local ChatGPT desktop execution, add this entry to the client's MCP configuration:
+
+```toml
+[mcp_servers.sprite-tools]
+command = "/absolute/path/to/node"
+args = ["/absolute/path/to/sprite-tools/dist/mcp/index.js"]
+```
+
+The desktop app and CLI share MCP configuration. See the [official MCP setup guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
+
+The repository also includes `plugin.json` and `mcp.json` for a local desktop plugin. Build the CLI, MCP server, and Web app before loading the package.
+
+Local stdio tools require local execution. ChatGPT on the web needs a separately hosted authenticated MCP service. This companion does not expose itself through a public tunnel.
+
+Example request:
+
+> Use sprite_video_capabilities first. Make a four-second side-view red robot walk loop on solid green with Google Veo Fast. Use 8 fps and 128-pixel sprites. Generate once, poll the returned job, then show me the sheet and collision metadata.
+
+Provider keys and vault passphrases never belong in MCP arguments. If the vault is locked, open its local setup page yourself.
+
+If you choose a custom state directory, give the companion `--state-dir` and set `SPRITE_TOOLS_VIDEO_HOME` to that same path for the MCP process.

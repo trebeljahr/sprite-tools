@@ -34,6 +34,7 @@ import { registerInfoCommand } from "./commands/info";
 import { registerLintCommand } from "./commands/lint";
 import { registerMetaCommand } from "./commands/meta";
 import { registerExportCommand } from "./commands/export";
+import { registerStudioCommand } from "./commands/studio";
 
 const program = new Command();
 
@@ -122,6 +123,7 @@ registerOutlineCommand(program);
 registerAtlasCommand(program);
 registerGifCommand(program);
 registerExportCommand(program);
+registerStudioCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   process.stderr.write(`sprite-tools: ${err instanceof Error ? err.message : String(err)}\n`);

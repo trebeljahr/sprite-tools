@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "sprite-tools",
+  "version": "0.1.0",
+  "description": "Generate video with your local provider keys and export transparent sprite sheets with collision metadata.",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true
+    }
+  }
+}

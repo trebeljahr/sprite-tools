@@ -10,8 +10,8 @@ A batteries-included toolkit for turning AI-generated or hand-drawn sprites into
 
 Three surfaces, one shared pipeline:
 
-- **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) (no backend, no upload).
-- **CLI (`sprite-tools`)** — 20 composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
+- **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) for local sprite editing. Video generation uses the local companion and your provider key.
+- **CLI (`sprite-tools`)** — Composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
 - **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
 
 All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
@@ -112,7 +112,15 @@ npm install -g @trebeljahr/sprite-tools
 npx @trebeljahr/sprite-tools meta hero.png --collision -o hero.json
 ```
 
-Requires **Node 20+**. No native dependencies — PNG I/O is pure JS, so it installs portably with no `node-gyp` step. Full install options (pnpm, MCP client config, building from source) live in the [install docs](https://sprites.trebeljahr.com/docs/install).
+Requires **Node 20+**. PNG I/O is pure JS. Video Studio additionally requires `ffmpeg` and `ffprobe` on your PATH. Full install options (pnpm, MCP client config, building from source) live in the [install docs](https://sprites.trebeljahr.com/docs/install).
+
+## Local Video Studio
+
+Run `sprite-tools studio`, open its private setup link, and add a Google or xAI key to the encrypted local vault. Set a total and per-job spending limit before generating. The default budget is zero.
+
+The local Web UI accepts prompts, concept art, and supported first/end frame controls. One job generates video, removes the background, and exports a sprite sheet with timing, pivots, collision polygons, and bounding hitboxes. Existing video can be imported or reprocessed without generation charges.
+
+Local MCP clients use the same running companion through five `sprite_video_*` tools. Keys stay out of chat and tool arguments. See [the runtime and security contract](docs/video-studio.md).
 
 ## MCP in Claude Desktop
 
@@ -126,7 +134,7 @@ Add to `claude_desktop_config.json` (macOS path: `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop — 23 tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
+Restart Claude Desktop — the sprite tools appear under the MCP menu. If `sprite-tools-mcp` isn't on the PATH Claude sees (common with `nvm`/`fnm`), set `command` to the absolute path printed by `which sprite-tools-mcp`.
 
 ## What's in the box
 
@@ -134,7 +142,7 @@ Restart Claude Desktop — 23 tools appear under the MCP menu. If `sprite-tools-
 
 **CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `aseprite` (alias `ase`), `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
 
-**MCP**: 23 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`; `aseprite` is `sprite_read_aseprite`).
+**MCP**: Tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`; `aseprite` is `sprite_read_aseprite`).
 
 ## Docs
 

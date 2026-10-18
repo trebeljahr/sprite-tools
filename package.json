@@ -1,7 +1,7 @@
 {
   "name": "@trebeljahr/sprite-tools",
   "version": "0.1.0",
-  "description": "Toolkit for turning sprite sheets into game-ready assets — background removal, collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
+  "description": "Toolkit for turning sprite sheets into game-ready assets \u2014 background removal, collision polygons, pivots, animation tags, nine-slice borders, pixel-art conversion, normal maps, outlines and drop shadows, palette swap, atlas packing, GIF export. Ships a CLI, an MCP server, and a web app off one algorithm core.",
   "keywords": [
     "sprite",
     "spritesheet",
@@ -35,7 +35,10 @@
     "dist/mcp/**/*.{js,d.ts}",
     "dist/src/lib/**/*.{js,d.ts}",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "out/**/*",
+    "plugin.json",
+    "mcp.json"
   ],
   "publishConfig": {
     "access": "public"
@@ -59,13 +62,13 @@
     "test": "vitest run && pnpm --filter @sprite-tools/server test",
     "test:watch": "vitest",
     "prepare": "husky || true",
-    "install-local": "pnpm run cli:build && pnpm run mcp:build && npm install -g .",
+    "install-local": "pnpm run build && pnpm run cli:build && pnpm run mcp:build && npm install -g .",
     "release": "pnpm run release:patch",
     "release:patch": "node scripts/release-prep.mjs && node scripts/release-bump.mjs patch && pnpm run _release:finish",
     "release:minor": "node scripts/release-prep.mjs && node scripts/release-bump.mjs minor && pnpm run _release:finish",
     "release:major": "node scripts/release-prep.mjs && node scripts/release-bump.mjs major && pnpm run _release:finish",
     "_release:finish": "pnpm run cli:build && pnpm run mcp:build && pnpm run typecheck && npm publish && git push --follow-tags",
-    "prepublishOnly": "pnpm run cli:build && pnpm run mcp:build",
+    "prepublishOnly": "pnpm run build && pnpm run cli:build && pnpm run mcp:build",
     "db:migrate": "pnpm --filter @sprite-tools/server db:migrate",
     "accounts:credit": "pnpm --filter @sprite-tools/server accounts:credit",
     "dev:client": "dotenvx run -f .env.development.local -f .env --ignore=MISSING_ENV_FILE -- next dev -p 3471",
