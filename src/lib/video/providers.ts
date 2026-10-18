@@ -81,8 +81,10 @@ function apiHeaders(provider: ProviderId, apiKey: string): Record<string, string
 export function generationPayload(input: GenerationInput): Record<string, unknown> {
   const value = validateGeneration(input);
   if (value.provider === "google") {
+    // Match the Gemini SDK's imageToMldev wire format for predictLongRunning.
     const image = (item: NonNullable<GenerationInput["firstFrame"]>) => ({
-      inlineData: { mimeType: item.mimeType, data: item.data },
+      bytesBase64Encoded: item.data,
+      mimeType: item.mimeType,
     });
     return {
       instances: [
@@ -124,6 +126,25 @@ export function generationPayload(input: GenerationInput): Record<string, unknow
       : {}),
   };
 }
+function submissionHttpError(status: number): ProviderError {
+  // Only authored guidance and the HTTP status leave this boundary. Provider
+  // bodies and statusText can contain credentials, prompts, or image data.
+  const guidance: Record<number, string> = {
+    400: "Check the selected model, video controls, and reference images.",
+    401: "Check the API key in local setup.",
+    402: "Check billing and required prepayment in the provider console.",
+    403: "Check model access, key permissions, and billing in the provider console.",
+    404: "Check model availability and API access in the provider console.",
+    429: "Check quota, rate limits, and billing in the provider console.",
+  };
+  const uncertain = status >= 500;
+  return new ProviderError(
+    uncertain
+      ? `The provider could not confirm the generation request (HTTP ${status}). The reserved budget is held; check the provider console before submitting another request.`
+      : `The provider declined the generation request (HTTP ${status}). ${guidance[status] ?? "Check the provider console and key permissions."}`,
+    uncertain,
+  );
+}
 export async function submitGeneration(
   input: GenerationInput,
   apiKey: string,
@@ -151,10 +172,7 @@ export async function submitGeneration(
   }
   if (!response.ok) {
     await response.body?.cancel();
-    throw new ProviderError(
-      "The provider declined the generation request. Check its console and key permissions.",
-      response.status >= 500,
-    );
+    throw submissionHttpError(response.status);
   }
   const result = await responseJson(response);
   const id = value.provider === "google" ? result.name : result.request_id;
