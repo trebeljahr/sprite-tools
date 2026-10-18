@@ -85,6 +85,55 @@ describe("video loop selection", () => {
     expect(result.selection.durationSeconds).toBe(1);
   });
 
+  it("budgets a detected loop across its complete cycle without a tiny final hold", () => {
+    const cycle = Array.from({ length: 47 }, (_, index) => pose(index * 4));
+    const options = {
+      fps: 24,
+      startSeconds: 2,
+      loopMode: "auto" as const,
+      loopMinSeconds: 1.6,
+      loopMaxSeconds: 2.1,
+    };
+    const frames = [...cycle, cycle[0], cycle[1]];
+    const interval = { startSeconds: 2, endSeconds: 2 + frames.length / options.fps };
+    const full = selectVideoFrames(frames, options, interval);
+    const budgeted = selectVideoFrames(frames, { ...options, maxFrames: 8 }, interval);
+
+    expect(full.selection).toMatchObject({ loopFound: true, outputFrameCount: 47 });
+    expect(budgeted.selection).toMatchObject({
+      loopFound: true,
+      startSeconds: full.selection.startSeconds,
+      endSeconds: full.selection.endSeconds,
+      durationSeconds: full.selection.durationSeconds,
+      outputFrameCount: 8,
+    });
+    expect(sum(budgeted.frameDurations)).toBe(sum(full.frameDurations));
+    const uniformHold = sum(full.frameDurations) / 8;
+    for (const hold of budgeted.frameDurations) {
+      expect(Math.abs(hold - uniformHold)).toBeLessThanOrEqual(1000 / options.fps);
+    }
+    budgeted.sourceFrameIndices.forEach((source, index) => {
+      expect(budgeted.frames[index]).toBe(frames[source]);
+      expect(budgeted.sourceFrameTimesSeconds[index]).toBe(2 + source / options.fps);
+      if (index > 0) expect(source).toBeGreaterThan(budgeted.sourceFrameIndices[index - 1]);
+    });
+  });
+
+  it("keeps deduplicated long holds when temporal loop targets select the same pose", () => {
+    const result = selectVideoFrames(sequence(20, 20, 20, 20, 20, 20, 80, 140, 200, 240, 20, 20), {
+      fps: 10,
+      loopMode: "auto",
+      loopMinSeconds: 1,
+      loopMaxSeconds: 1.1,
+      dedupeThreshold: 0,
+      maxFrames: 3,
+    });
+    expect(result.selection).toMatchObject({ loopFound: true, durationSeconds: 1 });
+    expect(result.sourceFrameIndices).toEqual([0, 6]);
+    expect(result.frameDurations).toEqual([600, 400]);
+    expect(result.selection.outputFrameCount).toBeLessThanOrEqual(3);
+  });
+
   it("samples by elapsed time after dedupe and preserves long holds", () => {
     const result = selectVideoFrames(sequence(20, 20, 20, 20, 20, 20, 80, 140, 200, 240), {
       fps: 10,

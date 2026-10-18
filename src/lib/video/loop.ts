@@ -261,11 +261,14 @@ export function selectVideoFrames<T extends FrameImageLike>(
     held = merged;
   }
   if (options.maxFrames !== undefined && held.length > options.maxFrames) {
-    const selected = new Set<number>([0, held.length - 1]);
-    const lastStartMs = held[held.length - 1].startMs;
+    // A loop wraps to its first pose; forcing its final sampled pose creates a tiny last hold.
+    const cyclic = loopFound === true;
+    const selected = new Set<number>(cyclic ? [0] : [0, held.length - 1]);
+    const targetCount = cyclic ? options.maxFrames : options.maxFrames - 1;
+    const spanMs = (cyclic ? endMs : held[held.length - 1].startMs) - startMs;
     let index = 0;
-    for (let i = 1; i < options.maxFrames - 1; i++) {
-      const target = startMs + ((lastStartMs - startMs) * i) / (options.maxFrames - 1);
+    for (let i = 1; i < targetCount; i++) {
+      const target = startMs + (spanMs * i) / targetCount;
       while (index + 1 < held.length && held[index + 1].startMs <= target) index++;
       selected.add(index);
     }
