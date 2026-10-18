@@ -1,5 +1,6 @@
 import {
   MAX_VIDEO_BYTES,
+  VIDEO_MODELS,
   type GenerationInput,
   type ProviderId,
   validateGeneration,
@@ -126,7 +127,102 @@ export function generationPayload(input: GenerationInput): Record<string, unknow
       : {}),
   };
 }
-function submissionHttpError(status: number): ProviderError {
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+const GOOGLE_ERROR_REASONS = new Map<string, string>([
+  ["API_KEY_INVALID", "Google rejected the API key. Check the key in local setup."],
+  ["API_KEY_SERVICE_BLOCKED", "The API key's service restrictions block the Gemini API."],
+  [
+    "API_KEY_HTTP_REFERRER_BLOCKED",
+    "The API key's website restrictions block requests from this local server.",
+  ],
+  ["API_KEY_IP_ADDRESS_BLOCKED", "The API key's IP address restrictions block this server."],
+  ["SERVICE_DISABLED", "Enable the Gemini API for the key's existing Google project."],
+  ["BILLING_DISABLED", "Check billing and required prepayment for the key's Google project."],
+]);
+/** Classifies untrusted errors without returning any provider-authored text. */
+export function classifyProviderError(provider: ProviderId, payload: unknown): string | undefined {
+  if (provider !== "google") return undefined;
+  const error = record(record(payload)?.error);
+  if (!error) return undefined;
+  if (Array.isArray(error.details)) {
+    for (const item of error.details) {
+      const detail = record(item);
+      if (
+        detail?.["@type"] === "type.googleapis.com/google.rpc.ErrorInfo" &&
+        typeof detail.reason === "string"
+      ) {
+        const hint = GOOGLE_ERROR_REASONS.get(detail.reason);
+        if (hint) return hint;
+      }
+    }
+  }
+  if (typeof error.message !== "string" || error.message.length > 4096) return undefined;
+  const message = error.message;
+  if (/^api key (?:not valid|is invalid|is not valid|expired)/i.test(message))
+    return "Google rejected the API key. Check the key in local setup.";
+  if (/^(?:your )?prepayment credits (?:are depleted|are exhausted)/i.test(message))
+    return "Google requires a positive Gemini API prepay balance. Check AI Studio billing.";
+  if (
+    /^(?:billing (?:is |has been )?(?:disabled|not enabled)|this api method requires billing)/i.test(
+      message,
+    )
+  )
+    return "Check billing and required prepayment for the key's Google project.";
+  if (/^your use case is currently not supported\b/i.test(message))
+    return "Google does not support this combination of model, duration, and reference frames. Check those controls before submitting again.";
+  if (
+    /(?:last[_ ]?frame|first and last frames|interpolation)/i.test(message) &&
+    /\b8\s*(?:s\b|seconds?\b)/i.test(message) &&
+    /\b(?:only|must|required|requires)\b/i.test(message)
+  )
+    return "Google requires 8 seconds for the requested first and last frame mode.";
+  if (/^invalid json payload received\b|^unknown (?:name|field)\b/i.test(message))
+    return "Google rejected a request field. Check the video adapter's request format.";
+  if (
+    /(?:inlineData|bytesBase64Encoded|mimeType|lastFrame)/i.test(message) &&
+    /(?:not supported|isn't supported|invalid|unknown)/i.test(message)
+  )
+    return "Google rejected an image field. Check the video adapter's image payload format.";
+  if (
+    /^(?:invalid image|unable to (?:decode|process|read) (?:the )?(?:input )?image|image (?:is invalid|could not be decoded))/i.test(
+      message,
+    )
+  )
+    return "Google could not read a reference image. Use a valid PNG or JPEG image.";
+  if (
+    /\bresolution\b/i.test(message) &&
+    /(?:not supported|unsupported|invalid|must be)/i.test(message)
+  )
+    return "Google rejected the requested resolution. Check the model's resolution and duration limits.";
+  if (
+    /\b(?:duration|durationSeconds)\b/i.test(message) &&
+    /(?:not supported|unsupported|invalid|must be)/i.test(message)
+  )
+    return "Google rejected the requested duration. Check the model's duration and reference frame limits.";
+  return undefined;
+}
+async function responseDiagnostic(
+  provider: ProviderId,
+  response: Response,
+): Promise<string | undefined> {
+  try {
+    if (provider !== "google") {
+      await response.body?.cancel();
+      return undefined;
+    }
+    const payload: unknown = JSON.parse(
+      Buffer.from(await boundedBytes(response, 16 * 1024)).toString("utf8"),
+    );
+    return classifyProviderError(provider, payload);
+  } catch {
+    return undefined;
+  }
+}
+function providerHttpError(status: number, hint?: string, modelCheck = false): ProviderError {
   // Only authored guidance and the HTTP status leave this boundary. Provider
   // bodies and statusText can contain credentials, prompts, or image data.
   const guidance: Record<number, string> = {
@@ -138,12 +234,50 @@ function submissionHttpError(status: number): ProviderError {
     429: "Check quota, rate limits, and billing in the provider console.",
   };
   const uncertain = status >= 500;
+  if (modelCheck)
+    return new ProviderError(
+      `Google model access check failed (HTTP ${status}). ${hint ?? guidance[status] ?? "Check the provider console and key permissions."}`,
+      uncertain,
+    );
   return new ProviderError(
     uncertain
       ? `The provider could not confirm the generation request (HTTP ${status}). The reserved budget is held; check the provider console before submitting another request.`
-      : `The provider declined the generation request (HTTP ${status}). ${guidance[status] ?? "Check the provider console and key permissions."}`,
+      : `The provider declined the generation request (HTTP ${status}). ${hint ?? guidance[status] ?? "Check the provider console and key permissions."}`,
     uncertain,
   );
+}
+/** Reads model metadata; success does not confirm billing or generation entitlement. */
+export async function verifyGoogleModel(
+  model: string,
+  apiKey: string,
+  context: ProviderContext = {},
+): Promise<{ available: true; supportsGeneration: boolean }> {
+  if (!VIDEO_MODELS.some((item) => item.provider === "google" && item.id === model))
+    throw new ProviderError("Choose a supported Google video model.");
+  let response: Response;
+  try {
+    response = await (context.transport ?? fetch)(`${GOOGLE_BASE}models/${model}`, {
+      method: "GET",
+      headers: apiHeaders("google", apiKey),
+      redirect: "error",
+      signal: signal(context),
+    });
+  } catch {
+    throw new ProviderError("Google model access check is temporarily unavailable.", true);
+  }
+  if (!response.ok)
+    throw providerHttpError(response.status, await responseDiagnostic("google", response), true);
+  const result = await responseJson(response);
+  if (result.name !== `models/${model}`)
+    throw new ProviderError("Google returned invalid model metadata.");
+  const methods = result.supportedGenerationMethods;
+  return {
+    available: true,
+    supportsGeneration:
+      Array.isArray(methods) &&
+      methods.every((method) => typeof method === "string") &&
+      methods.includes("predictLongRunning"),
+  };
 }
 export async function submitGeneration(
   input: GenerationInput,
@@ -171,8 +305,7 @@ export async function submitGeneration(
     );
   }
   if (!response.ok) {
-    await response.body?.cancel();
-    throw submissionHttpError(response.status);
+    throw providerHttpError(response.status, await responseDiagnostic(value.provider, response));
   }
   const result = await responseJson(response);
   const id = value.provider === "google" ? result.name : result.request_id;

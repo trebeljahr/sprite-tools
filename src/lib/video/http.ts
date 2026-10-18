@@ -144,6 +144,13 @@ export async function startStudio(options: StudioOptions = {}) {
         const route = url.pathname.slice("/api/studio/".length);
         if (req.method === "GET" && route === "status")
           return json(res, 200, await service.status());
+        if (req.method === "POST" && route === "verify-google-model") {
+          const value = parse(
+            z.object({ model: z.string().min(1).max(120) }).strict(),
+            await body(req),
+          );
+          return json(res, 200, await service.verifyGoogleModel(value.model));
+        }
         if (req.method === "POST" && route === "unlock") {
           const value = parse(
             z.object({ passphrase: z.string().min(12).max(1024) }).strict(),

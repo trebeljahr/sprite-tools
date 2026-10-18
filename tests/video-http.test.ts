@@ -164,6 +164,56 @@ describe("local studio HTTP boundary", () => {
     expect(html).not.toContain(studio.token);
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
   });
+  it("checks Google model access without a generation request or budget reservation", async () => {
+    const { studio, headers, post, transport } = await fixture();
+    const model = "veo-3.1-lite-generate-preview";
+    expect(
+      (
+        await fetch(`${studio.origin}/api/studio/verify-google-model`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model }),
+        })
+      ).status,
+    ).toBe(401);
+    expect((await post("verify-google-model", { model })).status).toBe(400);
+    expect(transport).not.toHaveBeenCalled();
+    await post("unlock", { passphrase: "test-only-http-passphrase" });
+    await post("credentials", { provider: "google", apiKey: "fake-check-only-google-key" });
+    expect((await post("verify-google-model", { model: "../../private" })).status).toBe(400);
+    expect(transport).not.toHaveBeenCalled();
+    transport.mockResolvedValueOnce(
+      Response.json({
+        name: `models/${model}`,
+        supportedGenerationMethods: ["predictLongRunning"],
+        description: "fake-sensitive-provider-data",
+      }),
+    );
+    const check = await post("verify-google-model", { model });
+    expect(check.status).toBe(200);
+    expect(await check.json()).toEqual({ available: true, supportsGeneration: true });
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][1]?.method).toBe("GET");
+    const status = await (await fetch(`${studio.origin}/api/studio/status`, { headers })).json();
+    expect(status.jobs).toEqual([]);
+    expect(status.budget.committedUsd).toBe(0);
+    transport.mockResolvedValueOnce(
+      Response.json(
+        {
+          error: {
+            message: "fake-check-only-google-key fake-sensitive-provider-data",
+            details: [
+              { "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" },
+            ],
+          },
+        },
+        { status: 400 },
+      ),
+    );
+    const failure = await post("verify-google-model", { model });
+    expect(failure.status).toBe(400);
+    expect(await failure.text()).not.toContain("fake-");
+  });
   it("serves the local web export but prevents symlink escapes and private storage exposure", async () => {
     const { studio, webRoot, stateDir } = await fixture(true);
     expect((await fetch(`${studio.origin}/animate`)).status).toBe(200);

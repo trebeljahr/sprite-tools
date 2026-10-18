@@ -13,6 +13,7 @@ import {
   type ProviderPoll,
   type ProviderTransport,
   submitGeneration,
+  verifyGoogleModel,
 } from "./providers.js";
 import {
   artifactNames,
@@ -276,6 +277,18 @@ export class VideoService {
     await this.exclusive(async () => {
       this.requireIdle();
       await this.vault.set(provider, apiKey);
+    });
+  }
+  /** Metadata lookup only: does not generate media or reserve a job budget. */
+  async verifyGoogleModel(model: string) {
+    return this.exclusive(async () => {
+      this.requireUnlocked();
+      if (this.options.simulation)
+        throw new Error("Model access checks are unavailable in simulation mode.");
+      return verifyGoogleModel(model, this.vault.get("google"), {
+        transport: this.options.transport,
+        signal: AbortSignal.timeout(10_000),
+      });
     });
   }
   async removeCredential(provider: ProviderId): Promise<void> {
