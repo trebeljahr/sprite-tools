@@ -193,7 +193,9 @@ test("the client release list follows the carry manifest, own release first", ()
       schema: 2,
       releases: [SHA, OLD_SHA],
     });
-    for (const invalid of [[], ["latest"], [SHA.slice(0, 7)]]) {
+    manifest([SHA, SHA, `${OLD_SHA}-local`, OLD_SHA]);
+    assert.deepEqual(writeReleases(directory), [SHA, OLD_SHA]);
+    for (const invalid of [[], ["latest"], [SHA.slice(0, 7)], [`${SHA}-local`]]) {
       manifest(invalid);
       assert.throws(() => writeReleases(directory), /full-SHA releases/);
     }
