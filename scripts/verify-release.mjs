@@ -5,12 +5,6 @@ const ORIGIN = "https://sprites.trebeljahr.com";
 const ALIASES = [];
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// The last images that served the whole Next app, pages and /api together.
-// They have no /api/health, so a release that replaces one can check only
-// account readiness for its baseline. Remove an entry once no rollback can
-// return to it.
-export const LEGACY_NEXT_RELEASES = new Set(["9bddc3f7014e122c433a6e443f6d83c0291bf726"]);
-
 // This proves which build public HTTP serves. The deployment operator must
 // also inspect Coolify's exact deployment and running container image digest.
 // A server release needs three to four minutes before only the new build
@@ -62,18 +56,16 @@ const uncached = (response) => (response.headers.get("cache-control") ?? "").inc
 
 /**
  * The accounts server (Coolify) on /api: /api/health names the commit its
- * image was built from and reports the account database ready. `legacy`
- * accepts a pre-split Next image, which can only report readiness.
+ * image was built from and reports the account database ready.
  */
-export function verifyServer(commit, { legacy = false, ...options } = {}) {
+export function verifyServer(commit, options = {}) {
   return sampled(
     commit,
     async (get) => {
-      const path = legacy ? "/api/health/accounts" : "/api/health";
-      const health = await get(path);
+      const health = await get("/api/health");
       const body = health.status === 200 && uncached(health) ? await health.json() : {};
       if (body.ready !== true) throw new Error("Account database readiness failed.");
-      if (!legacy && body.version !== commit) {
+      if (body.version !== commit) {
         throw new Error("Accounts server is not the expected commit.");
       }
     },

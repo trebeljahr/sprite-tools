@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { clientVersion } from "./client-version.mjs";
-import { LEGACY_NEXT_RELEASES, verifyClient, verifyServer } from "./verify-release.mjs";
+import { verifyClient, verifyServer } from "./verify-release.mjs";
 import { writeReleases } from "./write-releases.mjs";
 import { writeVersion } from "./write-version.mjs";
 
@@ -121,20 +121,6 @@ test("cached responses, broken pages, stale HTML and unready accounts each fail 
       /readiness failed/,
     );
   }
-});
-
-test("a pre-split Next baseline is checked for account readiness only", async () => {
-  assert.ok(LEGACY_NEXT_RELEASES.size >= 1);
-  const http = fakeHttp({ serverCommits: [OLD_SHA] });
-  assert.deepEqual(await verifyServer(OLD_SHA, { ...quick, legacy: true, fetch: http.fetch }), {
-    commit: OLD_SHA,
-    samples: 2,
-  });
-  assert.deepEqual(new Set(paths(http)), new Set(["/api/health/accounts"]));
-  await assert.rejects(
-    verifyServer(OLD_SHA, { ...quick, legacy: true, fetch: fakeHttp({ accounts: false }).fetch }),
-    /readiness failed/,
-  );
 });
 
 test("invalid release identity fails before making any request", async () => {

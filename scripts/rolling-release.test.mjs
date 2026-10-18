@@ -7,7 +7,6 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { APP, queuedDeployment, rollingRelease, safeFailure } from "./lib/rolling-release.mjs";
-import { LEGACY_NEXT_RELEASES } from "./verify-release.mjs";
 
 const OLD = "a".repeat(40);
 const NEW = "b".repeat(40);
@@ -473,21 +472,11 @@ test("public verification requires this site's build identity and account readin
   assert.equal(brokenTarget.reports.at(-1).stage, "recovery-required");
 });
 
-test("a pre-split Next baseline is accepted on readiness, then the server must name its commit", async () => {
+test("a server that cannot name its commit is never a valid baseline", async () => {
   const p = platform();
-  const paths = publicSite(p, { legacy: new Set([OLD]) });
-  LEGACY_NEXT_RELEASES.add(OLD);
-  try {
-    assert.equal((await rollingRelease(config, p.release, p.deps)).stage, "http-verified");
-  } finally {
-    LEGACY_NEXT_RELEASES.delete(OLD);
-  }
-  assert.deepEqual([...paths].sort(), ["/api/health", "/api/health/accounts"]);
-
-  const unlisted = platform();
-  publicSite(unlisted, { legacy: new Set([OLD]) });
-  await assert.rejects(rollingRelease(config, unlisted.release, unlisted.deps));
-  assert.equal(writes(unlisted).length, 0);
+  publicSite(p, { legacy: new Set([OLD]) });
+  await assert.rejects(rollingRelease(config, p.release, p.deps));
+  assert.equal(writes(p).length, 0);
 });
 
 // Source repositories and deployed image packages intentionally differ for some apps.

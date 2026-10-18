@@ -129,9 +129,8 @@ Server verification requires uncached `/api/health` to report the full commit
 with accounts ready for 16 consecutive samples over at least 30s. It waits up to
 nine minutes for that: a release needs three to four minutes (image pull, start
 period, drain of the old container) before only the new build answers. The
-baseline check of an image listed in `LEGACY_NEXT_RELEASES`
-(`scripts/verify-release.mjs`), which served pages and `/api` together and has
-no `/api/health`, accepts account readiness alone. Client verification then
+baseline, the image serving before the release, is checked the same way.
+Client verification then
 requires uncached `/version.json` and the homepage `build-commit` metadata to
 agree on the full commit for 16 samples. This is HTTP evidence;
 `http-verified` is not a claim that the provider job finished or that old
@@ -154,13 +153,9 @@ the journal tags afterwards. To roll back the client, activate an earlier
 version: `wrangler versions deploy <version-id>@100%` (or `wrangler rollback`).
 A version keeps its own files, so that is complete within seconds.
 
-Returning to the pre-split Next image means both: delete the
-`sprites.trebeljahr.com/*` route (Traefik answers every path again within
-about ten seconds) and pin that image's digest in the app.
-
 Local checks: `node --test scripts/release.test.mjs scripts/rolling-release.test.mjs`,
 `pnpm typecheck`, `pnpm test`, `pnpm build`, and
 `actionlint .github/workflows/deploy.yml`. The controller tests cover fixed
 scope, digest/revision disagreement, architecture, baseline drift, latched
-failures, ambiguous hooks, account readiness, the legacy baseline, and
+failures, ambiguous hooks, account readiness, and
 authenticated registry redirect limits. They do not replace a live release.
