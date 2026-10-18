@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { z } from "zod";
+import { PlaybackTiming } from "@/components/playback-timing";
+import { frameAtTime } from "@/lib/animation/playback";
 import { Button } from "@/components/ui/button";
 
 const metadataSchema = z
@@ -56,6 +58,8 @@ export function VideoLoopPreview({
   const [frameIndex, setFrameIndex] = useState(0);
   const indexRef = useRef(0);
   const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [zoom, setZoom] = useState(2);
   const [error, setError] = useState("");
   const durationMs = metadata.frameDurations.reduce((sum, duration) => sum + duration, 0);
 
@@ -104,11 +108,7 @@ export function VideoLoopPreview({
       .reduce((sum, duration) => sum + duration, 0);
     let animation: number;
     const tick = (now: number) => {
-      const position = (now - started + offset) % durationMs;
-      let index = 0,
-        end = metadata.frameDurations[0];
-      while (position >= end && index < metadata.frameCount - 1)
-        end += metadata.frameDurations[++index];
+      const index = frameAtTime(metadata.frameDurations, (now - started) * speed + offset);
       if (index !== indexRef.current) {
         indexRef.current = index;
         setFrameIndex(index);
@@ -117,7 +117,7 @@ export function VideoLoopPreview({
     };
     animation = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animation);
-  }, [playing, sheet, metadata, durationMs]);
+  }, [playing, sheet, metadata, speed]);
 
   const seek = (index: number) => {
     setPlaying(false);
@@ -133,14 +133,14 @@ export function VideoLoopPreview({
           {metadata.frameCount} frames · {(durationMs / 1000).toFixed(2)} s
         </p>
       </div>
-      <div className="flex min-h-48 items-center justify-center rounded-md border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-4">
+      <div className="min-h-48 max-h-[70vh] overflow-auto rounded-md border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-4">
         <canvas
           ref={canvas}
           width={metadata.frameWidth}
           height={metadata.frameHeight}
           aria-label={`Animation preview, frame ${frameIndex + 1} of ${metadata.frameCount}`}
-          className="max-h-72 max-w-full [image-rendering:pixelated]"
-          style={{ width: Math.min(480, metadata.frameWidth * 2), height: "auto" }}
+          className="mx-auto block [image-rendering:pixelated]"
+          style={{ width: metadata.frameWidth * zoom, height: "auto" }}
         />
       </div>
       <div className="flex items-center gap-2">
@@ -181,6 +181,55 @@ export function VideoLoopPreview({
           {frameIndex + 1}/{metadata.frameCount}
         </span>
       </div>
+      <PlaybackTiming durationMs={durationMs} speed={speed} onSpeedChange={setSpeed} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Zoom</span>
+        {[1, 2, 4].map((value) => (
+          <Button
+            key={value}
+            size="sm"
+            variant={zoom === value ? "secondary" : "outline"}
+            aria-pressed={zoom === value}
+            onClick={() => setZoom(value)}
+          >
+            {value}×
+          </Button>
+        ))}
+        <Button size="sm" variant="outline" onClick={() => seek(metadata.frameCount - 1)}>
+          Inspect last frame
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => seek(0)}>
+          Inspect first frame
+        </Button>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-xs">Review frames and holds</summary>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+          {metadata.frameDurations.map((hold, index) => (
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: output frame positions are fixed for this preview
+              key={index}
+              type="button"
+              onClick={() => seek(index)}
+              aria-label={`Inspect sprite frame ${index + 1}`}
+              aria-pressed={frameIndex === index}
+              className={`shrink-0 rounded border p-1 text-xs ${frameIndex === index ? "border-primary bg-primary/10" : "border-border"}`}
+            >
+              <span
+                className="block [image-rendering:pixelated]"
+                style={{
+                  width: 64,
+                  height: (64 * metadata.frameHeight) / metadata.frameWidth,
+                  backgroundImage: `url(${sheetUrl})`,
+                  backgroundSize: `${metadata.grid.cols * 64}px ${(metadata.grid.rows * 64 * metadata.frameHeight) / metadata.frameWidth}px`,
+                  backgroundPosition: `-${(index % metadata.grid.cols) * 64}px -${(Math.floor(index / metadata.grid.cols) * 64 * metadata.frameHeight) / metadata.frameWidth}px`,
+                }}
+              />
+              {index + 1} · {hold} ms
+            </button>
+          ))}
+        </div>
+      </details>
       <p className="text-xs text-muted-foreground">
         Frame hold: {metadata.frameDurations[frameIndex]} ms
         {metadata.sourceFrameIndices?.[frameIndex] !== undefined

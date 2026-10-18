@@ -57,6 +57,8 @@ import {
   buildManualCropStep,
   buildImportAsepriteStep,
 } from "@/lib/pipeline/use-pipeline";
+import { PlaybackTiming } from "@/components/playback-timing";
+import { frameAtTime } from "@/lib/animation/playback";
 import { stitchSheet, exportAsZip } from "@/lib/pipeline/export";
 import { detectSheetGrid, isAsepriteFilename, type SheetDetection } from "@/lib/pipeline/import";
 import {
@@ -209,7 +211,8 @@ function SpritesheetContent() {
   // ------- Animation playback -------
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const playbackIndexRef = useRef(0);
 
   // Layer / tag / hidden-layer changes after an import re-run that import in
   // place, so the frames on screen always match the picker. Only when the
@@ -286,6 +289,16 @@ function SpritesheetContent() {
     () => activeIndices.map((i) => allFrames[i]),
     [activeIndices, allFrames],
   );
+
+  // Use the completed import's rate, not an un-applied extraction setting.
+  const importedFps =
+    pipeline.state.steps.find((step) => step.kind === "import-video")?.config.fps ?? 10;
+  const previewDurations = useMemo(
+    () => activeFrames.map((frame) => frame.metadata?.durationMs || 1000 / importedFps),
+    [activeFrames, importedFps],
+  );
+  const previewDurationMs = previewDurations.reduce((sum, ms) => sum + ms, 0);
+  playbackIndexRef.current = previewIndex;
 
   const currentGlobalIndex = activeIndices[previewIndex] ?? -1;
 
@@ -757,17 +770,19 @@ function SpritesheetContent() {
 
   // ------- Animation playback -------
   useEffect(() => {
-    if (isPlaying && activeFrames.length > 0) {
-      playbackRef.current = setInterval(() => {
-        setPreviewIndex((p) => (p + 1) % activeFrames.length);
-      }, 1000 / Math.max(1, fps));
-    } else if (playbackRef.current) {
-      clearInterval(playbackRef.current);
-    }
-    return () => {
-      if (playbackRef.current) clearInterval(playbackRef.current);
+    if (!isPlaying || !previewDurations.length) return;
+    const started = performance.now();
+    const offset = previewDurations
+      .slice(0, playbackIndexRef.current)
+      .reduce((sum, ms) => sum + ms, 0);
+    let animation: number;
+    const tick = (now: number) => {
+      setPreviewIndex(frameAtTime(previewDurations, offset + (now - started) * playbackSpeed));
+      animation = requestAnimationFrame(tick);
     };
-  }, [isPlaying, activeFrames.length, fps]);
+    animation = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animation);
+  }, [isPlaying, previewDurations, playbackSpeed]);
 
   // ------- Selection drag handlers -------
   useEffect(() => {
@@ -1210,19 +1225,29 @@ function SpritesheetContent() {
                             )}
                           </div>
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-mono">
-                            <ChevronLeft
-                              className="w-3 h-3 cursor-pointer"
-                              onClick={() =>
+                            <button
+                              type="button"
+                              aria-label="Previous preview frame"
+                              onClick={() => {
+                                setIsPlaying(false);
                                 setPreviewIndex(
                                   (p) => (p - 1 + activeFrames.length) % activeFrames.length,
-                                )
-                              }
-                            />
+                                );
+                              }}
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
                             {previewIndex + 1} / {activeFrames.length}
-                            <ChevronRight
-                              className="w-3 h-3 cursor-pointer"
-                              onClick={() => setPreviewIndex((p) => (p + 1) % activeFrames.length)}
-                            />
+                            <button
+                              type="button"
+                              aria-label="Next preview frame"
+                              onClick={() => {
+                                setIsPlaying(false);
+                                setPreviewIndex((p) => (p + 1) % activeFrames.length);
+                              }}
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
                           </div>
                           <ZoomIndicator
                             zoom={pView.zoom}
@@ -1240,6 +1265,7 @@ function SpritesheetContent() {
                       <Button
                         size="icon"
                         variant="outline"
+                        aria-label={isPlaying ? "Pause preview" : "Play preview"}
                         onClick={() => setIsPlaying(!isPlaying)}
                         disabled={activeFrames.length === 0}
                       >
@@ -1247,16 +1273,22 @@ function SpritesheetContent() {
                       </Button>
                       <Slider
                         className="flex-1"
+                        aria-label="Preview frame"
                         value={[previewIndex]}
                         min={0}
                         max={Math.max(0, activeFrames.length - 1)}
                         step={1}
                         onValueChange={(val) => {
-                          setPreviewIndex(val as number);
+                          setPreviewIndex(Array.isArray(val) ? val[0] : val);
                           setIsPlaying(false);
                         }}
                       />
                     </div>
+                    <PlaybackTiming
+                      durationMs={previewDurationMs}
+                      speed={playbackSpeed}
+                      onSpeedChange={setPlaybackSpeed}
+                    />
                   </CardContent>
                 </Card>
 

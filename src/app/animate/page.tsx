@@ -36,6 +36,7 @@ import {
   type ProviderId,
   type VideoResolution,
 } from "@/lib/video/schema";
+import { VideoProcessingRecipe } from "@/components/video-processing-recipe";
 import { resolveVideoTrim } from "@/lib/video/loop";
 import {
   closeUncertainStudioJob,
@@ -195,11 +196,16 @@ export default function AnimatePage() {
   const [firstFrame, setFirstFrame] = useState<Reference[]>([]);
   const [lastFrame, setLastFrame] = useState<Reference[]>([]);
   const [references, setReferences] = useState<Reference[]>([]);
-  const [processing, setProcessing] = useState<ProcessingOptions>(() => validateProcessing({}));
+  const [processing, setProcessing] = useState<ProcessingOptions>(() =>
+    validateProcessing({ fps: 12 }),
+  );
   const [jobId, setJobId] = useState<string | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [sheetPreview, setSheetPreview] = useState<string | null>(null);
   const [loopMetadata, setLoopMetadata] = useState<VideoLoopMetadata | null>(null);
+  const sourceVideo = useRef<HTMLVideoElement>(null);
+  const [sourceTime, setSourceTime] = useState(0);
+  const [sourceDuration, setSourceDuration] = useState(0);
   const [handoffReady, setHandoffReady] = useState(false);
   const pendingRequest = useRef<{ signature: string; id: string } | null>(null);
   const { setSharedSource } = useSharedProjectSource();
@@ -236,6 +242,8 @@ export default function AnimatePage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: a completed MCP reprocess changes the revision even if polling misses its transient processing status
   useEffect(() => {
     setVideoPreview(null);
+    setSourceTime(0);
+    setSourceDuration(0);
     setSheetPreview(null);
     setLoopMetadata(null);
     setHandoffReady(false);
@@ -657,6 +665,38 @@ export default function AnimatePage() {
                 Keep the useful motion, find a repeating cycle, then reduce the frame count.
               </p>
             </div>
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium">1. Choose motion detail</h3>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  [8, "Stepped"],
+                  [12, "Balanced"],
+                  [24, "More detail"],
+                ].map(([rate, label]) => (
+                  <Button
+                    key={rate}
+                    size="sm"
+                    variant={processing.fps === rate ? "secondary" : "outline"}
+                    aria-pressed={processing.fps === rate}
+                    onClick={() =>
+                      setProcessing((previous) => ({
+                        ...previous,
+                        fps: Number(rate),
+                        maxFrames: undefined,
+                      }))
+                    }
+                  >
+                    {label} · {rate} fps
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A full 2 s clip gives 16 frames at 8 fps, 24 at 12 fps, or 48 at 24 fps. Start at
+                12; compare 24 for fast motion. Sampling cannot create missing poses. Presets clear
+                the frame budget so you can review all samples.
+              </p>
+            </div>
+            <h3 className="text-xs font-medium">2. Choose the cut, then review similar frames</h3>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="loop-start" className="text-xs">
@@ -826,8 +866,10 @@ export default function AnimatePage() {
             )}
             <p className="text-xs text-muted-foreground">
               Automatic loops are suggestions. Review the preview and seam. Reprocessing uses the
-              saved video and makes no provider request.
+              saved video and makes no provider request. Lower the duplicate tolerance if motion
+              becomes jerky; a smaller frame budget also increases pose holds.
             </p>
+            <VideoProcessingRecipe value={processing} onChange={setProcessing} />
           </section>
           <details className="border-y py-4" open>
             <summary className="cursor-pointer text-sm font-medium">Sprite output</summary>
@@ -998,8 +1040,11 @@ export default function AnimatePage() {
           <div className="overflow-hidden rounded-lg bg-muted/30">
             {videoPreview ? (
               <video
+                ref={sourceVideo}
                 aria-label="Generated video"
                 src={videoPreview}
+                onTimeUpdate={(event) => setSourceTime(event.currentTarget.currentTime)}
+                onLoadedMetadata={(event) => setSourceDuration(event.currentTarget.duration)}
                 controls
                 muted
                 playsInline
@@ -1024,8 +1069,117 @@ export default function AnimatePage() {
               </div>
             )}
           </div>
+          {videoPreview && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium">Choose the source cut</h2>
+              <p className="text-xs text-muted-foreground">
+                Scrub the original video, then mark the start and end. Marks use source time and
+                disable automatic cuts.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={sourceDuration || 1}
+                step={1 / processing.fps}
+                value={sourceTime}
+                aria-label="Source video time"
+                className="w-full accent-primary"
+                onChange={(event) => {
+                  if (!sourceVideo.current) return;
+                  sourceVideo.current.pause();
+                  sourceVideo.current.currentTime = Number(event.target.value);
+                  setSourceTime(Number(event.target.value));
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs tabular-nums">
+                  {sourceTime.toFixed(3)} / {sourceDuration.toFixed(3)} s
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    !sourceDuration || sourceTime >= (processing.endSeconds ?? sourceDuration)
+                  }
+                  onClick={() =>
+                    setProcessing((previous) => ({
+                      ...previous,
+                      startSeconds: sourceTime,
+                      loopMode: "full",
+                    }))
+                  }
+                >
+                  Mark start
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={sourceTime <= processing.startSeconds}
+                  onClick={() =>
+                    setProcessing((previous) => ({
+                      ...previous,
+                      endSeconds: sourceTime,
+                      loopMode: "full",
+                    }))
+                  }
+                >
+                  Mark end
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setProcessing((previous) => ({
+                      ...previous,
+                      startSeconds: 0,
+                      endSeconds: undefined,
+                      loopMode: "full",
+                    }))
+                  }
+                >
+                  Full clip
+                </Button>
+                <Button size="sm" disabled={!ready} onClick={() => void reprocess()}>
+                  Apply cut · free
+                </Button>
+              </div>
+            </div>
+          )}
           {sheetPreview && loopMetadata && (
-            <VideoLoopPreview sheetUrl={sheetPreview} metadata={loopMetadata} />
+            <div className="space-y-3">
+              {current &&
+                Object.keys({ ...current.processing, ...processing }).some(
+                  (key) =>
+                    current.processing[key as keyof ProcessingOptions] !==
+                    processing[key as keyof ProcessingOptions],
+                ) && (
+                  <p role="status" className="text-xs text-amber-600">
+                    Settings changed. Preview and downloads show the last applied result.
+                  </p>
+                )}
+              <VideoLoopPreview
+                key={sheetPreview}
+                sheetUrl={sheetPreview}
+                metadata={loopMetadata}
+              />
+              {loopMetadata.selection?.loopFound && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const selection = loopMetadata.selection!;
+                    setProcessing((previous) => ({
+                      ...previous,
+                      startSeconds: selection.startSeconds,
+                      endSeconds: selection.endSeconds,
+                      loopMode: "full",
+                    }));
+                  }}
+                >
+                  Use suggested cut as manual trim
+                </Button>
+              )}
+            </div>
           )}
           {sheetPreview && (
             <div className="space-y-3">

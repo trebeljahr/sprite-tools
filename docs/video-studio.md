@@ -61,3 +61,27 @@ Local clients require a running companion. Cloud/browser MCP connections require
 ## Validation
 
 Run `node --import tsx scripts/verify-video-e2e.ts` after the Web and MCP builds for an offline end-to-end receipt. Add `--preview` to inspect that fake-provider studio in a browser. Tests use fake keys and temporary state. Provider HTTP is injected. Media tests decode a generated local fixture with real FFmpeg and verify transparency, geometry, timing, and metadata normalization. A live-provider smoke test additionally needs provider login, restricted keys, and an explicit spending ceiling. Mock success does not certify live model access or actual provider billing.
+
+## Reviewing and reusing a cut
+
+The browser starts at 12 sampled frames per second. The 8/12/24 FPS presets produce
+16/24/48 samples from an untrimmed two-second clip and clear the output frame budget.
+They change extraction, not playback speed. Inspect the source motion before reducing
+the budget or merging adjacent similar frames; neither operation invents in-between poses.
+
+Scrub the saved source video and use **Mark start** / **Mark end** to prepare a manual
+trim. **Use suggested cut as manual trim** copies a detected interval into the controls
+and disables automatic loop search. Neither action processes immediately. **Apply cut**
+reprocesses the saved bytes, without a generation request. The preview and downloads
+continue to represent the last applied output while controls are dirty.
+
+The sprite preview supports frame stepping, thumbnail selection, zoom, and speed or
+loop-duration adjustment. These timing adjustments affect preview only; downloads retain
+the processor's per-frame holds. Sheet Builder has the same preview timing controls and
+uses imported Aseprite holds or the completed video import's sampling rate. Changing an
+unapplied extraction FPS control no longer changes playback.
+
+Save the processing recipe as JSON after review. Loading a recipe validates it and fills
+the controls without starting work. Its object can be supplied directly as `processing`
+to `sprite_video_reprocess` alongside the saved job's `job_id`. Recipes contain extraction
+and cleanup settings only, with no provider credentials or generation request.
