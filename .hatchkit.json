@@ -10,6 +10,10 @@
   "s3Provider": "none",
   "deployTarget": "existing",
   "deploymentMode": "coolify",
+  "coolifyRuntime": "image",
+  "containerPorts": {
+    "app": 8080
+  },
   "ports": {
     "server": 3000,
     "client": 3001
