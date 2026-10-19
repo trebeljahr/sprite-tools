@@ -50,8 +50,8 @@ async function shutdown(signal: string) {
 // SHUTDOWN_DRAIN_SECONDS, then close. A second SIGTERM stops waiting.
 process.on("SIGTERM", () => {
   if (drainSeconds > 0 && !isDraining()) {
-    startDraining();
-    console.log(`[server] SIGTERM: failing the health check for ${drainSeconds}s, then closing`);
+    startDraining(drainSeconds);
+    console.log(`[server] SIGTERM: failing the health checks for ${drainSeconds}s, then closing`);
     setTimeout(() => void shutdown("SIGTERM"), drainSeconds * 1000);
     return;
   }
