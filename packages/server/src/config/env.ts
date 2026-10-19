@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import { config } from "@dotenvx/dotenvx";
 
 /**
- * Load the committed, dotenvx-encrypted `.env.production` into process.env.
+ * Load the committed, dotenvx-encrypted `.env.production` into process.env,
+ * when it is present: a production run on a laptop (`migrate-cli` against the
+ * live database, say), with the private key from `.env.keys`.
  *
- * The image carries the encrypted file and Coolify supplies its private key
- * (DOTENV_PRIVATE_KEY_PRODUCTION) together with the plain runtime variables.
- * Values already in the environment win, as with `dotenvx run`. Loading here
- * instead of wrapping the process in `dotenvx run` keeps Node as the process
- * that receives `docker stop`'s SIGTERM, so the shutdown drain works without
- * a signal-forwarding entrypoint.
+ * The deployed image does not carry the file. Coolify's environment is the
+ * runtime source, filled by `hatchkit sync` from this file, so in the
+ * container this is a no-op. Values already in the environment win, as with
+ * `dotenvx run`.
  */
 export function loadEnvironment(file = ".env.production") {
   if (process.env.NODE_ENV !== "production" || !existsSync(file)) return;

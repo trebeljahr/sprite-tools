@@ -1,12 +1,11 @@
 # Only the accounts server is built as an image (packages/server/Dockerfile).
-# Allowlist its inputs so source, local env files and keys never enter the
-# build context. The encrypted .env.production is safe to ship; its private
-# key is not.
+# Allowlist its inputs so source, env files and keys never enter the build
+# context. Runtime config comes from Coolify's environment, filled by
+# `hatchkit sync` from the encrypted .env.production.
 *
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
-!.env.production
 !packages/server
 packages/server/node_modules
 packages/server/dist

@@ -6,11 +6,11 @@
 # Image app. The web client is a static export served by a Cloudflare Worker;
 # this image serves only /api on the same hostname.
 #
-# Runtime configuration comes from the container environment that Coolify
-# sets (POSTGRES_URL, BETTER_AUTH_*, email transport). The committed,
-# dotenvx-encrypted .env.production travels with the image and is decrypted
-# at startup with DOTENV_PRIVATE_KEY_PRODUCTION (src/config/env.ts). Values in
-# the container environment win over the file.
+# Runtime configuration comes only from the container environment that
+# Coolify sets (POSTGRES_URL, BETTER_AUTH_*, email transport). The committed,
+# dotenvx-encrypted .env.production is the at-rest store `hatchkit sync`
+# decrypts locally and pushes into that environment; it is not in the image,
+# so a rotated value can't be shadowed by a stale baked-in copy.
 ARG NODE_VERSION=24.21.0
 
 FROM node:${NODE_VERSION}-bookworm-slim AS build
@@ -49,7 +49,6 @@ ENV COMMIT_SHA=$COMMIT_SHA
 COPY --from=build /app/packages/server/package.json ./
 COPY --from=build /app/packages/server/dist ./dist
 COPY --from=build /app/packages/server/db ./db
-COPY .env.production ./
 
 # Coolify cannot set no-new-privileges on a Docker Image app, so the image
 # carries no setuid/setgid programs that could raise privileges instead.
