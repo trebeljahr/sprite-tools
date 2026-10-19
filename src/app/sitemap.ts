@@ -63,7 +63,7 @@ function routeQuality(path: string) {
     return { changeFrequency: "weekly" as const, priority: 1 };
   }
 
-  if (path === "/privacy") {
+  if (path === "/privacy" || path === "/imprint") {
     return { changeFrequency: "yearly" as const, priority: 0.3 };
   }
 
@@ -78,9 +78,13 @@ function routeQuality(path: string) {
 export const dynamic = "force-static";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
-  const staticRoutes = ["/", ...TOOL_ROUTES, ...(AI_ENABLED ? AI_ROUTES : []), "/privacy"].map(
-    (path) => ({ path, lastModified }),
-  );
+  const staticRoutes = [
+    "/",
+    ...TOOL_ROUTES,
+    ...(AI_ENABLED ? AI_ROUTES : []),
+    "/privacy",
+    "/imprint",
+  ].map((path) => ({ path, lastModified }));
   const routes = [...staticRoutes, ...(await discoverDocRoutes())];
 
   return routes.map((path) => ({
