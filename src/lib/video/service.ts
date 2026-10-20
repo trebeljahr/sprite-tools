@@ -98,6 +98,20 @@ function canonical(value: unknown): string {
 function digest(value: unknown): string {
   return createHash("sha256").update(canonical(value)).digest("hex");
 }
+function requestDigests(
+  request: ({ generation: GenerationInput } | { content: string }) & {
+    processing: ProcessingOptions;
+  },
+): string[] {
+  const hashes = [digest(request)];
+  if (request.processing.extractionMaxEdge === 512) {
+    // Earlier requests had an implicit 512px extraction limit. Match that exact original
+    // request, including every other setting, even after its saved video was reprocessed.
+    const { extractionMaxEdge: _extractionMaxEdge, ...processing } = request.processing;
+    hashes.push(digest({ ...request, processing }));
+  }
+  return hashes;
+}
 async function acquireLock(stateDir: string): Promise<() => Promise<void>> {
   const path = join(stateDir, "studio.lock");
   const nonce = randomBytes(16).toString("hex");
@@ -333,12 +347,12 @@ export class VideoService {
     const generation = validateGeneration(raw.generation);
     const processing = validateProcessing(raw.processing);
     resolveVideoTrim(generation.durationSeconds, processing);
-    const hash = digest({ generation, processing });
+    const hashes = requestDigests({ generation, processing });
     const result = await this.exclusive(async () => {
       this.requireUnlocked();
       const existing = this.state.jobs.find((job) => job.requestId === idempotency);
       if (existing) {
-        if (existing.digest !== hash)
+        if (!hashes.includes(existing.digest))
           throw new Error("This requestId was already used with different settings.");
         return this.publicJob(existing);
       }
@@ -355,7 +369,7 @@ export class VideoService {
       const job: StoredJob = {
         id: randomUUID(),
         requestId: idempotency,
-        digest: hash,
+        digest: hashes[0],
         status: "queued",
         reservedUsd,
         outputRevision: 0,
@@ -394,11 +408,14 @@ export class VideoService {
     const mp4 = bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp";
     if (!mp4) throw new Error("Import a valid MP4 video.");
     const processing = validateProcessing(raw.processing);
-    const hash = digest({ content: createHash("sha256").update(bytes).digest("hex"), processing });
+    const hashes = requestDigests({
+      content: createHash("sha256").update(bytes).digest("hex"),
+      processing,
+    });
     const result = await this.exclusive(async () => {
       const existing = this.state.jobs.find((job) => job.requestId === idempotency);
       if (existing) {
-        if (existing.digest !== hash)
+        if (!hashes.includes(existing.digest))
           throw new Error("This requestId was already used with different settings.");
         return this.publicJob(existing);
       }
@@ -406,7 +423,7 @@ export class VideoService {
       const job: StoredJob = {
         id: randomUUID(),
         requestId: idempotency,
-        digest: hash,
+        digest: hashes[0],
         status: "processing",
         reservedUsd: 0,
         outputRevision: 0,

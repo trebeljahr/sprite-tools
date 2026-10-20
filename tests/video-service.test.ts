@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,7 @@ import {
   type VideoService,
   type VideoServiceOptions,
 } from "../src/lib/video/service";
-import type { GenerationInput } from "../src/lib/video/schema";
+import type { GenerationInput, ProcessingInput } from "../src/lib/video/schema";
 const generation: GenerationInput = {
   provider: "google",
   model: "veo-3.1-fast-generate-preview",
@@ -165,6 +165,70 @@ describe("durable local video service", () => {
     await done(service, trimmed.id);
     expect(network.mock.calls.filter(([, request]) => request?.method === "POST")).toHaveLength(1);
   });
+  it.each(["generation", "import"] as const)(
+    "recognizes an identical persisted legacy %s request without changing its reservation",
+    async (kind) => {
+      const network = transport();
+      const { service, dir } = await fixture({ transport: network });
+      await configure(service);
+      const requestId = randomUUID();
+      const retry = (
+        target: VideoService,
+        processing: ProcessingInput = { frameWidth: 128 },
+        differentContent = false,
+      ) =>
+        kind === "generation"
+          ? target.createJob({
+              requestId,
+              generation: differentContent
+                ? { ...generation, prompt: "A different prompt." }
+                : generation,
+              processing,
+            })
+          : target.importVideo({
+              requestId,
+              fileName: "test.mp4",
+              videoBase64: (differentContent
+                ? Buffer.concat([mp4, Buffer.from([1])])
+                : mp4
+              ).toString("base64"),
+              processing,
+            });
+      const job = await retry(service);
+      await done(service, job.id);
+      await service.close();
+      const statePath = join(dir, "state.json");
+      const state = JSON.parse(await readFile(statePath, "utf8"));
+      delete state.jobs[0].processing.extractionMaxEdge;
+      // Version-1 digests sorted each object's keys. These fixture settings are flat.
+      const sorted = (value: Record<string, unknown>) =>
+        Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
+      const payload = {
+        ...(kind === "generation"
+          ? { generation: sorted(state.jobs[0].generation) }
+          : { content: createHash("sha256").update(mp4).digest("hex") }),
+        processing: sorted(state.jobs[0].processing),
+      };
+      state.jobs[0].digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+      await writeFile(statePath, JSON.stringify(state), { mode: 0o600 });
+      network.mockClear();
+      const { service: restarted } = await fixture({ stateDir: dir, transport: network });
+      await restarted.unlock(passphrase);
+      expect((await retry(restarted)).id).toBe(job.id);
+      expect((await retry(restarted, { frameWidth: 128, extractionMaxEdge: 512 })).id).toBe(job.id);
+      await expect(retry(restarted, { frameWidth: 128, extractionMaxEdge: 1280 })).rejects.toThrow(
+        "different settings",
+      );
+      await expect(retry(restarted, { frameWidth: 256 })).rejects.toThrow("different settings");
+      await expect(retry(restarted, undefined, true)).rejects.toThrow("different settings");
+      await restarted.retryProcessing(job.id, { frameWidth: 256, extractionMaxEdge: 1280 });
+      await done(restarted, job.id);
+      expect((await retry(restarted)).id).toBe(job.id);
+      expect((await restarted.status()).jobs).toHaveLength(1);
+      expect((await restarted.status()).budget.committedUsd).toBe(job.reservedUsd);
+      expect(network).not.toHaveBeenCalled();
+    },
+  );
   it("keeps uncertain submission reservations and requires deliberate resolution", async () => {
     const network = vi
       .fn<typeof fetch>()

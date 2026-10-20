@@ -4,6 +4,45 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { validateProcessing, type ProcessingOptions } from "@/lib/video/schema";
 
+export function VideoExtractionControls({
+  value,
+  onChange,
+}: {
+  value: ProcessingOptions;
+  onChange: (value: ProcessingOptions) => void;
+}) {
+  return (
+    <div className="mt-4 space-y-2">
+      <label htmlFor="video-extraction-detail" className="text-xs">
+        Extraction detail
+      </label>
+      <select
+        id="video-extraction-detail"
+        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        value={value.extractionMaxEdge}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            extractionMaxEdge: Number(event.target.value) as ProcessingOptions["extractionMaxEdge"],
+          })
+        }
+      >
+        <option value={512}>512 px longest edge · default</option>
+        <option value={1280}>1280 px longest edge · 720p landscape</option>
+        <option value={1920}>1920 px longest edge · 1080p landscape</option>
+      </select>
+      <p className="text-xs text-muted-foreground">
+        Keep more source detail before cutting the selected frames. This does not change video
+        generation resolution or cost. Frame width below sets the final sprite size.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Existing recipes use 512 px. Higher detail may need a smaller frame budget; sheets are
+        limited to 16 megapixels.
+      </p>
+    </div>
+  );
+}
+
 export function VideoProcessingRecipe({
   value,
   onChange,

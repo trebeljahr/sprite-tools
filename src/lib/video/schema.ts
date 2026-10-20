@@ -140,7 +140,8 @@ export const processingOptionsSchema = z
     loopMaxSeconds: z.number().min(0.1).max(30).default(2),
     maxFrames: z.number().int().min(2).max(120).optional(),
     dedupeThreshold: z.number().min(0).max(8).optional(),
-    frameWidth: z.number().int().min(16).max(512).default(128),
+    extractionMaxEdge: z.union([z.literal(512), z.literal(1280), z.literal(1920)]).default(512),
+    frameWidth: z.number().int().min(16).max(1920).default(128),
     backgroundColor: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)

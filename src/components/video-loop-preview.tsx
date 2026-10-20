@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 const metadataSchema = z
   .object({
     frameCount: z.number().int().min(1).max(120),
-    frameWidth: z.number().int().min(1).max(1024),
-    frameHeight: z.number().int().min(1).max(1024),
+    frameWidth: z.number().int().min(1).max(1920),
+    frameHeight: z.number().int().min(1).max(1920),
     grid: z.object({
       cols: z.number().int().min(1).max(32),
       rows: z.number().int().min(1).max(120),

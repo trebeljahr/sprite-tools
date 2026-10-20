@@ -2,7 +2,7 @@ import "../../../cli/lib/imagedata-shim";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile, chmod } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { loadPng, savePng, stitchSheet } from "../../../cli/lib/image-io";
+import { loadPng, savePng, readPngSize } from "../../../cli/lib/image-io";
 import { applyChromaKeyToImageData, hexToRgb } from "../pipeline/chroma-core";
 import { computeTrimRect } from "../atlas/pack";
 import { generateOutline } from "../collision/outline";
@@ -19,6 +19,10 @@ export type { ProcessingOptions } from "./schema";
 export { VideoProcessingError } from "./loop";
 const MAX_FRAMES = 120;
 const MAX_SHEET_PIXELS = 16_777_216;
+const ANALYSIS_MAX_EDGE = 512;
+const MAX_EXTRACTION_EDGE = 1920;
+const MAX_SELECTED_PIXELS = 33_554_432;
+const MAX_SCRATCH_BYTES = 160 * 1024 * 1024;
 
 /** Never invokes a shell. Restrict formats/protocols at both probe and decode. */
 async function runMedia(binary: string, args: string[], maxBytes = 64 * 1024): Promise<string> {
@@ -62,58 +66,106 @@ async function runMedia(binary: string, args: string[], maxBytes = 64 * 1024): P
   });
 }
 
-/** Pure image stage, also used by deterministic pipeline contract tests. */
-export function buildVideoSheet(
-  input: ImageData[],
+type FrameSelection = Pick<
+  ReturnType<typeof selectVideoFrames>,
+  "frameDurations" | "sourceFrameIndices" | "sourceFrameTimesSeconds" | "selection"
+>;
+interface Dimensions {
+  width: number;
+  height: number;
+}
+function keyFrame(image: ImageData, options: ProcessingOptions): ImageData {
+  applyChromaKeyToImageData(image, hexToRgb(options.backgroundColor), {
+    mode: "chroma-transparent",
+    similarity: options.tolerance,
+    softness: options.softness,
+    spill: options.spill,
+    choke: options.choke,
+  });
+  return image;
+}
+function timingOf(selected: ReturnType<typeof selectVideoFrames>): FrameSelection {
+  return {
+    frameDurations: selected.frameDurations,
+    sourceFrameIndices: selected.sourceFrameIndices,
+    sourceFrameTimesSeconds: selected.sourceFrameTimesSeconds,
+    selection: selected.selection,
+  };
+}
+
+/**
+ * Reads one selected, keyed frame at a time: first for the shared crop, then for the sheet.
+ * Timing is supplied by the analysis pass and never resampled at the extraction resolution.
+ */
+export function buildSelectedVideoSheet(
+  readFrame: (index: number) => ImageData,
+  selected: FrameSelection,
+  dimensions: Dimensions,
   rawOptions: Partial<ProcessingOptions> = {},
-  decodedInterval?: VideoInterval,
+  analysisDimensions: Dimensions = dimensions,
 ) {
   const options = validateVideoProcessing(rawOptions);
-  if (!input.length || input.length > MAX_FRAMES)
-    throw new VideoProcessingError("Video must contain 1–120 sampled frames.");
-  const width = input[0].width;
-  const height = input[0].height;
+  const { width, height } = dimensions;
+  const count = selected.sourceFrameIndices.length;
   if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
     width < 1 ||
     height < 1 ||
-    width * height > 512 * 512 ||
-    input.some((f) => f.width !== width || f.height !== height)
-  ) {
-    throw new VideoProcessingError("Decoded video frames exceed the allowed dimensions.");
+    width > MAX_EXTRACTION_EDGE ||
+    height > MAX_EXTRACTION_EDGE ||
+    count < 1 ||
+    count > MAX_FRAMES ||
+    selected.frameDurations.length !== count ||
+    selected.sourceFrameTimesSeconds.length !== count
+  )
+    throw new VideoProcessingError("Selected video frames exceed the allowed dimensions or count.");
+  const read = (index: number) => {
+    const frame = readFrame(index);
+    if (frame.width !== width || frame.height !== height)
+      throw new VideoProcessingError("Decoded video frames have inconsistent dimensions.");
+    return frame;
+  };
+  let left = width,
+    top = height,
+    right = 0,
+    bottom = 0;
+  for (let index = 0; index < count; index++) {
+    const bounds = computeTrimRect(read(index));
+    if (!bounds) continue;
+    left = Math.min(left, bounds.x);
+    top = Math.min(top, bounds.y);
+    right = Math.max(right, bounds.x + bounds.w);
+    bottom = Math.max(bottom, bounds.y + bounds.h);
   }
-  const allKeyed = input.map((frame) => {
-    const image = new ImageData(new Uint8ClampedArray(frame.data), width, height);
-    applyChromaKeyToImageData(image, hexToRgb(options.backgroundColor), {
-      mode: "chroma-transparent",
-      similarity: options.tolerance,
-      softness: options.softness,
-      spill: options.spill,
-      choke: options.choke,
-    });
-    return image;
-  });
-  const selected = selectVideoFrames(allKeyed, options, decodedInterval);
-  const keyed = selected.frames;
-  const bounds = keyed.map(computeTrimRect).filter((b) => b !== null);
-  if (!bounds.length)
+  if (right <= left || bottom <= top)
     throw new VideoProcessingError(
       "Background removal left no visible pixels. Change the background color or tolerance.",
     );
-  const x = Math.max(0, Math.min(...bounds.map((b) => b.x)) - options.padding);
-  const y = Math.max(0, Math.min(...bounds.map((b) => b.y)) - options.padding);
-  const right = Math.min(width, Math.max(...bounds.map((b) => b.x + b.w)) + options.padding);
-  const bottom = Math.min(height, Math.max(...bounds.map((b) => b.y + b.h)) + options.padding);
+  const x = Math.max(0, left - options.padding);
+  const y = Math.max(0, top - options.padding);
+  right = Math.min(width, right + options.padding);
+  bottom = Math.min(height, bottom + options.padding);
   const crop = { x, y, width: right - x, height: bottom - y };
   const frameWidth = options.frameWidth;
   const frameHeight = Math.max(1, Math.round((crop.height / crop.width) * frameWidth));
-  const cols = Math.min(options.columns, keyed.length);
-  const rows = Math.ceil(keyed.length / cols);
-  if (frameHeight > 1024 || frameWidth * frameHeight * cols * rows > MAX_SHEET_PIXELS) {
+  const cols = Math.min(options.columns, count);
+  const rows = Math.ceil(count / cols);
+  if (
+    frameHeight > MAX_EXTRACTION_EDGE ||
+    frameWidth * frameHeight * cols * rows > MAX_SHEET_PIXELS
+  )
     throw new VideoProcessingError(
-      "Output sheet exceeds the pixel limit. Reduce frame width or sampling rate.",
+      "Output sheet exceeds the pixel limit. Reduce frame width or the frame budget.",
     );
-  }
-  const frames = keyed.map((frame) => {
+  // Check the complete grid, including blank tail cells, before allocating it.
+  const sheet = new ImageData(frameWidth * cols, frameHeight * rows);
+  const cell = (index: number) => ({ row: Math.floor(index / cols), col: index % cols });
+  const pivots = [];
+  const hitboxes = [];
+  const collision = [];
+  for (let index = 0; index < count; index++) {
+    const frame = read(index);
     const image = new ImageData(frameWidth, frameHeight);
     for (let py = 0; py < frameHeight; py++) {
       const sy = y + Math.min(crop.height - 1, Math.floor((py * crop.height) / frameHeight));
@@ -122,65 +174,164 @@ export function buildVideoSheet(
         const from = (sy * width + sx) * 4;
         image.data.set(frame.data.subarray(from, from + 4), (py * frameWidth + px) * 4);
       }
+      const destination =
+        ((Math.floor(index / cols) * frameHeight + py) * sheet.width +
+          (index % cols) * frameWidth) *
+        4;
+      sheet.data.set(
+        image.data.subarray(py * frameWidth * 4, (py + 1) * frameWidth * 4),
+        destination,
+      );
     }
-    return image;
-  });
-  const sheet = stitchSheet(frames, cols, rows);
-  const cell = (index: number) => ({ row: Math.floor(index / cols), col: index % cols });
+    pivots.push({
+      index,
+      cell: cell(index),
+      pivot: { x: Math.round((frameWidth - 1) / 2), y: frameHeight - 1 },
+    });
+    const rect = computeTrimRect(image);
+    hitboxes.push({
+      index,
+      cell: cell(index),
+      type: "aabb",
+      bounds: rect ? { x: rect.x, y: rect.y, width: rect.w, height: rect.h } : null,
+    });
+    const outline = generateOutline(image, {
+      alphaThreshold: 32,
+      simplifyTolerance: 1,
+      convexHull: false,
+    });
+    collision.push({
+      index,
+      cell: cell(index),
+      bounds: outline.bounds,
+      pointCount: outline.polygon.length,
+      polygon: outline.polygon.map((p) => [p.x, p.y]),
+    });
+  }
   const metadata = {
     source: "sheet.png",
     sourceWidth: sheet.width,
     sourceHeight: sheet.height,
     frameWidth,
     frameHeight,
-    frameCount: frames.length,
+    frameCount: count,
     grid: { cols, rows },
     frameDurations: selected.frameDurations,
     sourceFrameIndices: selected.sourceFrameIndices,
     sourceFrameTimesSeconds: selected.sourceFrameTimesSeconds,
     selection: selected.selection,
-    tags: [
-      {
-        name: options.name,
-        from: 0,
-        to: frames.length - 1,
-        fps: options.fps,
-        direction: "forward",
-      },
-    ],
-    pivots: frames.map((_, index) => ({
-      index,
-      cell: cell(index),
-      pivot: { x: Math.round((frameWidth - 1) / 2), y: frameHeight - 1 },
-    })),
-    hitboxes: frames.map((frame, index) => {
-      const rect = computeTrimRect(frame);
-      return {
-        index,
-        cell: cell(index),
-        type: "aabb",
-        bounds: rect ? { x: rect.x, y: rect.y, width: rect.w, height: rect.h } : null,
-      };
-    }),
-    collision: frames.map((frame, index) => {
-      const outline = generateOutline(frame, {
-        alphaThreshold: 32,
-        simplifyTolerance: 1,
-        convexHull: false,
-      });
-      return {
-        index,
-        cell: cell(index),
-        bounds: outline.bounds,
-        pointCount: outline.polygon.length,
-        polygon: outline.polygon.map((p) => [p.x, p.y]),
-      };
-    }),
-    processing: { ...options, crop, decodedWidth: width, decodedHeight: height },
+    tags: [{ name: options.name, from: 0, to: count - 1, fps: options.fps, direction: "forward" }],
+    pivots,
+    hitboxes,
+    collision,
+    processing: {
+      ...options,
+      crop,
+      decodedWidth: width,
+      decodedHeight: height,
+      analysisWidth: analysisDimensions.width,
+      analysisHeight: analysisDimensions.height,
+    },
     collisionNote:
       "Collision polygons trace the first connected region; detached regions and holes are not traced. Hitbox AABBs enclose all nontransparent pixels, including detached regions. Both use frame-local coordinates; review for gameplay.",
   };
   return { sheet, metadata };
+}
+
+/** Pure analysis and image stage for existing callers and deterministic contract tests. */
+export function buildVideoSheet(
+  input: ImageData[],
+  rawOptions: Partial<ProcessingOptions> = {},
+  decodedInterval?: VideoInterval,
+) {
+  const options = validateVideoProcessing(rawOptions);
+  if (!input.length || input.length > MAX_FRAMES)
+    throw new VideoProcessingError("Video must contain 1–120 sampled frames.");
+  const { width, height } = input[0];
+  if (
+    width < 1 ||
+    height < 1 ||
+    width * height > ANALYSIS_MAX_EDGE ** 2 ||
+    input.some((f) => f.width !== width || f.height !== height)
+  )
+    throw new VideoProcessingError("Decoded video frames exceed the allowed dimensions.");
+  const keyed = input.map((frame) =>
+    keyFrame(new ImageData(new Uint8ClampedArray(frame.data), width, height), options),
+  );
+  const selected = selectVideoFrames(keyed, options, decodedInterval);
+  return buildSelectedVideoSheet(
+    (index) => selected.frames[index],
+    timingOf(selected),
+    { width, height },
+    options,
+  );
+}
+function scaledDimensions(width: number, height: number, maxEdge: number): Dimensions {
+  const scale = Math.min(1, maxEdge / width, maxEdge / height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+/** Check worst-case selected PNG storage before asking ffmpeg to create it. */
+export function assertSelectedExtractionBounds(count: number, dimensions: Dimensions): void {
+  const { width, height } = dimensions;
+  const pixels = count * width * height;
+  if (
+    !Number.isInteger(count) ||
+    count < 1 ||
+    count > MAX_FRAMES ||
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > MAX_EXTRACTION_EDGE ||
+    height > MAX_EXTRACTION_EDGE ||
+    pixels > MAX_SELECTED_PIXELS ||
+    pixels * 4 + count * 65_536 > MAX_SCRATCH_BYTES
+  )
+    throw new VideoProcessingError(
+      "Selected video frames exceed the extraction limit. Reduce the frame budget or extraction detail.",
+    );
+}
+async function framePaths(
+  directory: string,
+  dimensions: Dimensions,
+  expectedCount?: number,
+): Promise<string[]> {
+  const names = (await readdir(directory)).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
+  if (
+    !names.length ||
+    names.length > MAX_FRAMES ||
+    (expectedCount !== undefined && names.length !== expectedCount)
+  )
+    throw new VideoProcessingError("Video decoder did not return the selected source frames.");
+  let bytes = 0;
+  for (const name of names) {
+    const path = join(directory, name);
+    const info = await stat(path);
+    bytes += info.size;
+    if (
+      !info.isFile() ||
+      info.size > dimensions.width * dimensions.height * 4 + 65_536 ||
+      bytes > MAX_SCRATCH_BYTES
+    )
+      throw new VideoProcessingError(
+        "Selected video frames exceed the local scratch limit. Reduce the frame budget or extraction detail.",
+      );
+    const actual = readPngSize(path);
+    if (actual?.width !== dimensions.width || actual?.height !== dimensions.height)
+      throw new VideoProcessingError("Decoded video frames have inconsistent dimensions.");
+  }
+  return names.map((name) => join(directory, name));
+}
+function analyzeFrames(
+  paths: string[],
+  options: ProcessingOptions,
+  trim: VideoInterval,
+): FrameSelection {
+  const keyed = paths.map((path) => keyFrame(loadPng(path), options));
+  return timingOf(selectVideoFrames(keyed, options, trim));
 }
 
 export async function processVideo({
@@ -241,43 +392,66 @@ export async function processVideo({
   await mkdir(outputDir, { recursive: true, mode: 0o700 });
   const scratch = await mkdtemp(join(outputDir, ".frames-"));
   try {
-    const dw = Math.max(1, Math.round(width * Math.min(1, 512 / width, 512 / height)));
-    const dh = Math.max(1, Math.round(height * Math.min(1, 512 / width, 512 / height)));
-    await runMedia("ffmpeg", [
-      "-nostdin",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-threads",
-      "1",
-      "-protocol_whitelist",
-      "file",
-      "-format_whitelist",
-      "mov,matroska,webm",
-      "-ss",
-      String(trim.startSeconds),
-      "-i",
-      input,
-      "-map",
-      "0:v:0",
-      "-an",
-      "-sn",
-      "-dn",
-      "-t",
-      String(trim.endSeconds - trim.startSeconds),
-      "-vf",
-      `setpts=PTS-STARTPTS,fps=${options.fps}:round=up,scale=${dw}:${dh}:flags=lanczos`,
-      "-frames:v",
-      String(MAX_FRAMES),
-      "-threads",
-      "1",
-      join(scratch, "frame-%04d.png"),
-    ]);
-    const names = (await readdir(scratch)).filter((name) => /^frame-\d{4}\.png$/.test(name)).sort();
-    const { sheet, metadata } = buildVideoSheet(
-      names.map((name) => loadPng(join(scratch, name))),
+    const analysis = scaledDimensions(width, height, ANALYSIS_MAX_EDGE);
+    const extraction = scaledDimensions(width, height, options.extractionMaxEdge);
+    const decode = (directory: string, dimensions: Dimensions, indices?: number[]) => {
+      const select = indices
+        ? `,select=${indices.map((index) => `eq(n\\,${index})`).join("+")}`
+        : "";
+      return runMedia("ffmpeg", [
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-threads",
+        "1",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        "mov,matroska,webm",
+        "-ss",
+        String(trim.startSeconds),
+        "-i",
+        input,
+        "-map",
+        "0:v:0",
+        "-an",
+        "-sn",
+        "-dn",
+        "-t",
+        String(trim.endSeconds - trim.startSeconds),
+        "-vf",
+        `setpts=PTS-STARTPTS,fps=${options.fps}:round=up${select},scale=${dimensions.width}:${dimensions.height}:flags=lanczos`,
+        "-fps_mode",
+        "passthrough",
+        "-frames:v",
+        String(indices?.length ?? MAX_FRAMES),
+        "-threads",
+        "1",
+        join(directory, "frame-%04d.png"),
+      ]);
+    };
+    const analysisDirectory = join(scratch, "analysis");
+    await mkdir(analysisDirectory, { mode: 0o700 });
+    await decode(analysisDirectory, analysis);
+    const proxies = await framePaths(analysisDirectory, analysis);
+    const selected = analyzeFrames(proxies, options, trim);
+    let selectedPaths = selected.sourceFrameIndices.map((index) => proxies[index]);
+    if (extraction.width !== analysis.width || extraction.height !== analysis.height) {
+      assertSelectedExtractionBounds(selectedPaths.length, extraction);
+      // Analysis pixels are no longer needed. Keep only one bounded PNG set on disk.
+      await rm(analysisDirectory, { recursive: true, force: true });
+      const selectedDirectory = join(scratch, "selected");
+      await mkdir(selectedDirectory, { mode: 0o700 });
+      await decode(selectedDirectory, extraction, selected.sourceFrameIndices);
+      selectedPaths = await framePaths(selectedDirectory, extraction, selectedPaths.length);
+    }
+    const { sheet, metadata } = buildSelectedVideoSheet(
+      (index) => keyFrame(loadPng(selectedPaths[index]), options),
+      selected,
+      extraction,
       options,
-      trim,
+      analysis,
     );
     const sheetPath = join(outputDir, "sheet.png");
     const metadataPath = join(outputDir, "metadata.json");

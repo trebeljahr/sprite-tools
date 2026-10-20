@@ -36,7 +36,10 @@ import {
   type ProviderId,
   type VideoResolution,
 } from "@/lib/video/schema";
-import { VideoProcessingRecipe } from "@/components/video-processing-recipe";
+import {
+  VideoExtractionControls,
+  VideoProcessingRecipe,
+} from "@/components/video-processing-recipe";
 import { resolveVideoTrim } from "@/lib/video/loop";
 import {
   closeUncertainStudioJob,
@@ -873,11 +876,12 @@ export default function AnimatePage() {
           </section>
           <details className="border-y py-4" open>
             <summary className="cursor-pointer text-sm font-medium">Sprite output</summary>
+            <VideoExtractionControls value={processing} onChange={setProcessing} />
             <div className="mt-4 grid grid-cols-3 gap-3">
               {(
                 [
                   ["fps", "Sample FPS", 1, 24],
-                  ["frameWidth", "Frame width", 16, 512],
+                  ["frameWidth", "Frame width", 16, 1920],
                   ["columns", "Columns", 1, 32],
                   ["tolerance", "Key tolerance", 0, 255],
                   ["padding", "Crop padding", 0, 32],
