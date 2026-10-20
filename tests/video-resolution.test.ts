@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import * as imageIo from "../cli/lib/image-io";
 import { loadPng, savePng } from "../cli/lib/image-io";
 import {
   assertSelectedExtractionBounds,
@@ -202,5 +204,61 @@ describe("two-pass local video extraction", () => {
       }),
     ).rejects.toThrow(/Output sheet exceeds/);
     expect(await readdir(outputDir)).toEqual([]);
+  }, 30_000);
+
+  it("keeps both scratch passes at eight bits for a sixteen-bit source", async () => {
+    const highBitPath = join(directory, "high-bit.mkv");
+    const encoded = spawnSync(
+      "ffmpeg",
+      [
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-threads",
+        "1",
+        "-i",
+        join(directory, "input-00.png"),
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "yuv444p16le",
+        "-frames:v",
+        "1",
+        "-r",
+        "1",
+        "-threads",
+        "1",
+        highBitPath,
+      ],
+      { timeout: 20_000, maxBuffer: 64 * 1024, shell: false },
+    );
+    if (encoded.error) throw encoded.error;
+    expect(encoded.status, encoded.stderr.toString()).toBe(0);
+    const format = spawnSync(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "stream=pix_fmt", "-of", "csv=p=0", highBitPath],
+      { timeout: 5000, maxBuffer: 1024, shell: false },
+    );
+    expect(format.status).toBe(0);
+    expect(format.stdout.toString().trim()).toBe("yuv444p16le");
+    const depths: number[] = [];
+    const originalLoad = imageIo.loadPng;
+    const load = vi.spyOn(imageIo, "loadPng").mockImplementation((path) => {
+      // PNG IHDR bit depth is observable before scratch is cleaned on completion.
+      depths.push(readFileSync(path)[24]);
+      return originalLoad(path);
+    });
+    try {
+      await processVideo({
+        videoPath: highBitPath,
+        outputDir: join(directory, "high-bit-output"),
+        options: { fps: 1, extractionMaxEdge: 1280, frameWidth: 16 },
+      });
+    } finally {
+      load.mockRestore();
+    }
+    expect(depths.length).toBeGreaterThanOrEqual(3);
+    expect(depths.every((depth) => depth === 8)).toBe(true);
   }, 30_000);
 });

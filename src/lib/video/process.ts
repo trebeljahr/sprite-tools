@@ -424,6 +424,9 @@ export async function processVideo({
         `setpts=PTS-STARTPTS,fps=${options.fps}:round=up${select},scale=${dimensions.width}:${dimensions.height}:flags=lanczos`,
         "-fps_mode",
         "passthrough",
+        // The scratch budget assumes four bytes per pixel, including high-bit-depth inputs.
+        "-pix_fmt",
+        "rgba",
         "-frames:v",
         String(indices?.length ?? MAX_FRAMES),
         "-threads",
