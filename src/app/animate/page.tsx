@@ -304,7 +304,8 @@ export default function AnimatePage() {
   const activeJob = status?.jobs.some((job) =>
     ["queued", "generating", "processing", "uncertain"].includes(job.status),
   );
-  const ready = local && !!status && !status.locked && !busy;
+  const localReady = local && !!status && !busy;
+  const ready = localReady && !status?.locked;
 
   const chooseModel = (id: string) => {
     const next = getVideoModel(id);
@@ -847,7 +848,7 @@ export default function AnimatePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!ready}
+                  disabled={!localReady}
                   onClick={() => void reprocess()}
                 >
                   <RefreshCw className="mr-2 h-3 w-3" />
@@ -856,7 +857,7 @@ export default function AnimatePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!ready}
+                  disabled={!localReady}
                   onClick={() => {
                     const options = { ...processing, loopMode: "auto" as const };
                     setProcessing(options);
@@ -1016,19 +1017,19 @@ export default function AnimatePage() {
               </p>
             )}
             <label
-              className={`flex cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted ${!ready || activeJob ? "pointer-events-none opacity-50" : ""}`}
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted ${!localReady || activeJob ? "pointer-events-none opacity-50" : ""}`}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
                 const file = event.dataTransfer.files[0];
-                if (file && ready && !activeJob) void importVideo(file);
+                if (file && localReady && !activeJob) void importVideo(file);
               }}
             >
               <input
                 aria-label="Import existing video"
                 type="file"
                 accept="video/mp4,.mp4"
-                disabled={!ready || !!activeJob}
+                disabled={!localReady || !!activeJob}
                 className="sr-only"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -1143,7 +1144,7 @@ export default function AnimatePage() {
                 >
                   Full clip
                 </Button>
-                <Button size="sm" disabled={!ready} onClick={() => void reprocess()}>
+                <Button size="sm" disabled={!localReady} onClick={() => void reprocess()}>
                   Apply cut · free
                 </Button>
               </div>
