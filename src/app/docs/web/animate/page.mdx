@@ -46,6 +46,14 @@ Download the sheet and metadata together. Keep the original video to try differe
 
 Google reference images use a separate mode from start/end frames. The form validates model restrictions before submission. Model availability still depends on your provider account.
 
+Google lists the Veo 3.1 previews for shutdown on **22 October 2026**. See its [deprecation notice](https://ai.google.dev/gemini-api/docs/deprecations).
+
+The experimental Gemini Omni adapter supports three seconds at 720p, with optional start/end images.
+It starts disabled. The companion flag `--enable-google-omni` enables it after you review its limits.
+Each request needs a successful input-token count and reserves an estimated $0.50.
+That estimate is not a verified provider billing cap. Google stores the background request and response.
+The adapter never switches from Veo to Omni automatically.
+
 ## Choose the loop before exporting
 
 Use the trim start and end times to keep the useful action. Ask for an automatic loop suggestion, then inspect the animated sprite preview and step across its boundary.

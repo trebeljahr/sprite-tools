@@ -44,6 +44,27 @@ Saved-video imports and reprocessing work while the vault is locked. Paid genera
 
 ## Provider setup
 
+The experimental Gemini Omni adapter targets `gemini-omni-1.1-flash` through the Interactions API.
+It is off by default. `--enable-google-omni` enables its initial three-second, 720p mode.
+Veo remains available with a linked 22 October 2026 deprecation notice; selecting Google does not silently switch models.
+
+Omni counts the final ordered images and text with the same model before reserving a job.
+Counts over 10,000 or failed checks stop submission. Requests always set `max_output_tokens` to
+27,000, use the standard tier, and create a fresh background interaction with `store: true`.
+They send no tools or conversation history. First/last images use the documented image-to-video
+task; reference-image editing and extension controls are not exposed.
+
+The $0.50 reservation is a conservative local estimate, not a verified hard provider billing cap.
+The candidate bound is $0.4875 only if the output-token limit covers all billed output.
+The adapter does not claim that Omni billing interpretation has been verified.
+Google stores the background request and response; no exact retention period is promised.
+
+An interaction identifier is stored before polling. Recovery retrieves that interaction without
+submitting another generation. Inline MP4 output and Google Files output are size-bounded.
+Authenticated Omni downloads accept only the documented Google Files host/path and never follow redirects.
+Model metadata lookup remains available without enabling paid Omni requests; metadata success
+does not prove video-generation entitlement or billing limits.
+
 Use a dedicated provider key with the narrowest supported video model and endpoint access. Enter it directly in the local setup screen.
 
 Google's AI Studio project spend cap can take time to enforce. Do not describe it as an instantaneous hard limit. xAI's billing settings apply to a team; a postpaid limit does not cap existing prepaid credits. Inspect the selected project/team before changing any account-wide setting. Preserve the owner's chosen automatic reload settings unless they authorize a change.
@@ -51,6 +72,8 @@ Google's AI Studio project spend cap can take time to enforce. Do not describe i
 Official references, checked 2026-10-18:
 
 - [Google Veo controls](https://ai.google.dev/gemini-api/docs/veo)
+- [Google Omni controls](https://ai.google.dev/gemini-api/docs/omni) and [Interactions API](https://ai.google.dev/api/interactions-api) (adapter contract checked 2026-10-20)
+- [Google token counting](https://ai.google.dev/api/tokens)
 - [Google pricing](https://ai.google.dev/gemini-api/docs/pricing)
 - [Google billing caps](https://ai.google.dev/gemini-api/docs/billing)
 - [Google key restrictions](https://ai.google.dev/gemini-api/docs/api-key)

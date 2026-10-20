@@ -124,7 +124,7 @@ export function registerVideoTools(server: McpServer) {
         openWorldHint: false,
       },
       description:
-        "List supported Google/xAI video models, controls, price estimates and local Studio budget/status. Configure provider keys only in the local setup page; never pass keys through MCP.",
+        "List Google/xAI video models, controls, reservation estimates and local Studio budget/status. Experimental Omni is disabled unless status.googleOmniEnabled is true; its $0.50 reservation is not a verified provider billing cap. Configure provider keys only in local setup; never pass keys through MCP.",
       inputSchema: {},
     },
     () =>

@@ -24,6 +24,8 @@ import {
 import { useSharedProjectSource } from "@/lib/project/store";
 import {
   MAX_VIDEO_BYTES,
+  GOOGLE_OMNI_MODEL,
+  GOOGLE_OMNI_GATE_MESSAGE,
   VIDEO_MODELS,
   VIDEO_PROVIDERS,
   VIDEO_PRICING_DATE,
@@ -213,6 +215,7 @@ export default function AnimatePage() {
   const pendingRequest = useRef<{ signature: string; id: string } | null>(null);
   const { setSharedSource } = useSharedProjectSource();
   const model = getVideoModel(modelId);
+  const omniGated = modelId === GOOGLE_OMNI_MODEL && !status?.googleOmniEnabled;
   const current = status?.jobs.find((job) => job.id === jobId) ?? null;
   const configured = status?.providers.find((item) => item.id === provider)?.configured;
   const refresh = useCallback(async () => {
@@ -311,7 +314,7 @@ export default function AnimatePage() {
     const next = getVideoModel(id);
     setModelId(id);
     setProvider(next.provider);
-    setDuration(next.provider === "xai" ? 2 : 4);
+    setDuration(next.durations?.[0] ?? (next.provider === "xai" ? 2 : next.minDuration));
     setResolution(next.resolutions.includes("720p") ? "720p" : next.resolutions[0]);
     setAspectRatio(next.aspectRatios.includes("16:9") ? "16:9" : next.aspectRatios[0]);
     if (!next.supportsLastFrame) setLastFrame([]);
@@ -507,6 +510,22 @@ export default function AnimatePage() {
                   </option>
                 ))}
               </select>
+              {model.deprecationDate && (
+                <p className="text-xs text-muted-foreground">
+                  Google lists this Veo preview for shutdown on {model.deprecationDate}.{" "}
+                  <a
+                    href={model.deprecationUrl}
+                    className="underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Provider deprecation notice
+                  </a>
+                </p>
+              )}
+              {omniGated && (
+                <p className="text-xs text-muted-foreground">{GOOGLE_OMNI_GATE_MESSAGE}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="video-model">Model</Label>
@@ -983,6 +1002,9 @@ export default function AnimatePage() {
               List prices checked {VIDEO_PRICING_DATE}. Provider billing can differ. Local budget
               stays reserved after uncertain requests.
             </p>
+            {model.billingNote && (
+              <p className="text-xs text-muted-foreground">{model.billingNote}</p>
+            )}
             {validation && <p className="text-xs text-destructive">{validation}</p>}
             {overBudget && (
               <p className="text-xs text-destructive">
@@ -1000,7 +1022,9 @@ export default function AnimatePage() {
             )}
             <Button
               className="w-full"
-              disabled={!ready || !configured || !!validation || overBudget || !!activeJob}
+              disabled={
+                !ready || !configured || !!validation || overBudget || !!activeJob || omniGated
+              }
               onClick={() => void generate()}
             >
               {busy ? (

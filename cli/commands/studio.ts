@@ -27,6 +27,10 @@ export function registerStudioCommand(program: Command) {
     )
     .option("--web-root <path>", "built static Web app directory (default: bundled out/)")
     .option(
+      "--enable-google-omni",
+      "enable experimental Omni generation with a $0.50 reservation estimate, not a verified provider billing cap",
+    )
+    .option(
       "--port <number>",
       "loopback port (default: choose a free high port)",
       (value: string) => {
@@ -36,32 +40,40 @@ export function registerStudioCommand(program: Command) {
         return port;
       },
     )
-    .action(async (options: { stateDir?: string; webRoot?: string; port?: number }) => {
-      const studio = await startStudio({
-        stateDir: options.stateDir ? resolve(options.stateDir) : undefined,
-        webRoot: options.webRoot ? resolve(options.webRoot) : bundledWebRoot(),
-        port: options.port,
-      });
-      process.stdout.write(
-        `Video Studio is running locally.\nSetup: ${studio.origin}/setup#token=${studio.token}\n`,
-      );
-      process.stdout.write(
-        "Open this private setup link in your browser. Keep this process running for Web and MCP video tools.\n",
-      );
-      process.stdout.write(
-        "Provider keys stay in the encrypted local vault. Never paste them into an assistant conversation.\n",
-      );
-      let closing = false;
-      const stop = async () => {
-        if (closing) return;
-        closing = true;
-        await studio.close();
-      };
-      process.once("SIGINT", () => {
-        void stop();
-      });
-      process.once("SIGTERM", () => {
-        void stop();
-      });
-    });
+    .action(
+      async (options: {
+        stateDir?: string;
+        webRoot?: string;
+        port?: number;
+        enableGoogleOmni?: boolean;
+      }) => {
+        const studio = await startStudio({
+          stateDir: options.stateDir ? resolve(options.stateDir) : undefined,
+          webRoot: options.webRoot ? resolve(options.webRoot) : bundledWebRoot(),
+          port: options.port,
+          enableGoogleOmni: options.enableGoogleOmni === true,
+        });
+        process.stdout.write(
+          `Video Studio is running locally.\nSetup: ${studio.origin}/setup#token=${studio.token}\n`,
+        );
+        process.stdout.write(
+          "Open this private setup link in your browser. Keep this process running for Web and MCP video tools.\n",
+        );
+        process.stdout.write(
+          "Provider keys stay in the encrypted local vault. Never paste them into an assistant conversation.\n",
+        );
+        let closing = false;
+        const stop = async () => {
+          if (closing) return;
+          closing = true;
+          await studio.close();
+        };
+        process.once("SIGINT", () => {
+          void stop();
+        });
+        process.once("SIGTERM", () => {
+          void stop();
+        });
+      },
+    );
 }

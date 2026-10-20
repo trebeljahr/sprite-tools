@@ -7,16 +7,21 @@ import { processVideo, VideoProcessingError } from "./process.js";
 import { resolveVideoTrim } from "./loop.js";
 import {
   downloadVideo,
+  downloadOmniVideo,
+  preflightGoogleOmni,
   pollGeneration,
   ProviderError,
   type ProviderOperation,
   type ProviderPoll,
   type ProviderTransport,
+  type OmniPreflight,
   submitGeneration,
   verifyGoogleModel,
 } from "./providers.js";
 import {
   artifactNames,
+  GOOGLE_OMNI_GATE_MESSAGE,
+  GOOGLE_OMNI_MODEL,
   estimateUsd,
   isBase64,
   MAX_VIDEO_BYTES,
@@ -46,6 +51,7 @@ interface StoredJob extends PublicJob {
   processing: ProcessingOptions;
   operation?: ProviderOperation;
   hasVideo?: boolean;
+  omniPreflight?: OmniPreflight;
 }
 interface State {
   version: 1;
@@ -55,6 +61,8 @@ interface State {
 }
 export interface VideoServiceOptions {
   simulation?: boolean;
+  /** Explicit startup opt-in; never mutable through Web or MCP requests. */
+  enableGoogleOmni?: boolean;
   stateDir?: string;
   transport?: ProviderTransport;
   processVideo?: typeof processVideo;
@@ -266,6 +274,7 @@ export class VideoService {
   async status(): Promise<StudioStatus> {
     return this.exclusive(async () => ({
       simulation: this.options.simulation === true,
+      googleOmniEnabled: this.options.enableGoogleOmni === true,
       locked: this.vault.locked,
       providers: VIDEO_PROVIDERS.map(({ id }) => ({ id, configured: this.vault.has(id) })),
       budget: {
@@ -356,8 +365,10 @@ export class VideoService {
           throw new Error("This requestId was already used with different settings.");
         return this.publicJob(existing);
       }
+      if (generation.model === GOOGLE_OMNI_MODEL && !this.options.enableGoogleOmni)
+        throw new Error(GOOGLE_OMNI_GATE_MESSAGE);
       this.requireIdle();
-      this.vault.get(generation.provider);
+      const key = this.vault.get(generation.provider);
       const reservedUsd = estimateUsd(generation);
       const cost = micros(reservedUsd);
       if (
@@ -366,6 +377,10 @@ export class VideoService {
         this.committed() + cost > this.state.limitMicros
       )
         throw new Error("This generation exceeds the local budget. Review the limits in setup.");
+      const omniPreflight =
+        generation.model === GOOGLE_OMNI_MODEL
+          ? await preflightGoogleOmni(generation, key, { transport: this.options.transport })
+          : undefined;
       const job: StoredJob = {
         id: randomUUID(),
         requestId: idempotency,
@@ -375,6 +390,7 @@ export class VideoService {
         outputRevision: 0,
         generation,
         processing,
+        ...(omniPreflight ? { omniPreflight } : {}),
       };
       await ensurePrivateDirectory(join(this.stateDir, "jobs", job.id));
       this.state.jobs.push(job);
@@ -517,7 +533,12 @@ export class VideoService {
         const generation = job.generation;
         if (!generation) throw new Error("Generation settings are missing.");
         const key = this.vault.get(generation.provider);
-        const context = { transport: this.options.transport, signal: abort };
+        const context = {
+          transport: this.options.transport,
+          signal: abort,
+          enableGoogleOmni: this.options.enableGoogleOmni,
+          omniPreflight: job.omniPreflight,
+        };
         if (!job.operation) {
           await this.internal(async () => {
             job.status = "generating";
@@ -559,7 +580,12 @@ export class VideoService {
             return;
           }
           if (status.status === "done") {
-            const bytes = await downloadVideo(generation.provider, status.url, key, context);
+            const bytes =
+              "bytes" in status
+                ? status.bytes
+                : status.downloadKind === "omni"
+                  ? await downloadOmniVideo(status.url, key, context)
+                  : await downloadVideo(generation.provider, status.url, key, context);
             await writePrivateFile(join(this.stateDir, "jobs", id, "video.mp4"), bytes);
             await this.internal(async () => {
               job.hasVideo = true;

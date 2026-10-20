@@ -3,7 +3,7 @@ import { z } from "zod";
 export type ProviderId = "google" | "xai";
 export type VideoResolution = "480p" | "720p" | "1080p";
 export const VIDEO_PROVIDERS: { id: ProviderId; label: string }[] = [
-  { id: "google", label: "Google Veo" },
+  { id: "google", label: "Google video" },
   { id: "xai", label: "xAI Grok Imagine" },
 ];
 export interface VideoModel {
@@ -20,7 +20,18 @@ export interface VideoModel {
   supportsLastFrame: boolean;
   pricePerSecondUsd: Partial<Record<VideoResolution, number>>;
   inputImageUsd: number;
+  experimental?: boolean;
+  reservationUsd?: number;
+  billingNote?: string;
+  deprecationDate?: string;
+  deprecationUrl?: string;
 }
+export const GOOGLE_OMNI_MODEL = "gemini-omni-1.1-flash";
+export const GOOGLE_OMNI_MAX_INPUT_TOKENS = 10_000;
+export const GOOGLE_OMNI_MAX_OUTPUT_TOKENS = 27_000;
+export const GOOGLE_OMNI_RESERVATION_USD = 0.5;
+export const GOOGLE_OMNI_GATE_MESSAGE =
+  "Experimental Omni generation is disabled. Start the companion with --enable-google-omni only after reviewing its estimated cost limits.";
 const google = {
   provider: "google" as const,
   minDuration: 4,
@@ -31,6 +42,8 @@ const google = {
   supportsFirstFrame: true,
   supportsLastFrame: true,
   inputImageUsd: 0,
+  deprecationDate: "2026-10-22",
+  deprecationUrl: "https://ai.google.dev/gemini-api/docs/deprecations",
 };
 const xai = {
   provider: "xai" as const,
@@ -65,6 +78,25 @@ export const VIDEO_MODELS: VideoModel[] = [
     label: "Veo 3.1",
     maxReferenceImages: 3,
     pricePerSecondUsd: { "720p": 0.4, "1080p": 0.4 },
+  },
+  {
+    id: GOOGLE_OMNI_MODEL,
+    provider: "google",
+    label: "Gemini Omni 1.1 Flash · experimental adapter",
+    minDuration: 3,
+    maxDuration: 3,
+    durations: [3],
+    resolutions: ["720p"],
+    aspectRatios: ["16:9", "9:16"],
+    maxReferenceImages: 0,
+    supportsFirstFrame: true,
+    supportsLastFrame: true,
+    pricePerSecondUsd: {},
+    inputImageUsd: 0,
+    experimental: true,
+    reservationUsd: GOOGLE_OMNI_RESERVATION_USD,
+    billingNote:
+      "$0.50 local reservation estimate, not a verified provider billing cap. Requests limit counted input to 10,000 tokens and max_output_tokens to 27,000. Google stores background requests and responses.",
   },
   {
     ...xai,
@@ -235,6 +267,7 @@ export function validateGeneration(input: unknown): GenerationInput {
 export function estimateUsd(input: GenerationInput): number {
   const value = validateGeneration(input);
   const model = getVideoModel(value.model);
+  if (model.reservationUsd !== undefined) return model.reservationUsd;
   const images =
     Number(Boolean(value.firstFrame)) +
     Number(Boolean(value.lastFrame)) +
@@ -259,6 +292,8 @@ export interface PublicJob {
 }
 export interface StudioStatus {
   simulation: boolean;
+  /** Startup-only experimental adapter flag; absent on older companions. */
+  googleOmniEnabled?: boolean;
   locked: boolean;
   providers: { id: ProviderId; configured: boolean }[];
   budget: { limitUsd: number; perJobUsd: number; committedUsd: number; remainingUsd: number };
