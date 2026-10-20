@@ -115,9 +115,9 @@ it("signs up, refuses the unverified account, then signs in to a session and sum
   expect(summary.status).toBe(200);
   expect(summary.json).toEqual({
     name: "HTTP",
-    credits: 0,
-    reserved: 0,
-    spent: 0,
+    balanceUsd: 0,
+    reservedUsd: 0,
+    spentUsd: 0,
     paidVideoEnabled: false,
   });
 

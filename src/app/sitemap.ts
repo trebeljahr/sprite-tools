@@ -26,7 +26,9 @@ const TOOL_ROUTES = [
   "/lint",
 ];
 
-const AI_ROUTES = ["/generate", "/animate"];
+// /generate works for everyone (own xAI key or AI credit). /animate needs the
+// local Video Studio, so it stays out of the sitemap unless the flag is on.
+const AI_ROUTES = ["/animate"];
 
 type RouteEntry = {
   path: string;
@@ -81,6 +83,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
     "/",
     ...TOOL_ROUTES,
+    "/generate",
     ...(AI_ENABLED ? AI_ROUTES : []),
     "/privacy",
     "/imprint",

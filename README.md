@@ -20,7 +20,7 @@ All three surfaces call the same algorithm modules and emit the same JSON shapes
 
 Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools in your browser. Images stay local to the page unless you opt into an AI-powered flow that explicitly calls an external service.
 
-Every tool is free and works without an account. An account is only for buying AI credits.
+Every tool is free and works without an account. AI Character makes images with your own xAI key (no account) or with prepaid AI credit, priced at xAI's list price plus a stated margin. An account is only for that credit.
 
 Good starting points:
 

@@ -1,5 +1,6 @@
 import { Pool } from "pg";
-// Operator-only, idempotent grants. No browser/API endpoint may call this script.
+// Operator-only, idempotent grants of AI credit in micro-dollars (1000000 = US$1).
+// No browser/API endpoint may call this script.
 const [owner, amountText, grantId] = process.argv.slice(2);
 const amount = Number(amountText);
 if (
@@ -13,7 +14,7 @@ if (
   )
 ) {
   throw new Error(
-    "Usage: accounts:credit <user-id|__global__> <positive-integer-credits> <grant-uuid>; POSTGRES_URL required",
+    "Usage: accounts:credit <user-id|__global__> <positive-integer-micro-dollars> <grant-uuid>; POSTGRES_URL required",
   );
 }
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL, max: 1 });

@@ -3,14 +3,14 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/privacy", {
   title: "Privacy policy",
   description:
-    "How sprite-tools handles local sprite images, optional AI features, anonymous visit counts, error reports, sign-in, and what the site stores in your browser.",
+    "How sprite-tools handles local sprite images, AI generation with your own key or AI credit, accounts, anonymous visit counts, error reports, and what the site stores in your browser.",
 });
 
 # Privacy
 
 sprite-tools runs almost entirely in your browser. Sprite images you
-upload never leave your machine unless you explicitly opt into the AI
-tools (which send prompts + generated images to xAI).
+upload never leave your machine. Only the AI tools send anything out, and
+only when you use them.
 
 ## What we count
 
@@ -36,6 +36,36 @@ To leave your own visits out of the counts, open the browser console on
 this site and run `localStorage.plausible_ignore = "true"`. Plausible
 reads that key and then sends nothing from that browser.
 
+## AI Character
+
+[AI Character](/generate) makes images with xAI. How your prompt travels
+depends on who pays:
+
+- **Your own xAI key**: your browser sends the prompt and the key straight
+  to xAI. The key stays in the page's memory until you close the tab. It
+  never reaches the sprite-tools server.
+- **AI credit**: your browser sends the prompt to the sprite-tools server,
+  which passes it to xAI and sends the image back. The server keeps the
+  price and time of each image, not the prompt or the image.
+
+The key and the prompt reach xAI only when you press Generate.
+
+xAI handles the prompt under [its own privacy policy](https://x.ai/legal/privacy-policy).
+
+## Accounts and AI credit
+
+An account exists only to hold AI credit. The server stores your name,
+email address, a hash of your password and your credit balance. For each
+session it stores the IP address and browser that signed in, and a
+signed-in session sets one cookie. To slow down password guessing, the
+server counts requests to the sign-in and account endpoints per IP
+address. It keeps one counter per IP address and endpoint, with the time
+of the last request.
+
+You buy credit through [Stripe](https://stripe.com/privacy). Stripe takes
+your card details; the sprite-tools server never sees them. The server
+keeps the Stripe checkout ID, the amount and the time of each purchase.
+
 ## Error reports
 
 A self-hosted [GlitchTip](https://glitchtip.com) instance receives
@@ -50,8 +80,8 @@ Some tools remember things on your device so they keep working across
 pages and reloads. None of this is sent anywhere, and none of it is
 used for counting visits.
 
-- **IndexedDB `sprite-tools`**: the image you loaded, so every tool
-  page opens with the same source.
+- **IndexedDB `sprite-tools`**: the image you loaded, or the one you sent
+  over from AI Character, so every tool page opens with the same source.
 - **`sprite-tools:source-rev`** (localStorage): a timestamp that tells
   other open tabs the image changed.
 - **`sprite-tools:tutorial:<tool>:dismissed`** (localStorage): set when
@@ -61,13 +91,12 @@ used for counting visits.
 
 Clear the site data in your browser's settings to remove all of it.
 
-## Never
+## Never stored on our server
 
-- Sprite images, frames, or generated assets.
+- Sprite images, frames, or generated images.
+- AI Character prompts.
 - The contents of your clipboard.
-- Any personally identifying information, unless you sign in for AI
-  tools — in which case we store the minimum identifier required to
-  bill usage.
+- Your own xAI key.
 
 ## Source of truth
 

@@ -3,29 +3,48 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/docs/web/generate", {
   title: "AI Character",
   description:
-    "Generate a character sprite from a text prompt, then send it into animation or sheet-building workflows.",
+    "Generate a character sprite from a text prompt with xAI, paid with your own xAI key or with AI credit.",
 });
 
 # AI Character
 
 [Open AI Character](/generate)
 
-AI Character generates a character sprite image from a text prompt, then hands it to the animation or sheet-building flow.
+AI Character generates a character sprite image from a text prompt with
+xAI's image models, then hands it to the rest of the tools.
 
-## Availability
+## Who pays for the image
 
-This feature is web-only and gated behind sign-in because it calls paid third-party image generation APIs. The core CLI package does not include AI generation.
+Every image costs money at xAI. You pick one of two ways to pay:
+
+- **Your own xAI key.** Paste a key from [console.x.ai](https://console.x.ai).
+  Your browser sends the prompt and the key straight to xAI, and xAI bills
+  your account at its list price. You need no account here. The key stays in
+  the page's memory and never reaches the sprite-tools server.
+- **AI credit.** Sign in on the [account page](/account) and buy credit.
+  The server makes the image with its own xAI key and takes xAI's list price
+  plus a stated margin from your credit. The page shows the price per image
+  before you generate. An account exists only for this credit.
+
+With credit, you pay for an image when it comes back. If xAI refuses the
+request or sends no image, the price goes back to your credit. If xAI does
+not answer within 90 seconds, it may still have billed, so the price is
+kept.
 
 ## Workflow
 
-1. Pick a sprite template.
-2. Describe the character.
-3. Choose a chroma-key-friendly background color.
-4. Generate the image.
-5. Download it, or send it to [AI Animation](/docs/web/animate).
+1. Pick who pays.
+2. Pick a sprite template and a model.
+3. Describe the character.
+4. Choose a chroma-key-friendly background color.
+5. Generate the image.
+6. Download it, or send it to [Background Removal](/docs/web/background-removal).
 
-## Local setup
+## Self-hosting
 
-AI generation depends on deployment secrets and auth configuration. For local development, see [Contributing](/docs/reference/contributing) for the app setup, then configure the required AI provider environment variables before enabling the feature.
+The own-key path needs no server. AI credit needs the accounts server
+(`packages/server`) with `XAI_API_KEY`, and Stripe keys to sell credit; see
+`docs/accounts-operations.md` in the repo. The CLI package does not include
+AI generation.
 
 For offline or scriptable sprite processing, use the [CLI](/docs/cli) after you already have source art.

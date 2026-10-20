@@ -12,9 +12,12 @@ import {
   RefreshCw,
   Edit3,
   Check,
+  KeyRound,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,29 +33,23 @@ import {
 } from "@/components/ui/select";
 import {
   SPRITE_TEMPLATES,
-  POLLINATIONS_MODELS,
+  XAI_IMAGE_MODELS,
+  type CreditsInfo,
   type SpriteTemplateType,
-  generateImage,
-} from "@/lib/image-gen";
+  type XaiImageModelId,
+  fetchBalanceUsd,
+  fetchCreditsInfo,
+  formatUsd,
+  generateWithCredit,
+  generateWithOwnKey,
+} from "@/lib/ai-image";
+import { useSharedProjectSource } from "@/lib/project/store";
 import { cn } from "@/lib/utils";
-import { AuthWall } from "@/components/auth-wall";
-import { AiGate } from "@/components/ai-gate";
+
+type PayWith = "own-key" | "credit";
 
 export default function GeneratePage() {
-  return (
-    <AiGate
-      feature="AI Character"
-      description="Generate character sprite art from a text prompt using AI image generation."
-    >
-      <AuthWall
-        feature="AI Character"
-        description="Generate character sprite art from a text prompt using AI image generation."
-        costHint="~1 credit per image"
-      >
-        <GeneratePageContent />
-      </AuthWall>
-    </AiGate>
-  );
+  return <GeneratePageContent />;
 }
 
 function GeneratePageContent() {
@@ -60,7 +57,15 @@ function GeneratePageContent() {
   const [userPrompt, setUserPrompt] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [bgColor, setBgColor] = useState("green");
-  const [model, setModel] = useState("flux");
+  const [model, setModel] = useState<XaiImageModelId>("grok-imagine-image");
+  const [payWith, setPayWith] = useState<PayWith>("own-key");
+  // The visitor's own xAI key lives only in this state: never stored, never
+  // sent anywhere but api.x.ai.
+  const [apiKey, setApiKey] = useState("");
+  const [creditsInfo, setCreditsInfo] = useState<CreditsInfo | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
+  const { setSharedSource } = useSharedProjectSource();
+  const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
@@ -72,6 +77,15 @@ function GeneratePageContent() {
     setCustomTemplate(selectedTemplate.basePrompt);
   }, [selectedTemplate.basePrompt]);
 
+  useEffect(() => {
+    void fetchCreditsInfo().then(setCreditsInfo);
+    void fetchBalanceUsd().then(setBalanceUsd);
+  }, []);
+
+  const modelInfo = XAI_IMAGE_MODELS.find((m) => m.id === model)!;
+  const creditPrice = creditsInfo?.models.find((m) => m.id === model)?.priceUsd ?? null;
+  const creditReady = Boolean(creditsInfo?.generation) && balanceUsd !== null;
+
   const handleGenerate = async () => {
     if (!userPrompt) {
       toast.error("Please enter a character description.");
@@ -82,15 +96,29 @@ function GeneratePageContent() {
     try {
       const templateToUse = isEditingTemplate ? customTemplate : selectedTemplate.basePrompt;
       const finalPrompt = templateToUse
-        .replace("{prompt}", userPrompt)
-        .replace("{bgcolor}", bgColor);
+        .replace("{prompt}", () => userPrompt)
+        .replace("{bgcolor}", () => bgColor);
 
-      const url = await generateImage(finalPrompt, { model });
-      setGeneratedImageUrl(url);
-      toast.success("Image generated!");
+      if (payWith === "own-key") {
+        if (!apiKey.trim()) {
+          toast.error("Paste your xAI API key first.");
+          return;
+        }
+        setGeneratedImageUrl(await generateWithOwnKey({ apiKey, model, prompt: finalPrompt }));
+      } else {
+        const result = await generateWithCredit({
+          model,
+          prompt: finalPrompt,
+          requestKey: crypto.randomUUID(),
+        });
+        setGeneratedImageUrl(result.image);
+        if (result.balanceUsd !== null) setBalanceUsd(result.balanceUsd);
+        else void fetchBalanceUsd().then(setBalanceUsd);
+      }
+      toast.success("Image generated.");
     } catch (error) {
-      toast.error("Failed to generate image.");
-      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate image.");
+      if (payWith === "credit") void fetchBalanceUsd().then(setBalanceUsd);
     } finally {
       setIsGenerating(false);
     }
@@ -106,6 +134,19 @@ function GeneratePageContent() {
     toast.success("Prompt refined!");
   };
 
+  const handleUseInTools = async () => {
+    if (!generatedImageUrl) return;
+    try {
+      const blob = await (await fetch(generatedImageUrl)).blob();
+      const extension =
+        blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+      await setSharedSource(new File([blob], `character.${extension}`, { type: blob.type }));
+      router.push("/background-removal");
+    } catch {
+      toast.error("Could not load the image into the tools.");
+    }
+  };
+
   const handleDownload = async () => {
     if (!generatedImageUrl) return;
     try {
@@ -114,7 +155,7 @@ function GeneratePageContent() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sprite-${Date.now()}.png`;
+      a.download = `sprite-${Date.now()}.${blob.type === "image/png" ? "png" : "jpg"}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -130,12 +171,115 @@ function GeneratePageContent() {
           <Sparkles className="w-8 h-8 text-primary" />
           AI Character
         </h1>
-        <p className="text-muted-foreground">Generate character sprite art with AI.</p>
+        <p className="text-muted-foreground">
+          Generate character sprite art with xAI&rsquo;s image models.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Settings Panel */}
         <div className="space-y-6 lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5" />
+                How to pay for images
+              </CardTitle>
+              <CardDescription>Each image costs real money at xAI. Pick who pays.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="How to pay">
+                {(
+                  [
+                    ["own-key", "Your own xAI key"],
+                    ["credit", "AI credit"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={payWith === value}
+                    variant={payWith === value ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPayWith(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+
+              {payWith === "own-key" ? (
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <Label htmlFor="xai-key" className="flex items-center gap-2 text-foreground">
+                    <KeyRound className="w-4 h-4" />
+                    xAI API key
+                  </Label>
+                  <Input
+                    id="xai-key"
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="xai-…"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                  <p>
+                    Your browser sends the prompt and the key straight to xAI. The key stays in this
+                    tab&rsquo;s memory. It never reaches the sprite-tools server, and it is gone
+                    when you close the tab.
+                  </p>
+                  <p>
+                    xAI bills your own account: {formatUsd(XAI_IMAGE_MODELS[0].costUsd)} per image
+                    with {XAI_IMAGE_MODELS[0].label}, {formatUsd(XAI_IMAGE_MODELS[1].costUsd)} with{" "}
+                    {XAI_IMAGE_MODELS[1].label}. No account here. Get a key at{" "}
+                    <a
+                      href="https://console.x.ai"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      console.x.ai
+                    </a>
+                    .
+                  </p>
+                </div>
+              ) : !creditsInfo?.generation ? (
+                <p className="text-xs text-muted-foreground">
+                  AI credit is not available on this server. Use your own xAI key instead.
+                </p>
+              ) : (
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <p>
+                    The sprite-tools server makes the image with its own xAI key and takes the price
+                    from your prepaid credit. The price is xAI&rsquo;s list price plus a{" "}
+                    {creditsInfo.marginPercent}% margin:{" "}
+                    {creditsInfo.models
+                      .map((m) => `${formatUsd(m.priceUsd)} per image with ${m.label}`)
+                      .join(", ")}
+                    .
+                  </p>
+                  {balanceUsd === null ? (
+                    <p>
+                      AI credit needs an account, and that is all an account is for.{" "}
+                      <Link href="/account" className="underline underline-offset-2">
+                        Sign in or create one
+                      </Link>
+                      .
+                    </p>
+                  ) : (
+                    <p className="text-foreground">
+                      Your credit: {formatUsd(balanceUsd)}.{" "}
+                      <Link href="/account" className="underline underline-offset-2">
+                        Add credit
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -218,18 +362,25 @@ function GeneratePageContent() {
 
               <div className="space-y-2">
                 <Label>Model</Label>
-                <Select value={model} onValueChange={(v) => v && setModel(v)}>
+                <Select value={model} onValueChange={(v) => v && setModel(v as XaiImageModelId)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {POLLINATIONS_MODELS.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
+                    {XAI_IMAGE_MODELS.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  {payWith === "own-key"
+                    ? `${formatUsd(modelInfo.costUsd)} per image, billed by xAI.`
+                    : creditPrice !== null
+                      ? `${formatUsd(creditPrice)} per image from your credit.`
+                      : "AI credit is not available on this server."}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -273,7 +424,7 @@ function GeneratePageContent() {
 
               <Button
                 onClick={handleGenerate}
-                disabled={isGenerating}
+                disabled={isGenerating || (payWith === "credit" && !creditReady)}
                 className="w-full h-12 text-lg"
               >
                 {isGenerating ? (
@@ -299,15 +450,10 @@ function GeneratePageContent() {
                       <Download className="w-4 h-4 mr-2" />
                       Download
                     </Button>
-                    <Link
-                      href={`/animate?imageUrl=${encodeURIComponent(generatedImageUrl)}`}
-                      className={cn(
-                        "inline-flex items-center justify-center rounded-lg h-7 px-2.5 text-[0.8rem] font-medium bg-green-600 text-white hover:bg-green-700 transition-colors",
-                      )}
-                    >
-                      Use for Animation
+                    <Button size="sm" onClick={handleUseInTools}>
+                      Remove the background
                       <ArrowRight className="w-4 h-4 ml-2" />
-                    </Link>
+                    </Button>
                   </div>
                 )}
               </div>

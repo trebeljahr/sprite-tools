@@ -3,6 +3,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { Pool } from "pg";
 
 const LOCK = 71324001;
+export const MIGRATIONS = ["001-video-budgets.sql", "002-credit-purchases.sql"];
 
 /**
  * Apply the pinned Better Auth schema, then the budget/job tables, under one
@@ -29,9 +30,10 @@ export async function migrate() {
     });
     await migration.runMigrations();
     await lock.query("BEGIN");
-    await lock.query(
-      await readFile(new URL("../db/migrations/001-video-budgets.sql", import.meta.url), "utf8"),
-    );
+    for (const file of MIGRATIONS)
+      await lock.query(
+        await readFile(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"),
+      );
     await lock.query("COMMIT");
   } catch {
     await lock.query("ROLLBACK").catch(() => {});

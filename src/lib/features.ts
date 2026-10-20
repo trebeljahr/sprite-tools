@@ -7,7 +7,7 @@
 //   echo 'NEXT_PUBLIC_ENABLE_AI=true' >> .env.local
 
 /**
- * Legacy hosted AI Character UI. Hosted paid video remains disabled.
- * Video Studio has its own local companion and does not use this flag.
+ * Lists /animate in the sitemap. /generate is always on: it works with the
+ * visitor's own xAI key, and AI credit depends on the server's config.
  */
 export const AI_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AI === "true";

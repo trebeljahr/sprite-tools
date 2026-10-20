@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { type CreditsInfo, fetchCreditsInfo, formatUsd, startCreditCheckout } from "@/lib/ai-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,14 +14,22 @@ export default function AccountPage() {
   const [token, setToken] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [credits, setCredits] = useState<number | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
+  const [creditsInfo, setCreditsInfo] = useState<CreditsInfo | null>(null);
   useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get("token");
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("token");
     if (value) {
       setToken(value);
       setMode("reset");
       window.history.replaceState(null, "", "/account");
     }
+    const purchase = params.get("purchase");
+    if (purchase === "done")
+      setMessage("Thanks. Your credit shows here as soon as Stripe confirms the payment.");
+    else if (purchase === "cancelled") setMessage("Checkout cancelled. Nothing was charged.");
+    if (purchase) window.history.replaceState(null, "", "/account");
+    void fetchCreditsInfo().then(setCreditsInfo);
   }, []);
   useEffect(() => {
     if (!session) return;
@@ -30,8 +39,10 @@ export default function AccountPage() {
         if (!response.ok) throw new Error();
         return response.json();
       })
-      .then((value) => setCredits(value.credits))
-      .catch(() => setCredits(null));
+      .then((value) =>
+        setBalanceUsd(typeof value.balanceUsd === "number" ? value.balanceUsd : null),
+      )
+      .catch(() => setBalanceUsd(null));
     return () => controller.abort();
   }, [session]);
 
@@ -88,13 +99,54 @@ export default function AccountPage() {
         <>
           <p>Signed in as {session.user.email}.</p>
           <p>
-            {credits === null
-              ? "Credit balance unavailable."
-              : `${credits} generation credits available.`}
+            {balanceUsd === null
+              ? "AI credit balance unavailable."
+              : `AI credit: ${formatUsd(balanceUsd)}.`}
           </p>
           <p className="text-sm text-muted-foreground">
-            Paid generation is not available yet. Your other sprite tools remain free.
+            AI credit pays for images on{" "}
+            <a href="/generate" className="underline underline-offset-2">
+              AI Character
+            </a>
+            . Each image takes xAI&rsquo;s list price
+            {creditsInfo ? ` plus a ${creditsInfo.marginPercent}% margin` : ""} from it. Every other
+            tool is free and works without an account.
           </p>
+          {creditsInfo?.purchase ? (
+            <div className="space-y-2">
+              <p className="text-sm">
+                Add credit. Stripe shows the total, with any tax, before you pay.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {creditsInfo.amountsUsd.map((amount) => (
+                  <Button
+                    key={amount}
+                    variant="outline"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      setMessage("");
+                      try {
+                        window.location.assign(await startCreditCheckout(amount));
+                      } catch (error) {
+                        setMessage(error instanceof Error ? error.message : "Checkout failed.");
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {formatUsd(amount)}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Payment runs through Stripe. The sprite-tools server never sees your card.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Buying AI credit is not available on this server yet.
+            </p>
+          )}
           <Button
             onClick={async () => {
               setBusy(true);

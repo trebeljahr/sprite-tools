@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import { getAuth } from "./auth.js";
 import { account } from "./routes/account.js";
+import { creditsCheckout, creditsInfo, generateImage, stripeWebhook } from "./routes/credits.js";
 import { envelope } from "./routes/envelope.js";
 import { isProxyDraining, isTraefikProbe } from "./drain.js";
 import { accountsHealth, health } from "./routes/health.js";
@@ -50,6 +51,15 @@ export function createApp() {
   });
 
   app.get("/api/account", account);
+  app.get("/api/credits", creditsInfo);
+  app.post("/api/credits/checkout", express.json({ limit: "4kb" }), creditsCheckout);
+  // Stripe signs the raw bytes, so this route must not parse JSON first.
+  app.post(
+    "/api/credits/stripe-webhook",
+    express.raw({ type: "application/json", limit: "512kb" }),
+    stripeWebhook,
+  );
+  app.post("/api/generate/image", express.json({ limit: "16kb" }), generateImage);
   app.get("/api/health", health);
   app.get("/api/health/accounts", accountsHealth);
   app.post("/api/_e", envelope);
@@ -66,8 +76,12 @@ export function createApp() {
       res: express.Response,
       _next: express.NextFunction,
     ) => {
-      if (res.headersSent) res.destroy();
-      else res.status(500).set(NO_STORE).json({ error: "Internal error" });
+      if (res.headersSent) return res.destroy();
+      // Body parser errors (bad JSON 400, too large 413) keep their status.
+      const status = (_error as { status?: unknown })?.status;
+      if (typeof status === "number" && status >= 400 && status < 500)
+        return res.status(status).set(NO_STORE).json({ error: "Bad request" });
+      res.status(500).set(NO_STORE).json({ error: "Internal error" });
     },
   );
   return app;

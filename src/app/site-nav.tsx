@@ -7,7 +7,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Github, Lock, Menu, Package } from "lucide-react";
+import { ChevronDown, Github, Menu, Package } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,7 +18,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AI_ENABLED } from "@/lib/features";
 import { NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
 import { cn } from "@/lib/utils";
 
@@ -35,13 +34,12 @@ interface ToolLink {
   href: string;
   label: string;
   hint: string;
-  paid?: boolean;
 }
 
 const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   {
-    label: "AI (sign-in required)",
-    items: [{ href: "/generate", label: "AI Character", hint: "generate sprite art", paid: true }],
+    label: "AI",
+    items: [{ href: "/generate", label: "AI Character", hint: "generate sprite art" }],
   },
   {
     label: "Extract",
@@ -79,11 +77,7 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   },
 ];
 
-// AI group is hidden in prod until auth + billing ship. Flip NEXT_PUBLIC_ENABLE_AI
-// in .env.local to preview it locally.
-const TOOL_GROUPS = AI_ENABLED
-  ? ALL_TOOL_GROUPS
-  : ALL_TOOL_GROUPS.filter((g) => !g.label.startsWith("AI"));
+const TOOL_GROUPS = ALL_TOOL_GROUPS;
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -131,10 +125,7 @@ export function SiteNav() {
                           />
                         }
                       >
-                        <span className="font-medium flex items-center gap-1.5">
-                          {item.label}
-                          {item.paid && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
-                        </span>
+                        <span className="font-medium flex items-center gap-1.5">{item.label}</span>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuGroup>
@@ -196,7 +187,6 @@ export function SiteNav() {
                         >
                           <span className="font-medium flex items-center gap-1.5">
                             {item.label}
-                            {item.paid && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                           </span>
                           <span className="text-[10px] text-muted-foreground">{item.hint}</span>
                         </DropdownMenuItem>
