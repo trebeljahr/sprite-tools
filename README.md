@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/@trebeljahr/sprite-tools.svg)](https://www.npmjs.com/package/@trebeljahr/sprite-tools)
 [![CI](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml)
 [![Web app](https://img.shields.io/badge/web-sprites.trebeljahr.com-0f766e.svg)](https://sprites.trebeljahr.com)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-MIT%20%2B%20AGPL--3.0-blue.svg)](#license)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
 
 A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, GIF export, `.aseprite` file import, and engine-native export for Godot, Unity, Aseprite, and Phaser.
@@ -176,7 +176,7 @@ cli/commands/**        # CLI wrappers via commander + pngjs
 mcp/tools.ts           # MCP server (Zod schemas)
 src/app/**/page.tsx    # web app routes (static export, served by a Cloudflare Worker)
 src/app/docs/**        # MDX docs
-packages/server/**     # accounts API under /api (Better Auth + PostgreSQL)
+packages/server/**     # accounts API under /api (Better Auth + PostgreSQL), AGPL-3.0
 tests/**.test.ts       # vitest on every algorithm
 ```
 
@@ -225,4 +225,6 @@ Each command runs in this order:
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+The web app, the CLI, the MCP server and the algorithm modules are MIT. See [LICENSE](./LICENSE). The npm package `@trebeljahr/sprite-tools` contains only MIT code.
+
+The accounts server in `packages/server` is AGPL-3.0-or-later. See [packages/server/LICENSE](./packages/server/LICENSE). If you run a changed copy of it as a network service, you must offer its source code, with your changes, to the people who use it.

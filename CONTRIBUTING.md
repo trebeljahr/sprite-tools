@@ -37,8 +37,12 @@ src/lib/**             pure algorithm modules
 cli/commands/**        CLI wrappers
 mcp/tools.ts           MCP tool registration and schemas
 src/app/**             Next.js web app and docs
+packages/server/**     accounts API under /api (AGPL-3.0-or-later)
 tests/**               Vitest coverage for algorithms
 ```
+
+Contributions are licensed like the code they change: MIT everywhere except
+`packages/server`, which is AGPL-3.0-or-later.
 
 ## Pull request checklist
 
