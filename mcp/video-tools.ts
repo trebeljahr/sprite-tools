@@ -220,7 +220,7 @@ export function registerVideoTools(server: McpServer) {
           .partial()
           .optional()
           .describe(
-            "Sprite extraction: fps, frameWidth, backgroundColor, tolerance, softness, spill, choke, columns, padding, name. Trim with startSeconds/endSeconds; loopMode 'auto' suggests a cycle within loopMinSeconds/loopMaxSeconds. maxFrames caps exported frames; dedupeThreshold 0–8 merges adjacent duplicates while preserving hold time. At most 120 sampled input frames; review suggested loops.",
+            "Sprite extraction: fps, frameWidth, backgroundColor, tolerance, softness, spill, choke, columns, padding, name. Trim with startSeconds/endSeconds; loopMode 'auto' suggests a cycle within loopMinSeconds/loopMaxSeconds. maxFrames caps exported frames; dedupeThreshold 0–8 merges adjacent duplicates while preserving hold time. extractionMaxEdge selects 512 (default), 1280, or 1920 px source detail before cutting; frameWidth sets the final sprite width, up to 1920. Sheets stay within 16 megapixels. At most 120 sampled input frames; review suggested loops.",
           ),
         wait_seconds: waitSchema,
       },
@@ -296,7 +296,7 @@ export function registerVideoTools(server: McpServer) {
           .partial()
           .optional()
           .describe(
-            "Defaults: 8 fps, 128 px frame width, green key, 8 columns. startSeconds/endSeconds trim the source; loopMode 'auto' suggests a loop within loopMinSeconds/loopMaxSeconds; maxFrames caps output; optional dedupeThreshold 0–8 merges adjacent duplicates and keeps their hold time. Maximum 120 sampled input frames.",
+            "Defaults: 8 fps, 128 px frame width, green key, 8 columns. startSeconds/endSeconds trim the source; loopMode 'auto' suggests a loop within loopMinSeconds/loopMaxSeconds; maxFrames caps output; optional dedupeThreshold 0–8 merges adjacent duplicates and keeps their hold time. extractionMaxEdge selects 512 (default), 1280, or 1920 px source detail before cutting; frameWidth sets the final sprite width, up to 1920. Sheets stay within 16 megapixels. Maximum 120 sampled input frames.",
           ),
         wait_seconds: waitSchema,
       },
@@ -340,7 +340,7 @@ export function registerVideoTools(server: McpServer) {
         processing: processingOptionsSchema
           .partial()
           .describe(
-            "Replacement extraction settings. Use startSeconds/endSeconds for trimming, loopMode 'auto' plus loopMinSeconds/loopMaxSeconds for a suggested cycle, maxFrames for an output budget, and dedupeThreshold 0–8 for adjacent duplicates. Timing is preserved; review the exported loop and sourceFrameIndices.",
+            "Replacement extraction settings. Use startSeconds/endSeconds for trimming, loopMode 'auto' plus loopMinSeconds/loopMaxSeconds for a suggested cycle, maxFrames for an output budget, and dedupeThreshold 0–8 for adjacent duplicates. extractionMaxEdge selects 512 (default), 1280, or 1920 px source detail before cutting; frameWidth sets the final sprite width, up to 1920. Sheets stay within 16 megapixels. Timing is preserved; review the exported loop and sourceFrameIndices.",
           ),
         wait_seconds: waitSchema,
       },
