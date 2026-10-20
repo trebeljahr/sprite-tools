@@ -59,7 +59,7 @@ export function VideoLoopPreview({
   const indexRef = useRef(0);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
-  const [zoom, setZoom] = useState(2);
+  const [zoom, setZoom] = useState<"fit" | 1 | 2 | 4>("fit");
   const [error, setError] = useState("");
   const durationMs = metadata.frameDurations.reduce((sum, duration) => sum + duration, 0);
 
@@ -126,21 +126,25 @@ export function VideoLoopPreview({
     setFrameIndex(next);
   };
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium">Sprite loop preview</h2>
         <p className="text-xs text-muted-foreground">
           {metadata.frameCount} frames · {(durationMs / 1000).toFixed(2)} s
         </p>
       </div>
-      <div className="min-h-48 max-h-[70vh] overflow-auto rounded-md border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-4">
+      <div className="min-h-48 max-h-[70vh] w-full min-w-0 overflow-auto rounded-md border bg-[repeating-conic-gradient(#8882_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-4">
         <canvas
           ref={canvas}
           width={metadata.frameWidth}
           height={metadata.frameHeight}
           aria-label={`Animation preview, frame ${frameIndex + 1} of ${metadata.frameCount}`}
           className="mx-auto block [image-rendering:pixelated]"
-          style={{ width: metadata.frameWidth * zoom, height: "auto" }}
+          style={{
+            width: zoom === "fit" ? "100%" : metadata.frameWidth * zoom,
+            maxWidth: zoom === "fit" ? metadata.frameWidth : "none",
+            height: "auto",
+          }}
         />
       </div>
       <div className="flex items-center gap-2">
@@ -184,7 +188,7 @@ export function VideoLoopPreview({
       <PlaybackTiming durationMs={durationMs} speed={speed} onSpeedChange={setSpeed} />
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Zoom</span>
-        {[1, 2, 4].map((value) => (
+        {(["fit", 1, 2, 4] as const).map((value) => (
           <Button
             key={value}
             size="sm"
@@ -192,7 +196,7 @@ export function VideoLoopPreview({
             aria-pressed={zoom === value}
             onClick={() => setZoom(value)}
           >
-            {value}×
+            {value === "fit" ? "Fit" : `${value}×`}
           </Button>
         ))}
         <Button size="sm" variant="outline" onClick={() => seek(metadata.frameCount - 1)}>
