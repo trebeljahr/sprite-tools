@@ -78,6 +78,46 @@ describe("video MCP transport", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("GET");
   });
 
+  it("checks Google metadata without submitting or reserving a generation", async () => {
+    const metadata = { available: true, supportsGeneration: true };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(metadata)));
+    const result = await handlers.get("sprite_video_verify_google_model")!({
+      model: "veo-3.1-lite-generate-preview",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(JSON.parse(result.content[0].text)).toEqual(metadata);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://127.0.0.1:55555/api/studio/verify-google-model");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe(`Bearer ${token}`);
+    expect(JSON.parse(init.body)).toEqual({ model: "veo-3.1-lite-generate-preview" });
+    expect(result.content[0].text).not.toContain(token);
+  });
+
+  it("rejects unsupported model checks before network access", async () => {
+    for (const model of ["grok-imagine-video-1.5", "../jobs", "unknown"]) {
+      const result = await handlers.get("sprite_video_verify_google_model")!({ model });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toBe("Choose a supported Google video model.");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the locked-vault guidance without starting a paid fallback", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Unlock the local credential vault first." }), {
+        status: 400,
+      }),
+    );
+    const result = await handlers.get("sprite_video_verify_google_model")!({
+      model: "veo-3.1-lite-generate-preview",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe("Unlock the local credential vault first.");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("rejects remote connection files before sending the bearer", async () => {
     await writeFile(
       join(root, "connection.json"),

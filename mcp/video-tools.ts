@@ -137,6 +137,33 @@ export function registerVideoTools(server: McpServer) {
   );
 
   server.registerTool(
+    "sprite_video_verify_google_model",
+    {
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      description:
+        "Check Google model metadata with the saved local key. This free check creates no generation or budget reservation. Requires an unlocked vault. Success confirms metadata access only, not billing or generation entitlement; never pass an API key through MCP.",
+      inputSchema: {
+        model: z
+          .string()
+          .min(1)
+          .max(100)
+          .describe("Google model ID from sprite_video_capabilities."),
+      },
+    },
+    ({ model }) =>
+      safe(async () => {
+        if (!VIDEO_MODELS.some((item) => item.provider === "google" && item.id === model))
+          throw new Error("Choose a supported Google video model.");
+        return call("/verify-google-model", { model });
+      }),
+  );
+
+  server.registerTool(
     "sprite_video_generate",
     {
       annotations: {
