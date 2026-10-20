@@ -410,7 +410,7 @@ export default function ExportPage() {
     if (!active) return;
     downloadFile(active);
     setHasDownloaded(true);
-    track("export_downloaded", { format, filename: active.filename });
+    track("export_downloaded", { format });
     toast.success(`Downloaded ${active.filename}`);
   };
 

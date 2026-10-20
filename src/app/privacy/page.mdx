@@ -3,7 +3,7 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/privacy", {
   title: "Privacy policy",
   description:
-    "How sprite-tools handles local sprite images, optional AI features, anonymous analytics, error reports, sign-in, and consent.",
+    "How sprite-tools handles local sprite images, optional AI features, anonymous visit counts, error reports, sign-in, and what the site stores in your browser.",
 });
 
 # Privacy
@@ -12,26 +12,56 @@ sprite-tools runs almost entirely in your browser. Sprite images you
 upload never leave your machine unless you explicitly opt into the AI
 tools (which send prompts + generated images to xAI).
 
-## What we collect
+## What we count
 
-### Always
+The site counts visits with a self-hosted
+[Plausible](https://plausible.io) instance. Plausible sets no cookies
+and stores nothing in your browser. It does not follow you to other
+sites, and no ad network sees the data.
 
-- **Error reports** — anonymous crash reports via a self-hosted
-  [GlitchTip](https://glitchtip.com) instance, so we can fix bugs we
-  couldn't reproduce locally. These include stack traces and the URL of
-  the page that crashed. No sprite data, no IP logging beyond what the
-  origin server naturally sees.
-- **Pageviews** — aggregate page counts via a self-hosted
-  [Plausible](https://plausible.io) instance. No cookies, no cross-site
-  tracking, no ad networks.
+It counts two things, as totals across all visitors:
 
-### Only if you accept the banner
+- **Pageviews**: which pages get opened, and from which referring site.
+- **Tool events**: a handful of named events, such as "exported a GIF"
+  or "loaded a sample". Each event carries only the tool, the export
+  format and counts like the number of frames. It never carries file
+  names, image data or text you typed.
 
-- **Usage events** — a handful of named events ("exported GIF",
-  "loaded sample", etc.) sent to the same Plausible instance. A single
-  `localStorage` key records your consent choice.
+Plausible also reads the browser, operating system and country from
+each request. It does not store IP addresses. To count unique visitors
+it uses a hash that changes every day, so one day's visit cannot be
+linked to the next.
 
-### Never
+To leave your own visits out of the counts, open the browser console on
+this site and run `localStorage.plausible_ignore = "true"`. Plausible
+reads that key and then sends nothing from that browser.
+
+## Error reports
+
+A self-hosted [GlitchTip](https://glitchtip.com) instance receives
+anonymous crash reports, so we can fix bugs we could not reproduce
+locally. A report holds the stack trace and the URL of the page that
+crashed. It holds no sprite data, and we log no IP address beyond what
+the origin server naturally sees.
+
+## What the tools keep in your browser
+
+Some tools remember things on your device so they keep working across
+pages and reloads. None of this is sent anywhere, and none of it is
+used for counting visits.
+
+- **IndexedDB `sprite-tools`**: the image you loaded, so every tool
+  page opens with the same source.
+- **`sprite-tools:source-rev`** (localStorage): a timestamp that tells
+  other open tabs the image changed.
+- **`sprite-tools:tutorial:<tool>:dismissed`** (localStorage): set when
+  you close a tool's tutorial, so it stays closed.
+- **`donation-supported-at`** (localStorage): set when you come back
+  from the donate page, so the site can say thanks.
+
+Clear the site data in your browser's settings to remove all of it.
+
+## Never
 
 - Sprite images, frames, or generated assets.
 - The contents of your clipboard.
@@ -39,15 +69,9 @@ tools (which send prompts + generated images to xAI).
   tools — in which case we store the minimum identifier required to
   bill usage.
 
-## Changing your mind
-
-The consent banner only appears until you make a choice. To change it
-later, open your browser's site settings and clear `localStorage` for
-this origin; the banner will return on your next visit.
-
 ## Source of truth
 
-Analytics and error reporting are off in local development and only
+Visit counts and error reporting are off in local development and only
 activate in production. Plausible only loads on sprites.trebeljahr.com,
 and error reporting requires `NEXT_PUBLIC_GLITCHTIP_DSN` — if you
 self-host sprite-tools on another domain without setting it, neither
