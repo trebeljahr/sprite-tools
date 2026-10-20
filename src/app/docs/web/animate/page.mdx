@@ -29,7 +29,7 @@ Create a vault passphrase, save your Google or xAI key, and set the total and pe
 
 Keys stay in an encrypted file on your machine. Enter them only on the local setup page. Never paste keys into a chat, prompt, or MCP argument.
 
-The vault starts locked after a restart. Unlock it in the setup page to resume provider requests. Existing files remain available locally.
+The vault starts locked after a restart. Unlock it in the setup page to resume provider requests. Existing files, video imports, and free reprocessing remain available while it is locked.
 
 ## Generate and cut a video
 
@@ -55,6 +55,12 @@ Set a frame budget, such as 8 or 12 drawings. Reduction preserves the selected d
 Reprocess the saved video to compare settings without another generation charge. Open the video in Sheet Builder for its existing manual frame selection and duplicate controls.
 
 Use 720p as a starting point for detailed game sprites. Character size within the frame and the intended export size matter more than the video resolution alone. 480p remains an option for rough motion tests or small sprites.
+
+Under **Sprite output**, choose **1280 px** extraction detail to preserve a landscape 720p source. Choose **1920 px** for landscape 1080p. Existing recipes default to 512 px.
+
+**Frame width** sets each exported sprite's width. Increasing it cannot recover missing source detail. Higher extraction detail changes local processing, with no generation charge. Reduce the frame budget or sprite size if the sheet exceeds its size limit.
+
+The preview starts in **Fit** mode to show the whole sprite. Use 1×, 2× or 4× to inspect edges. Preview speed changes playback only. Exported frame timing stays unchanged.
 
 ## Write a cuttable prompt
 

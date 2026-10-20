@@ -36,11 +36,17 @@ Generation and extraction are separate decisions. Reuse a saved video to change 
 
 The Web workspace can also open the original saved video in the existing Sheet Builder through an authenticated local job handoff. Its manual frame selection and duplicate controls remain available.
 
+`extractionMaxEdge` chooses 512, 1280 or 1920 pixels for the longest decoded edge. Existing recipes default to 512. Loop analysis uses a 512-pixel proxy, then a second pass decodes only the selected frames at the requested detail. The second pass preserves source indices and frame holds.
+
+For a 720p landscape source, use 1280 to retain source detail. `frameWidth` separately sets the exported sprite width, up to 1920 pixels. A larger export cannot recover detail absent from the source. Extraction limits selected pixels, temporary files and the final sheet allocation. Reduce the frame budget or output dimensions when a limit is reached.
+
+Saved-video imports and reprocessing work while the vault is locked. Paid generation and provider access checks require the vault passphrase. The preview defaults to **Fit** so larger sprites stay visible. Pixel inspection remains available at 1×, 2× and 4×.
+
 ## Provider setup
 
 Use a dedicated provider key with the narrowest supported video model and endpoint access. Enter it directly in the local setup screen.
 
-Google's AI Studio project spend cap can take time to enforce. Do not describe it as an instantaneous hard limit. xAI's billing settings apply to a team; a postpaid limit does not cap existing prepaid credits. Inspect the selected project/team before changing any account-wide setting. Disable automatic top-ups for a bounded test.
+Google's AI Studio project spend cap can take time to enforce. Do not describe it as an instantaneous hard limit. xAI's billing settings apply to a team; a postpaid limit does not cap existing prepaid credits. Inspect the selected project/team before changing any account-wide setting. Preserve the owner's chosen automatic reload settings unless they authorize a change.
 
 Official references, checked 2026-10-18:
 
