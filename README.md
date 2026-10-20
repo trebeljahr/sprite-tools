@@ -20,6 +20,8 @@ All three surfaces call the same algorithm modules and emit the same JSON shapes
 
 Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools in your browser. Images stay local to the page unless you opt into an AI-powered flow that explicitly calls an external service.
 
+Every tool is free and works without an account. An account is only for buying AI credits.
+
 Good starting points:
 
 - [Sheet Lint](https://sprites.trebeljahr.com/lint) — the one to open first: what a sheet is, and what is wrong with it, drawn onto the sheet.

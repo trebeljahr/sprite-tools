@@ -178,7 +178,8 @@ export default function AccountPage() {
               ))}
           </div>
           <p className="text-sm text-muted-foreground">
-            Accounts start with zero generation credits. No payment is taken when you sign up.
+            An account is only for AI credits. Every other tool works without one. Accounts start
+            with zero credits, and no payment is taken when you sign up.
           </p>
         </>
       )}
