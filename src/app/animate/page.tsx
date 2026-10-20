@@ -480,7 +480,7 @@ export default function AnimatePage() {
         </div>
       ) : status?.locked ? (
         <div className="mb-6 rounded-md bg-muted/40 p-4 text-sm">
-          Unlock your local vault in{" "}
+          {status.vaultExists === false ? "Create" : "Unlock"} your local vault in{" "}
           <a href="/setup" className="underline">
             Keys &amp; limits
           </a>{" "}

@@ -276,6 +276,7 @@ export class VideoService {
       simulation: this.options.simulation === true,
       googleOmniEnabled: this.options.enableGoogleOmni === true,
       locked: this.vault.locked,
+      vaultExists: this.vault.exists,
       providers: VIDEO_PROVIDERS.map(({ id }) => ({ id, configured: this.vault.has(id) })),
       budget: {
         limitUsd: dollars(this.state.limitMicros),

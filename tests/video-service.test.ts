@@ -96,6 +96,25 @@ async function done(service: VideoService, id: string) {
 }
 
 describe("durable local video service", () => {
+  it("distinguishes a new vault from an existing empty vault after locking and restarting", async () => {
+    const { service, dir } = await fixture();
+    expect(await service.status()).toMatchObject({ vaultExists: false, locked: true });
+    await service.unlock(passphrase);
+    expect(await service.status()).toMatchObject({
+      vaultExists: true,
+      locked: false,
+      providers: [{ configured: false }, { configured: false }],
+    });
+    await service.lock();
+    expect(await service.status()).toMatchObject({ vaultExists: true, locked: true });
+    await service.close();
+    const { service: restarted } = await fixture({ stateDir: dir });
+    expect(await restarted.status()).toMatchObject({ vaultExists: true, locked: true });
+    await expect(restarted.unlock("incorrect-test-passphrase")).rejects.toThrow("incorrect");
+    expect(await restarted.status()).toMatchObject({ vaultExists: true, locked: true });
+    await restarted.unlock(passphrase);
+    expect(await restarted.status()).toMatchObject({ vaultExists: true, locked: false });
+  });
   it("defaults to zero spend and reserves once across concurrent duplicate requests", async () => {
     const network = transport();
     const { service, dir } = await fixture({ transport: network });

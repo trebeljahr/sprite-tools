@@ -295,6 +295,7 @@ export interface StudioStatus {
   /** Startup-only experimental adapter flag; absent on older companions. */
   googleOmniEnabled?: boolean;
   locked: boolean;
+  vaultExists: boolean;
   providers: { id: ProviderId; configured: boolean }[];
   budget: { limitUsd: number; perJobUsd: number; committedUsd: number; remainingUsd: number };
   jobs: PublicJob[];

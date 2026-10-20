@@ -79,7 +79,11 @@ export class CredentialVault {
   private salt?: Buffer;
   private keys: Keys = {};
   private configured = new Set<ProviderId>();
+  private persisted = false;
   constructor(private readonly file: string) {}
+  get exists(): boolean {
+    return this.persisted;
+  }
   get locked(): boolean {
     return !this.key;
   }
@@ -90,6 +94,7 @@ export class CredentialVault {
     try {
       const stored = JSON.parse(await readFile(this.file, "utf8")) as VaultFile;
       if (stored.version !== 1 || !Array.isArray(stored.providers)) throw new Error();
+      this.persisted = true;
       this.configured = new Set(stored.providers.filter((p) => p === "google" || p === "xai"));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
@@ -145,6 +150,7 @@ export class CredentialVault {
     this.keys = keys;
     this.configured = new Set(Object.keys(keys) as ProviderId[]);
     if (!stored) await this.save();
+    this.persisted = true;
   }
   lock(): void {
     this.key?.fill(0);
