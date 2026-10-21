@@ -18,6 +18,12 @@ import {
   type Body,
   type Input,
 } from "../src/lib/playground/controller";
+import {
+  chooseIdleBridge,
+  bridgeFrame,
+  bridgeSeconds,
+  reviewBridgeFrame,
+} from "../src/lib/playground/transitions";
 import { cameraFor } from "../src/lib/playground/scene";
 import { boundedFile, sameOriginFile } from "../src/lib/browser-files";
 const clip = (loop = true) => ({
@@ -324,6 +330,131 @@ describe("controller movement and transitions", () => {
     expect(stepBody(s, neutral, -1, set())).toEqual(s);
     expect(stepBody(s, { ...neutral, axis: 1 }, 60, set()).x - s.x).toBeLessThan(11);
     expect(advance(s, 10, { axis: 1, sprint: true }).x).toBeLessThan(WORLD.width);
+  });
+});
+describe("authored stop and landing routes", () => {
+  const configured = () =>
+    validateAnimationSet({
+      ...base,
+      clips: {
+        ...base.clips,
+        stop: { ...clip(false), frameCrop: { x: 10, y: 20, width: 80, height: 100 } },
+      },
+      controller: {
+        idleTransitions: [
+          { from: "walk", exitFrame: 1, clip: "stop", idleFrame: 2, leadMs: 180 },
+          { from: "walk", exitFrame: 3, clip: "stop", idleFrame: 2, leadMs: 180 },
+          { from: "jump", exitFrame: 3, clip: "stop", idleFrame: 2, leadMs: 80 },
+        ],
+      },
+    });
+  it("finishes the nearer forward step, then plays the bridge without a dissolve", () => {
+    const set = configured();
+    const initial = { ...createBody(), motion: "walk" as const, vx: 350, gaitPhase: 0.55 };
+    const stopped = stepBody(initial, neutral, 1 / 120, set);
+    expect(stopped.motion).toBe("transition");
+    expect(stopped.bridge?.route).toBe(1);
+    expect(stopped.bridge?.sourceFrame).toBe(2);
+    expect(stopped.settleFrom).toBeNull();
+    expect(bodyFrame(stopped, set)).toEqual({ role: "walk", frame: 2 });
+    const bridge = advance(stopped, 0.15, {}, set);
+    expect(bodyFrame(bridge, set).clipId).toBe("stop");
+    expect(bridge.settleFrom).toBeNull();
+    const idle = advance(stopped, bridgeSeconds(set, stopped.bridge!) + 0.01, {}, set);
+    expect(idle.motion).toBe("idle");
+    expect(idle.bridge).toBeNull();
+    expect(idle.time).toBeGreaterThanOrEqual(0.2);
+    expect(bodyFrame(idle, set).frame).toBe(2);
+  });
+  it("plays dedicated landing recovery immediately on contact", () => {
+    const set = configured();
+    const airborne = {
+      ...createBody(),
+      x: 100,
+      y: WORLD.ground - 1,
+      vy: 300,
+      grounded: false,
+      motion: "jump" as const,
+      jumpAge: 0.8,
+    };
+    const landed = stepBody(airborne, neutral, 1 / 120, set);
+    expect(landed.grounded).toBe(true);
+    expect(landed.motion).toBe("transition");
+    expect(landed.bridge?.route).toBe(2);
+    expect(advance(landed, 0.15, {}, set).motion).toBe("transition");
+    expect(advance(landed, 0.6, {}, set).motion).toBe("idle");
+  });
+  it.each([{ axis: -1 }, { jump: true }, { attack: true }, { roll: true }])(
+    "interrupts a bridge immediately on %o",
+    (input) => {
+      const set = configured();
+      const stopping = stepBody(
+        { ...createBody(), motion: "walk", vx: 350 },
+        neutral,
+        1 / 120,
+        set,
+      );
+      const next = stepBody(stopping, { ...neutral, ...input }, 1 / 120, set);
+      expect(next.motion).not.toBe("transition");
+      expect(next.bridge).toBeNull();
+    },
+  );
+  it("reviews exact source, bridge and idle endpoint frames", () => {
+    const set = configured(),
+      b = chooseIdleBridge(set, "walk", 1)!;
+    expect(bridgeFrame(set, b, 0)).toEqual({ role: "idle", clipId: "stop", frame: 0 });
+    expect(reviewBridgeFrame(set, 0, 0)).toEqual({ role: "walk", frame: 1 });
+    expect(reviewBridgeFrame(set, 0, 0.25).clipId).toBe("stop");
+    expect(reviewBridgeFrame(set, 0, 0.61)).toEqual({ role: "idle", frame: 2 });
+  });
+  it("keeps unapproved trial routes out of controller playback", () => {
+    const s = configured();
+    const reviewOnly = validateAnimationSet({
+      ...s,
+      controller: {
+        idleTransitions: s.controller!.idleTransitions!.map((r) => ({ ...r, enabled: false })),
+      },
+    });
+    expect(chooseIdleBridge(reviewOnly, "walk", 1)).toBeNull();
+    expect(reviewBridgeFrame(reviewOnly, 0, 0.25).clipId).toBe("stop");
+    const stopped = stepBody(
+      { ...createBody(), motion: "walk", vx: 350 },
+      neutral,
+      1 / 120,
+      reviewOnly,
+    );
+    expect(stopped.motion).toBe("walk");
+  });
+  it("rejects invalid routing and cropped sheet geometry", () => {
+    const set = configured();
+    for (const route of [
+      { from: "idle", exitFrame: 0, clip: "stop" },
+      { from: "walk", exitFrame: 4, clip: "stop" },
+      { from: "walk", exitFrame: 1, clip: "missing" },
+      { from: "walk", exitFrame: 1, clip: "idle" },
+      { from: "walk", exitFrame: 1, clip: "stop", idleFrame: 4 },
+    ])
+      expect(() =>
+        validateAnimationSet({ ...set, controller: { idleTransitions: [route] } }),
+      ).toThrow();
+    expect(() =>
+      validateAnimationSet({
+        ...base,
+        clips: { idle: { ...clip(), frameCrop: { x: 100, y: 0, width: 80, height: 100 } } },
+      }),
+    ).toThrow(/crop/);
+    const compact = validateAnimationSet({
+      ...base,
+      canvas: { width: 2048, height: 2048 },
+      clips: {
+        idle: {
+          ...clip(),
+          grid: { cols: 64, rows: 64 },
+          frameCrop: { x: 10, y: 20, width: 8, height: 8 },
+        },
+      },
+    });
+    expect(compact.clips.idle.frameCrop?.width).toBe(8);
   });
 });
 describe("clip queues and reusable sets", () => {

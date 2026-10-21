@@ -1,0 +1,87 @@
+import { clipFor, type AnimationSet, type Role } from "./set";
+
+export interface BridgeState {
+  route: number;
+  sourceFrame: number;
+  steps: number;
+  leadSeconds: number;
+}
+export interface PoseFrame {
+  role: Role;
+  frame: number;
+  clipId?: string;
+}
+export const clipSeconds = (set: AnimationSet, id: string) =>
+  set.clips[id].durations.reduce((a, b) => a + b, 0) / 1000;
+export function sampleClip(set: AnimationSet, id: string, seconds: number) {
+  const clip = set.clips[id];
+  let ms = Math.max(0, seconds * 1000);
+  for (let i = 0; i < clip.count; i++) {
+    if (ms < clip.durations[i]) return i;
+    ms -= clip.durations[i];
+  }
+  return clip.count - 1;
+}
+export function idleEntrySeconds(set: AnimationSet, route: number) {
+  const entry = set.controller!.idleTransitions![route].idleFrame;
+  return (
+    clipFor(set, "idle")
+      .clip.durations.slice(0, entry)
+      .reduce((a, b) => a + b, 0) / 1000
+  );
+}
+export function chooseIdleBridge(
+  set: AnimationSet,
+  from: Role,
+  sourceFrame: number,
+): BridgeState | null {
+  const clip = clipFor(set, from).clip;
+  const candidates = (set.controller?.idleTransitions ?? [])
+    .map((r, route) => ({ r, route, steps: (r.exitFrame - sourceFrame + clip.count) % clip.count }))
+    .filter(({ r }) => r.from === from && r.enabled)
+    .sort((a, b) => a.steps - b.steps);
+  const selected = candidates[0];
+  if (!selected) return null;
+  let nativeMs = 0;
+  for (let i = 0; i < selected.steps; i++)
+    nativeMs += clip.durations[(sourceFrame + i) % clip.count];
+  return {
+    route: selected.route,
+    sourceFrame,
+    steps: selected.steps,
+    leadSeconds: Math.min(nativeMs, selected.r.leadMs) / 1000,
+  };
+}
+export function bridgeSeconds(set: AnimationSet, state: BridgeState) {
+  return state.leadSeconds + clipSeconds(set, set.controller!.idleTransitions![state.route].clip);
+}
+export function bridgeFrame(set: AnimationSet, state: BridgeState, seconds: number): PoseFrame {
+  const route = set.controller!.idleTransitions![state.route];
+  if (seconds < state.leadSeconds) {
+    const clip = clipFor(set, route.from).clip;
+    const step = Math.min(
+      state.steps,
+      Math.floor((seconds / state.leadSeconds) * (state.steps + 1)),
+    );
+    return { role: route.from, frame: (state.sourceFrame + step) % clip.count };
+  }
+  return {
+    role: "idle",
+    clipId: route.clip,
+    frame: sampleClip(set, route.clip, seconds - state.leadSeconds),
+  };
+}
+/** Isolated endpoint/bridge/idle review. Source and target use exact saved frames. */
+export function reviewBridgeFrame(set: AnimationSet, index: number, seconds: number): PoseFrame {
+  const route = set.controller!.idleTransitions![index],
+    duration = clipSeconds(set, route.clip);
+  const t = seconds % (0.2 + duration + 0.8);
+  if (t < 0.2) return { role: route.from, frame: route.exitFrame };
+  if (t < 0.2 + duration)
+    return { role: "idle", clipId: route.clip, frame: sampleClip(set, route.clip, t - 0.2) };
+  const idle = clipFor(set, "idle");
+  return {
+    role: "idle",
+    frame: sampleClip(set, idle.id, idleEntrySeconds(set, index) + t - 0.2 - duration),
+  };
+}

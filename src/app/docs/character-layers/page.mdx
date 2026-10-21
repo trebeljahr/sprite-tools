@@ -189,3 +189,25 @@ Walking frame phase follows distance travelled. Running uses **Run animation** f
 An optional clip `locomotion` object stores `stridePixels` (world pixels per complete cycle), `phaseOffset` (0–1), and one `groundOffsets` Y correction per frame (source-art pixels). These settings work with arbitrary character sets. They calibrate flattened clips; they do not create foot IK or fix incorrect generated poses. Clip review uses the original durations, so controller cadence may differ from clip playback.
 
 When movement stops, the controller blends its last gait pose into idle over 240ms. Running keeps its gait while braking; releasing Shift with the direction key still held switches to walking. Finishing an attack, roll or landing also blends into idle. The idle clock continues through the end of the fade instead of restarting. New movement, a jump or an attack can interrupt this settling step. The idle loop keeps playing when the canvas is unfocused; input stays restricted to the focused canvas. This is a short pose crossfade using existing artwork, not an authored stopping clip or skeletal blend.
+
+
+### Authored stop and landing transitions
+
+`controller.idleTransitions` connects existing animation roles to dedicated, non-looping recovery clips. Each route names `from`, `exitFrame`, `clip`, and `idleFrame`; optional `leadMs` bounds the final step into the exit pose. Multiple routes from a gait let the controller choose the nearer forward foot contact. Set the bridge's first image to that exact exit pose and its last image to the exact idle entry. The controller plays source poses into the exit, then the recovery clip, then idle. Configured routes use no dissolve. Movement, jump, roll and attack can interrupt recovery immediately. Jump routes start at ground contact instead of squeezing recovery into the fallback landing timer.
+
+```json
+{
+  "controller": {
+    "idleTransitions": [
+      { "from": "walk", "exitFrame": 1, "clip": "walk-stop-front", "idleFrame": 0, "leadMs": 180 },
+      { "from": "walk", "exitFrame": 11, "clip": "walk-stop-rear", "idleFrame": 0, "leadMs": 180 },
+      { "from": "run", "exitFrame": 7, "clip": "run-stop", "idleFrame": 0, "leadMs": 180 },
+      { "from": "jump", "exitFrame": 17, "clip": "land-recover", "idleFrame": 0, "leadMs": 100 }
+    ]
+  }
+}
+```
+
+**Stop and landing transitions** buttons review the exact exit pose, recovery clip and idle entry. The playback speed selector also slows this review. Geometry and route validation cannot certify natural motion: inspect the step, planted foot, weapon hand, body volume and both joins. A route's bounded lead can accelerate the final portion of a gait; author additional exit variants when that is visible.
+
+A clip can store a losslessly cropped sheet with `frameCrop: { x, y, width, height }`. Each physical sheet cell has that width and height; the rectangle locates it inside the set's unchanged virtual `canvas`. Origins and movement stay in virtual coordinates. This saves transparent-sheet memory without resizing or moving painted pixels. The loader validates the physical PNG grid, crop bounds and total decoded pixel budget. Set a route’s `enabled: false` to keep an unapproved trial available in transition review while excluding it from controller playback. Settings export retains crops and transition routes. Sets without routes retain the earlier fallback behavior.

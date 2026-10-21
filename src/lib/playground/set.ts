@@ -46,6 +46,14 @@ const clip = z
       .nullable()
       .optional(),
     colour: colour.optional(),
+    frameCrop: z
+      .object({
+        x: z.number().int().min(0),
+        y: z.number().int().min(0),
+        width: z.number().int().min(1).max(2048),
+        height: z.number().int().min(1).max(2048),
+      })
+      .optional(),
     locomotion: z
       .object({
         stridePixels: z.number().min(40).max(2000),
@@ -71,6 +79,20 @@ const schema = z
         layerProject: z.string().max(2048).optional(),
         runSpeed: z.number().min(400).max(2400).optional(),
         runCycleMs: z.number().min(100).max(2000).optional(),
+        idleTransitions: z
+          .array(
+            z.object({
+              from: z.enum(roles),
+              clip: z.string().min(1).max(64),
+              exitFrame: z.number().int().min(0),
+              idleFrame: z.number().int().min(0).default(0),
+              leadMs: z.number().min(0).max(400).default(180),
+              label: z.string().max(100).optional(),
+              enabled: z.boolean().default(true),
+            }),
+          )
+          .max(32)
+          .optional(),
         labels: z.record(z.enum(roles), z.string().max(100)).optional(),
       })
       .optional(),
@@ -89,7 +111,17 @@ export function validateAnimationSet(value: unknown): AnimationSet {
       throw Error("Clip frame counts, grid and durations must agree.");
     if (c.locomotion?.groundOffsets && c.locomotion.groundOffsets.length !== c.count)
       throw Error("Ground offsets must match the clip frame count.");
-    total += s.canvas.width * s.canvas.height * c.grid.cols * c.grid.rows;
+    if (
+      c.frameCrop &&
+      (c.frameCrop.x + c.frameCrop.width > s.canvas.width ||
+        c.frameCrop.y + c.frameCrop.height > s.canvas.height)
+    )
+      throw Error("Frame crop is outside the virtual sprite canvas.");
+    total +=
+      (c.frameCrop?.width ?? s.canvas.width) *
+      (c.frameCrop?.height ?? s.canvas.height) *
+      c.grid.cols *
+      c.grid.rows;
     for (const p of Object.values(c.phase ?? {})) {
       if (!p) continue;
       const [a, b] = Array.isArray(p) ? p : [p.from, p.to];
@@ -112,6 +144,14 @@ export function validateAnimationSet(value: unknown): AnimationSet {
   for (const n of Object.values(bindings))
     if (n && !s.clips[n]) throw Error("Controller binding references an unknown clip.");
   bindings.idle ??= names[0];
+  for (const route of s.controller?.idleTransitions ?? []) {
+    const from = bindings[route.from],
+      idle = bindings.idle!;
+    if (route.from === "idle" || !from || !s.clips[route.clip] || s.clips[route.clip].loop)
+      throw Error("Idle transitions need a bound source and a non-looping bridge clip.");
+    if (route.exitFrame >= s.clips[from].count || route.idleFrame >= s.clips[idle].count)
+      throw Error("Transition endpoint is outside its clip.");
+  }
   return { ...s, bindings };
 }
 export function clipFor(set: AnimationSet, role: Role) {

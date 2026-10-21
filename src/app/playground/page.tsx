@@ -26,6 +26,7 @@ import {
   type Preview,
 } from "@/lib/playground/controller";
 
+import { reviewBridgeFrame } from "@/lib/playground/transitions";
 import { cameraFor, paintScene } from "@/lib/playground/scene";
 
 const labels: Record<Role, string> = {
@@ -63,12 +64,15 @@ function paintSprite(
   y: number,
   facing: number,
   time: number,
+  clipId?: string,
 ) {
   const { set, images } = loaded,
-    { id, clip, fallback } = clipFor(set, role),
+    { id, clip, fallback } = clipId
+      ? { id: clipId, clip: set.clips[clipId], fallback: false }
+      : clipFor(set, role),
     im = images[id],
-    w = set.canvas.width,
-    h = set.canvas.height;
+    w = clip.frameCrop?.width ?? set.canvas.width,
+    h = clip.frameCrop?.height ?? set.canvas.height;
   const color = clip.colour ?? { saturation: 1, contrast: 1, brightness: 1 };
   ctx.save();
   ctx.translate(x, y);
@@ -90,8 +94,8 @@ function paintSprite(
     Math.floor(renderFrame / clip.grid.cols) * h,
     w,
     h,
-    -set.origin.x,
-    -set.origin.y,
+    (clip.frameCrop?.x ?? 0) - set.origin.x,
+    (clip.frameCrop?.y ?? 0) - set.origin.y,
     w,
     h,
   );
@@ -108,6 +112,7 @@ export default function Playground() {
     [playing, setPlaying] = useState(true),
     [speed, setSpeed] = useState(1),
     [queued, setQueued] = useState(true),
+    [bridgeReview, setBridgeReview] = useState<number | null>(null),
     [from, setFrom] = useState<Role>("run"),
     [to, setTo] = useState<Role>("jump"),
     [view, setView] = useState({
@@ -158,8 +163,8 @@ export default function Playground() {
             throw Error("Animation sheets must be PNG files.");
           const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
           if (
-            header.getUint32(16) !== set.canvas.width * clip.grid.cols ||
-            header.getUint32(20) !== set.canvas.height * clip.grid.rows
+            header.getUint32(16) !== (clip.frameCrop?.width ?? set.canvas.width) * clip.grid.cols ||
+            header.getUint32(20) !== (clip.frameCrop?.height ?? set.canvas.height) * clip.grid.rows
           )
             throw Error(`${id}: sheet dimensions do not match its grid.`);
           const im = new Image(),
@@ -177,6 +182,7 @@ export default function Playground() {
         }
         if (ac.signal.aborted) return;
         setLoaded({ set, images, url: file });
+        setBridgeReview(null);
         setUrl(file);
         body.current = createBody();
         preview.current = { role: "idle", time: 0, queued: null };
@@ -231,6 +237,7 @@ export default function Playground() {
       if (!loaded) paintScene(ctx, { x: -460, y: 0 }, mode === "play");
       if (loaded) {
         let role: Role, frame: number, x: number, y: number, facing: number, time: number;
+        let clipId: string | undefined;
         if (mode === "play") {
           {
             accumulator += dt;
@@ -265,15 +272,23 @@ export default function Playground() {
             p = bodyFrame(s, loaded.set);
           role = p.role;
           frame = p.frame;
+          clipId = p.clipId;
           x = s.x;
           y = s.y;
           facing = s.facing;
           time = s.time;
         } else {
-          if (playing) preview.current = stepPreview(preview.current, dt * speed, loaded.set);
+          if (playing) {
+            if (bridgeReview !== null) preview.current.time += dt * speed;
+            else preview.current = stepPreview(preview.current, dt * speed, loaded.set);
+          }
           const p = preview.current;
-          role = p.role;
-          frame = frameAt(loaded.set, role, p.time, clipFor(loaded.set, role).clip.loop);
+          const pose =
+            bridgeReview !== null ? reviewBridgeFrame(loaded.set, bridgeReview, p.time) : null;
+          role = pose?.role ?? p.role;
+          frame =
+            pose?.frame ?? frameAt(loaded.set, role, p.time, clipFor(loaded.set, role).clip.loop);
+          clipId = pose?.clipId;
           x = VIEWPORT.width / 2;
           y = WORLD.ground;
           facing = 1;
@@ -309,10 +324,11 @@ export default function Playground() {
           paintSprite(blendCtx, loaded, "idle", frame, ox, oy, facing, time);
           blendCtx.restore();
           ctx.drawImage(blendCanvas, x - ox, y - oy);
-        } else paintSprite(ctx, loaded, role, frame, x, y, facing, time);
+        } else paintSprite(ctx, loaded, role, frame, x, y, facing, time, clipId);
         ctx.restore();
         c.dataset.state = mode === "play" ? body.current.motion : role;
         c.dataset.frame = String(frame);
+        c.dataset.clip = clipId ?? clipFor(loaded.set, role).id;
         c.dataset.x = x.toFixed(1);
         c.dataset.y = y.toFixed(1);
         if (now - report > 80) {
@@ -329,7 +345,7 @@ export default function Playground() {
                 ? body.current.queuedStab
                   ? "stab"
                   : ""
-                : (preview.current.queued ?? ""),
+                : (clipId ?? preview.current.queued ?? ""),
           });
         }
       }
@@ -337,9 +353,9 @@ export default function Playground() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [loaded, active, mode, playing, speed]);
+  }, [loaded, active, mode, playing, speed, bridgeReview]);
   const scrub = (frame: number) => {
-    if (!loaded) return;
+    if (!loaded || bridgeReview !== null) return;
     const p = preview.current,
       { clip, fallback } = clipFor(loaded.set, p.role);
     const index = (frame + clip.count) % clip.count;
@@ -403,6 +419,7 @@ export default function Playground() {
     }
   };
   const choose = (role: Role) => {
+    setBridgeReview(null);
     if (queued && playing) preview.current.queued = role;
     else preview.current = { role, time: 0, queued: null };
     setPlaying(true);
@@ -411,12 +428,17 @@ export default function Playground() {
     clear();
     body.current = createBody();
     preview.current = { role: "idle", time: 0, queued: null };
+    setBridgeReview(null);
     setActive(false);
   };
   const colourId = loaded
     ? clipFor(
         loaded.set,
-        (view.role === "land" ? "jump" : view.role === "settle" ? "idle" : view.role) as Role,
+        (view.role === "land"
+          ? "jump"
+          : view.role === "settle" || view.role === "transition"
+            ? "idle"
+            : view.role) as Role,
       ).id
     : null;
   const grade =
@@ -690,7 +712,7 @@ export default function Playground() {
             <Button
               variant="ghost"
               aria-label="Previous frame"
-              disabled={!loaded}
+              disabled={!loaded || bridgeReview !== null}
               onClick={() => scrub(view.frame - 1)}
             >
               ←
@@ -698,13 +720,14 @@ export default function Playground() {
             <Button
               variant="ghost"
               aria-label="Next frame"
-              disabled={!loaded}
+              disabled={!loaded || bridgeReview !== null}
               onClick={() => scrub(view.frame + 1)}
             >
               →
             </Button>
             <input
               aria-label="Animation frame"
+              disabled={bridgeReview !== null}
               type="range"
               className="min-w-24 flex-1"
               min={0}
@@ -767,6 +790,7 @@ export default function Playground() {
             <Button
               disabled={!loaded}
               onClick={() => {
+                setBridgeReview(null);
                 preview.current = { role: from, time: 0, queued: to };
                 setPlaying(true);
               }}
@@ -776,6 +800,33 @@ export default function Playground() {
           </div>
         </div>
       )}
+      {loaded?.set.controller?.idleTransitions?.length ? (
+        <div className="mt-5 space-y-2 border-t pt-4">
+          <p className="text-sm">Stop and landing transitions</p>
+          <div className="flex flex-wrap gap-2">
+            {loaded.set.controller.idleTransitions.map((route, index) => (
+              <Button
+                key={`${route.from}-${route.exitFrame}-${route.clip}`}
+                variant="outline"
+                onClick={() => {
+                  setMode("clips");
+                  setBridgeReview(index);
+                  preview.current = { role: route.from, time: 0, queued: null };
+                  setPlaying(true);
+                }}
+              >
+                {!route.enabled ? "Trial · " : ""}
+                {route.label ?? `${names[route.from]} → ${names.idle}`}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Review the source exit pose, recovery clip and idle entry in sequence. Trial clips are
+            for review only and stay out of the controller. Playback speed above also applies here.
+            Choose an action to return to frame review.
+          </p>
+        </div>
+      ) : null}
       {loaded && (!loaded.set.bindings.run || !loaded.set.bindings.roll) && (
         <p className="mt-4 text-xs text-amber-600">
           Temporary visuals: {!loaded.set.bindings.run ? "run uses a faster walk cycle. " : ""}

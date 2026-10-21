@@ -1,3 +1,11 @@
+import {
+  bridgeFrame,
+  bridgeSeconds,
+  chooseIdleBridge,
+  idleEntrySeconds,
+  type BridgeState,
+  type PoseFrame,
+} from "./transitions";
 import { clipFor, frameAt, roleDuration, type AnimationSet, type Role } from "./set";
 export interface Input {
   axis: number;
@@ -15,7 +23,8 @@ export interface Body {
   vy: number;
   facing: 1 | -1;
   grounded: boolean;
-  motion: Role | "land" | "settle";
+  motion: Role | "land" | "settle" | "transition";
+  bridge: BridgeState | null;
   time: number;
   jumpAge: number;
   attack: number;
@@ -64,6 +73,7 @@ export function createBody(): Body {
     facing: 1,
     grounded: true,
     motion: "idle",
+    bridge: null,
     time: 0,
     jumpAge: 0,
     attack: 0,
@@ -84,9 +94,10 @@ const crouching = (s: Body) =>
   s.motion === "crouch" ||
   s.motion === "crouchUp" ||
   s.motion === "crouchAttack";
-function begin(s: Body, role: Role | "land" | "settle") {
+function begin(s: Body, role: Body["motion"]) {
   s.motion = role;
   s.time = 0;
+  if (role !== "transition") s.bridge = null;
   if (role !== "settle") s.settleFrom = null;
 }
 function startAttack(s: Body, stab = false) {
@@ -94,7 +105,16 @@ function startAttack(s: Body, stab = false) {
   if (stab) s.attack = 2;
   s.attackBuffer = 0;
 }
+function startIdleBridge(s: Body, set: AnimationSet, role: Role) {
+  const bridge = chooseIdleBridge(set, role, bodyFrame(s, set).frame);
+  if (!bridge) return false;
+  begin(s, "transition");
+  s.bridge = bridge;
+  return true;
+}
 function settleIntoIdle(s: Body, set: AnimationSet) {
+  const source = bodyFrame(s, set).role;
+  if (startIdleBridge(s, set, source)) return;
   const from = { ...bodyFrame(s, set), time: s.time };
   begin(s, "settle");
   s.settleFrom = from;
@@ -149,6 +169,25 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     s.queuedCrouchAttack = false;
     settleIntoIdle(s, set);
   }
+  if (s.motion === "transition" && s.bridge) {
+    const end = bridgeSeconds(set, s.bridge);
+    if (s.time >= end) {
+      const route = set.controller!.idleTransitions![s.bridge.route];
+      if (route.from === "walk" || route.from === "run") {
+        const clip = clipFor(set, route.from).clip;
+        const elapsed = clip.durations.slice(0, route.exitFrame).reduce((a, b) => a + b, 0);
+        s.gaitPhase =
+          (elapsed / clip.durations.reduce((a, b) => a + b, 0) -
+            (clip.locomotion?.phaseOffset ?? 0) +
+            1) %
+          1;
+      }
+      const idleTime = idleEntrySeconds(set, s.bridge.route) + s.time - end;
+      begin(s, "idle");
+      s.time = idleTime;
+      if (!axis) s.vx = 0;
+    } else if (axis) begin(s, s.grounded ? (input.sprint ? "run" : "walk") : "jump");
+  }
   if (s.motion === "roll" && s.time >= roleDuration(set, "roll")) {
     s.rollCooldown = 0.15;
     if (s.queuedStab) {
@@ -187,6 +226,8 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
       s.attackBuffer = 0;
     } else if (s.motion !== "roll" && s.attackBuffer > 0) startAttack(s);
   }
+  if (s.grounded && !axis && (s.motion === "walk" || s.motion === "run"))
+    startIdleBridge(s, set, s.motion);
   if (s.motion === "roll") s.vx = s.facing * movement.roll;
   else {
     const target = crouching(s)
@@ -225,12 +266,15 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
         break;
       }
     }
-  if (!previous.grounded && s.grounded && !attacking(s) && s.motion !== "roll") begin(s, "land");
+  if (!previous.grounded && s.grounded && !attacking(s) && s.motion !== "roll") {
+    if (!startIdleBridge(s, set, "jump")) begin(s, "land");
+  }
   if (
     s.motion !== "roll" &&
     !attacking(s) &&
     !crouching(s) &&
     s.motion !== "land" &&
+    s.motion !== "transition" &&
     (s.motion !== "settle" || axis !== 0 || !s.grounded)
   ) {
     const next: Role = !s.grounded
@@ -254,6 +298,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
       s.motion === "run" ? (runSpeedFor(set) * runCycleMsFor(set)) / 1000 : strideFor(set, "walk");
     s.gaitPhase = (s.gaitPhase + Math.abs(s.x - previous.x) / stride) % 1;
   }
+  if (s.motion === "transition" && !s.grounded) begin(s, "jump");
   return s;
 }
 export function runSpeedFor(set: AnimationSet) {
@@ -265,8 +310,14 @@ export function runCycleMsFor(set: AnimationSet) {
 export function strideFor(set: AnimationSet, role: "walk" | "run") {
   return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);
 }
-export function bodyFrame(s: Body, set: AnimationSet) {
-  const role: Role = s.motion === "land" ? "jump" : s.motion === "settle" ? "idle" : s.motion,
+export function bodyFrame(s: Body, set: AnimationSet): PoseFrame {
+  if (s.motion === "transition" && s.bridge) return bridgeFrame(set, s.bridge, s.time);
+  const role: Role =
+      s.motion === "land"
+        ? "jump"
+        : s.motion === "settle" || s.motion === "transition"
+          ? "idle"
+          : s.motion,
     { clip } = clipFor(set, role);
   if (s.motion === "walk" || s.motion === "run") {
     const phase = (s.gaitPhase + (clip.locomotion?.phaseOffset ?? 0)) % 1;
