@@ -172,7 +172,11 @@ export function croppedCanvas(image: Pixels) {
         x1 = Math.max(x1, x);
         y1 = Math.max(y1, y);
       }
-  if (x0 > x1) return { canvas: document.createElement("canvas"), x: 0, y: 0 };
+  if (x0 > x1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 0;
+    return { canvas, x: 0, y: 0 };
+  }
   const c = document.createElement("canvas");
   c.width = x1 - x0 + 1;
   c.height = y1 - y0 + 1;

@@ -5,6 +5,7 @@ import {
   type ChromaCoreConfig,
   detectBackgroundColor,
   hexToRgb,
+  suppressChromaSpill,
 } from "@/lib/pipeline/chroma-core";
 
 type Rgba = [number, number, number, number];
@@ -74,6 +75,51 @@ describe("detectBackgroundColor", () => {
 });
 
 describe("applyChromaKeyToImageData", () => {
+  it("removes dark green edge spill beyond the RGB-distance band, preserving alpha and warm fur", () => {
+    const img = solid(12, 12, [130, 90, 60, 255]);
+    for (let y = 0; y < 12; y++) setPixel(img, 0, y, GREEN);
+    setPixel(img, 1, 5, [60, 100, 40, 255]);
+    setPixel(img, 2, 5, [70, 110, 45, 120]);
+    applyChromaKeyToImageData(img, { r: 0, g: 255, b: 0 }, { ...baseCfg, spill: 20 });
+    const edge = (5 * 12 + 1) * 4;
+    expect(Array.from(img.data.slice(edge, edge + 4))).toEqual([60, 60, 40, 255]);
+    expect(alphaAt(img, 2, 5)).toBe(120);
+    expect(Array.from(img.data.slice((5 * 12 + 3) * 4, (5 * 12 + 3) * 4 + 4))).toEqual([
+      130, 90, 60, 255,
+    ]);
+  });
+
+  it("preserves interior key-coloured artwork and lets spill be disabled", () => {
+    const img = solid(12, 12, [70, 110, 45, 255]);
+    setPixel(img, 0, 0, [0, 255, 0, 0]);
+    const original = new Uint8ClampedArray(img.data);
+    suppressChromaSpill(img, { r: 0, g: 255, b: 0 }, 0);
+    expect(img.data).toEqual(original);
+    suppressChromaSpill(img, { r: 0, g: 255, b: 0 }, 20);
+    const center = (6 * 12 + 6) * 4;
+    expect(Array.from(img.data.slice(center, center + 4))).toEqual([70, 110, 45, 255]);
+    expect(Array.from(img.data.slice((1 * 12 + 1) * 4, (1 * 12 + 1) * 4 + 4))).toEqual([
+      70, 70, 45, 255,
+    ]);
+  });
+
+  it("handles blue and magenta spill without desaturating unrelated channels", () => {
+    for (const [target, color, expected] of [
+      [{ r: 0, g: 0, b: 255 }, [60, 40, 100, 120], [60, 40, 60, 120]],
+      [{ r: 255, g: 0, b: 255 }, [110, 60, 90, 120], [80, 60, 60, 120]],
+    ] as const) {
+      const img = solid(1, 1, [...color]);
+      suppressChromaSpill(img, target, 20);
+      expect(Array.from(img.data)).toEqual(expected);
+    }
+  });
+
+  it("keeps red cloth at a magenta-keyed edge", () => {
+    const img = solid(1, 1, [150, 60, 40, 120]);
+    suppressChromaSpill(img, { r: 255, g: 0, b: 255 }, 20);
+    expect(Array.from(img.data)).toEqual([150, 60, 40, 120]);
+  });
+
   it("zeroes alpha within similarity and keeps distant pixels opaque", () => {
     const img = solid(8, 8, GREEN);
     setPixel(img, 4, 4, RED);

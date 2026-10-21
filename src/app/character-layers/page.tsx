@@ -15,6 +15,7 @@ import {
   type CharacterSession,
 } from "@/lib/character/browser";
 import { characterDemo } from "@/lib/character/demo";
+import { explodedLayout } from "@/lib/character/exploded";
 import { completionBackground, removeCompletionBackground } from "@/lib/character/completion";
 import { validatePlan, type CharacterPart, type Point } from "@/lib/character/types";
 
@@ -125,6 +126,23 @@ export default function CharacterLayersPage() {
     () => (session ? imageCanvas(session.source) : null),
     [session?.source, session],
   );
+  const exploded = useMemo(
+    () =>
+      session
+        ? explodedLayout(
+            Object.entries(canvases).map(([id, im]) => ({
+              id,
+              x: im.x,
+              y: im.y,
+              width: im.canvas.width,
+              height: im.canvas.height,
+            })),
+            session.source.width,
+            session.source.height,
+          )
+        : null,
+    [canvases, session],
+  );
   const commit = (next: CharacterSession, record = true) => {
     try {
       validatePlan(next.plan);
@@ -204,23 +222,39 @@ export default function CharacterLayersPage() {
     const c = canvas.current;
     if (!c || !session || !bundle) return;
     const ctx = c.getContext("2d")!;
-    c.width = session.source.width;
-    c.height = session.source.height;
+    c.width = view === "exploded" && exploded ? exploded.width : session.source.width;
+    c.height = view === "exploded" && exploded ? exploded.height : session.source.height;
     ctx.clearRect(0, 0, c.width, c.height);
     const transforms = poseTransforms(session.plan, view === "bend" ? { [selected]: angle } : {});
     if (view === "original" && sourceCanvas) ctx.drawImage(sourceCanvas, 0, 0);
     else
-      for (const [_i, l] of bundle.layers.entries()) {
+      for (const l of bundle.layers) {
         ctx.save();
-        if (view === "exploded") {
-          const p = session.plan.parts.find((p) => p.id === l.id);
-          if (p) {
-            const b = p.polygon.reduce(
-              (a, b) => ({ x: a.x + b.x / p.polygon.length, y: a.y + b.y / p.polygon.length }),
-              { x: 0, y: 0 },
-            );
-            ctx.translate((b.x - c.width / 2) * 0.35, (b.y - c.height / 2) * 0.25);
+        if (view === "exploded" && exploded) {
+          const item = exploded.items.find((p) => p.id === l.id);
+          if (!item) {
+            ctx.restore();
+            continue;
           }
+          ctx.fillStyle = "#b0824a";
+          ctx.font = `${Math.max(12, exploded.labelHeight * 0.65)}px sans-serif`;
+          ctx.fillText(
+            session.plan.parts.find((p) => p.id === l.id)?.name ?? "Unassigned",
+            item.left,
+            item.top + exploded.labelHeight * 0.7,
+            item.slotWidth,
+          );
+          if (l.id === selected) {
+            ctx.strokeStyle = "#b0824a";
+            ctx.lineWidth = Math.max(1, exploded.gap / 15);
+            ctx.strokeRect(
+              item.left - 4,
+              item.top - 4,
+              item.width + 8,
+              item.height + exploded.labelHeight + 8,
+            );
+          }
+          ctx.translate(item.dx, item.dy);
         } else if (view === "bend" && transforms[l.id]) ctx.transform(...transforms[l.id]);
         const im = canvases[l.id];
         if (im?.canvas.width && im.canvas.height) ctx.drawImage(im.canvas, im.x, im.y);
@@ -273,6 +307,7 @@ export default function CharacterLayersPage() {
       }
       ctx.restore();
     }
+    if (view === "exploded") return;
     ctx.strokeStyle = "#b0824a";
     ctx.lineWidth = Math.max(1, c.width / 500);
     const o = session.plan.origin,
@@ -283,7 +318,19 @@ export default function CharacterLayersPage() {
     ctx.moveTo(o.x, o.y - r);
     ctx.lineTo(o.x, o.y + r);
     ctx.stroke();
-  }, [session, bundle, canvases, view, part, selected, angle, showMasks, sourceCanvas, maskDraft]);
+  }, [
+    session,
+    bundle,
+    canvases,
+    exploded,
+    view,
+    part,
+    selected,
+    angle,
+    showMasks,
+    sourceCanvas,
+    maskDraft,
+  ]);
   const location = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
     const c = e.currentTarget,
       r = c.getBoundingClientRect();
@@ -293,8 +340,20 @@ export default function CharacterLayersPage() {
     };
   };
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!session || busy || view !== "assembled") return;
+    if (!session || busy) return;
     const p = location(e);
+    if (view === "exploded" && exploded) {
+      const hit = exploded.items.find(
+        (l) =>
+          p.x >= l.left &&
+          p.x < l.left + l.width &&
+          p.y >= l.top &&
+          p.y < l.top + l.height + exploded.labelHeight,
+      );
+      if (hit && session.plan.parts.some((part) => part.id === hit.id)) setSelected(hit.id);
+      return;
+    }
+    if (view !== "assembled") return;
     if (edit === "origin") {
       commit({ ...session, plan: { ...session.plan, origin: p } });
       return;
@@ -712,6 +771,12 @@ export default function CharacterLayersPage() {
               </button>
             ))}
           </div>
+          {view === "exploded" && (
+            <p className="py-2 text-xs text-muted-foreground">
+              Parts shown separately at the same scale. Select a part to inspect it. Missing joint
+              artwork still needs completion before bending.
+            </p>
+          )}
           <div className="relative flex min-h-[420px] flex-1 items-center justify-center overflow-hidden bg-[linear-gradient(45deg,#b6ae9b12_25%,transparent_25%,transparent_75%,#b6ae9b12_75%),linear-gradient(45deg,#b6ae9b12_25%,transparent_25%,transparent_75%,#b6ae9b12_75%)] [background-size:24px_24px] [background-position:0_0,12px_12px]">
             {session ? (
               <canvas
@@ -728,7 +793,7 @@ export default function CharacterLayersPage() {
                   drag.current = null;
                   setMaskDraft(null);
                 }}
-                className={`max-h-[62vh] max-w-full touch-none object-contain ${edit !== "inspect" ? "cursor-crosshair" : ""}`}
+                className={`max-w-full touch-none object-contain ${view === "exploded" ? "" : "max-h-[62vh]"} ${edit !== "inspect" ? "cursor-crosshair" : ""}`}
                 style={{ width: "auto", height: "auto" }}
               />
             ) : (

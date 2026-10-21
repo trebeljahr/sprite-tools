@@ -26,6 +26,49 @@ export interface ImageDataLike {
   data: Uint8ClampedArray | Uint8Array;
 }
 
+/** Remove key-colour contamination at the matte edge without eroding fine artwork. */
+export function suppressChromaSpill(img: ImageDataLike, target: Rgb, spill: number): void {
+  if (spill <= 0) return;
+  const key = [target.r, target.g, target.b];
+  const peak = Math.max(...key),
+    low = Math.min(...key);
+  if (peak - low < 32) return;
+  const keyed = key.map((c) => c >= peak - 16);
+  const strength = Math.min(1, spill / 20);
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const k = (y * img.width + x) * 4;
+      if (!img.data[k + 3]) continue;
+      let neutral = 0;
+      for (let c = 0; c < 3; c++) if (!keyed[c]) neutral = Math.max(neutral, img.data[k + c]);
+      let excess = 255;
+      for (let c = 0; c < 3; c++)
+        if (keyed[c]) excess = Math.min(excess, img.data[k + c] - neutral);
+      if (excess <= 0) continue;
+      // Distance to pure green misses dark, mixed edge pixels. Use the matte instead.
+      let edge = img.data[k + 3] < 255;
+      for (let dy = -2; dy <= 2 && !edge; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const xx = x + dx,
+            yy = y + dy;
+          if (
+            xx >= 0 &&
+            yy >= 0 &&
+            xx < img.width &&
+            yy < img.height &&
+            img.data[(yy * img.width + xx) * 4 + 3] < 255
+          ) {
+            edge = true;
+            break;
+          }
+        }
+      }
+      if (!edge) continue;
+      for (let c = 0; c < 3; c++) if (keyed[c]) img.data[k + c] -= excess * strength;
+    }
+  }
+}
+
 export function hexToRgb(hex: string): Rgb {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return m
@@ -91,7 +134,11 @@ export function applyChromaKeyToImageData(
 
     data[j + 3] = Math.min(data[j + 3], alpha * 255);
 
-    if (dist < similarity + softness + spill) {
+    if (
+      spill > 0 &&
+      Math.max(tR, tG, tB) - Math.min(tR, tG, tB) < 32 &&
+      dist < similarity + softness + spill
+    ) {
       const sf = 1 - Math.max(0, Math.min(1, (dist - similarity) / (softness + spill)));
       const gray = (r + g + b) / 3;
       data[j] = r * (1 - sf) + gray * sf;
@@ -122,6 +169,7 @@ export function applyChromaKeyToImageData(
       }
     }
   }
+  suppressChromaSpill(imgData, target, spill);
 }
 
 // Replaces the background with a solid (or corner-sampled gradient) fill,
