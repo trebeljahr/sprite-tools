@@ -64,7 +64,7 @@ describe("controller movement and transitions", () => {
     expect(walk.motion).toBe("walk");
     expect(run.motion).toBe("run");
     expect(walk.vx).toBe(350);
-    expect(run.vx).toBe(640);
+    expect(run.vx).toBe(800);
     expect(run.x).toBeGreaterThan(walk.x);
     expect(initial.x).toBe(180);
   });
@@ -83,6 +83,21 @@ describe("controller movement and transitions", () => {
     const longerStride = advance(initial, 0.3, { axis: 1 }, custom);
     expect(longerStride.gaitPhase).toBeCloseTo((longerStride.x - initial.x) / 400);
     expect(bodyFrame({ ...initial, gaitPhase: 0 }, custom).frame).toBe(1);
+  });
+  it("settles from movement into the animated idle pose and can interrupt that transition", () => {
+    const moving = advance(createBody(), 0.3, { axis: 1 });
+    const settling = advance(moving, 0.15);
+    expect(settling.motion).toBe("settle");
+    expect(settling.settleFrom?.role).toBe("walk");
+    expect(bodyFrame(settling, set()).role).toBe("idle");
+    const resting = advance(settling, 0.3);
+    expect(resting.motion).toBe("idle");
+    expect(resting.settleFrom).toBeNull();
+    const nextIdle = advance(resting, 0.15);
+    expect(bodyFrame(nextIdle, set()).frame).not.toBe(bodyFrame(resting, set()).frame);
+    const resumed = stepBody(settling, { ...neutral, axis: 1 }, 1 / 120, set());
+    expect(resumed.motion).toBe("walk");
+    expect(resumed.settleFrom).toBeNull();
   });
   it("stops locomotion at world boundaries instead of running feet against an invisible wall", () => {
     const edge = WORLD.left + WORLD.width - 340;
@@ -119,7 +134,7 @@ describe("controller movement and transitions", () => {
     expect(released.motion).toBe("walk");
   });
   it("carries running velocity and facing into a directed jump", () => {
-    const moving = advance(createBody(), 0.3, { axis: -1, sprint: true });
+    const moving = advance(createBody(), 0.4, { axis: -1, sprint: true });
     const airborne = stepBody(
       moving,
       { ...neutral, axis: -1, sprint: true, jump: true },
@@ -127,7 +142,7 @@ describe("controller movement and transitions", () => {
       set(),
     );
     expect(airborne.motion).toBe("jump");
-    expect(airborne.vx).toBe(-640);
+    expect(airborne.vx).toBe(-800);
     expect(airborne.facing).toBe(-1);
     expect(airborne.y).toBeLessThan(WORLD.ground);
   });
@@ -168,7 +183,7 @@ describe("controller movement and transitions", () => {
     const lower = jumpTo(createBody(), 410);
     expect(lower.grounded).toBe(true);
     expect(lower.y).toBe(WORLD.platforms[0].y);
-    const approach = advance(lower, 0.22, { axis: 1, sprint: true });
+    const approach = advance(lower, 0.08, { axis: 1, sprint: true });
     expect(approach.x).toBeLessThan(WORLD.platforms[0].x + WORLD.platforms[0].width);
     const upper = jumpTo(approach, 880);
     expect(upper.grounded).toBe(true);

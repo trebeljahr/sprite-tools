@@ -215,15 +215,17 @@ export default function Playground() {
       if (loaded) {
         let role: Role, frame: number, x: number, y: number, facing: number, time: number;
         if (mode === "play") {
-          if (active) {
+          {
             accumulator += dt;
             let first = true;
             while (accumulator >= 1 / 120) {
-              const i = {
-                ...input.current,
-                axis: Number(held.current.right) - Number(held.current.left),
-                sprint: held.current.sprint,
-              };
+              const i = active
+                ? {
+                    ...input.current,
+                    axis: Number(held.current.right) - Number(held.current.left),
+                    sprint: held.current.sprint,
+                  }
+                : emptyInput();
               if (!first) {
                 i.jump = false;
                 i.roll = false;
@@ -238,7 +240,7 @@ export default function Playground() {
               first = false;
               accumulator -= 1 / 120;
             }
-          } else accumulator = 0;
+          }
           const s = body.current,
             p = bodyFrame(s, loaded.set);
           role = p.role;
@@ -265,7 +267,18 @@ export default function Playground() {
         ctx.beginPath();
         ctx.ellipse(x, Math.min(WORLD.ground, y) + 3, 28, 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        paintSprite(ctx, loaded, role, frame, x, y, facing, time);
+        const from =
+          mode === "play" && body.current.motion === "settle" ? body.current.settleFrom : null;
+        if (from) {
+          const t = Math.min(1, time / 0.18),
+            blend = t * t * (3 - 2 * t);
+          ctx.save();
+          ctx.globalAlpha = 1 - blend;
+          paintSprite(ctx, loaded, from.role, from.frame, x, y, facing, 0);
+          ctx.globalAlpha = blend;
+          paintSprite(ctx, loaded, "idle", frame, x, y, facing, time);
+          ctx.restore();
+        } else paintSprite(ctx, loaded, role, frame, x, y, facing, time);
         ctx.restore();
         c.dataset.state = mode === "play" ? body.current.motion : role;
         c.dataset.frame = String(frame);
@@ -278,7 +291,7 @@ export default function Playground() {
             frame,
             x: Math.round(x),
             y: Math.round(y),
-            speed: Math.round(body.current.vx),
+            speed: mode === "play" ? Math.round(body.current.vx) : 0,
             facing,
             queued:
               mode === "play"
@@ -366,7 +379,10 @@ export default function Playground() {
     setActive(false);
   };
   const colourId = loaded
-    ? clipFor(loaded.set, (view.role === "land" ? "jump" : view.role) as Role).id
+    ? clipFor(
+        loaded.set,
+        (view.role === "land" ? "jump" : view.role === "settle" ? "idle" : view.role) as Role,
+      ).id
     : null;
   const grade =
     colourId && loaded
@@ -500,7 +516,7 @@ export default function Playground() {
         {loaded && mode === "play" && !active && (
           <button
             type="button"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded border border-[#b5aa94] bg-[#eee4ce]/95 px-5 py-3 text-sm text-[#302c28]"
+            className="absolute bottom-4 left-4 rounded border border-[#b5aa94] bg-[#eee4ce]/95 px-5 py-3 text-sm text-[#302c28]"
             onClick={() => canvas.current?.focus()}
           >
             Click to play · WASD + F

@@ -13,7 +13,7 @@ export interface Body {
   vy: number;
   facing: 1 | -1;
   grounded: boolean;
-  motion: Role | "land";
+  motion: Role | "land" | "settle";
   time: number;
   jumpAge: number;
   attack: number;
@@ -22,6 +22,7 @@ export interface Body {
   jumpBuffer: number;
   rollCooldown: number;
   gaitPhase: number;
+  settleFrom: { role: "walk" | "run"; frame: number } | null;
 }
 export const VIEWPORT = { width: 1280, height: 600 };
 export const WORLD = {
@@ -42,7 +43,7 @@ export const WORLD = {
 };
 const movement = {
   walk: 350,
-  run: 640,
+  run: 800,
   roll: 720,
   jump: 820,
   gravity: 1650,
@@ -66,13 +67,15 @@ export function createBody(): Body {
     jumpBuffer: 0,
     rollCooldown: 0,
     gaitPhase: 0,
+    settleFrom: null,
   };
 }
 const attackRole = (n: number): Role => `attack${(n % 3) + 1}` as Role;
 const attacking = (s: Body) => s.motion.startsWith("attack");
-function begin(s: Body, role: Role | "land") {
+function begin(s: Body, role: Role | "land" | "settle") {
   s.motion = role;
   s.time = 0;
+  if (role !== "settle") s.settleFrom = null;
 }
 function startAttack(s: Body, stab = false) {
   begin(s, stab ? "attack2" : attackRole(s.attack++));
@@ -107,6 +110,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     if (s.attackBuffer > 0) startAttack(s);
     else begin(s, s.grounded ? "idle" : "jump");
   } else if (s.motion === "land" && s.time >= 0.14) begin(s, "idle");
+  else if (s.motion === "settle" && s.time >= 0.18) begin(s, "idle");
   const locked = s.motion === "roll" || attacking(s);
   if (!locked) {
     if (s.jumpBuffer > 0 && s.grounded) {
@@ -155,7 +159,12 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
       }
     }
   if (!previous.grounded && s.grounded && !attacking(s) && s.motion !== "roll") begin(s, "land");
-  if (s.motion !== "roll" && !attacking(s) && s.motion !== "land") {
+  if (
+    s.motion !== "roll" &&
+    !attacking(s) &&
+    s.motion !== "land" &&
+    (s.motion !== "settle" || axis !== 0 || !s.grounded)
+  ) {
     const next: Role = !s.grounded
       ? "jump"
       : Math.abs(s.vx) > 12
@@ -163,7 +172,13 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
           ? "run"
           : "walk"
         : "idle";
-    if (s.motion !== next) begin(s, next);
+    if (s.motion !== next) {
+      if (next === "idle" && (s.motion === "walk" || s.motion === "run")) {
+        const from = { role: s.motion, frame: bodyFrame(s, set).frame };
+        begin(s, "settle");
+        s.settleFrom = from;
+      } else begin(s, next);
+    }
   }
   if (s.grounded && (s.motion === "walk" || s.motion === "run")) {
     const stride = strideFor(set, s.motion);
@@ -175,7 +190,7 @@ export function strideFor(set: AnimationSet, role: "walk" | "run") {
   return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);
 }
 export function bodyFrame(s: Body, set: AnimationSet) {
-  const role: Role = s.motion === "land" ? "jump" : s.motion,
+  const role: Role = s.motion === "land" ? "jump" : s.motion === "settle" ? "idle" : s.motion,
     { clip } = clipFor(set, role);
   if (s.motion === "walk" || s.motion === "run") {
     const phase = (s.gaitPhase + (clip.locomotion?.phaseOffset ?? 0)) % 1;
