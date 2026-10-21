@@ -350,6 +350,22 @@ export async function startStudio(options: StudioOptions = {}) {
       (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
     )
       throw new Error("Choose a valid local port.");
+    const settingsPath = join(service.stateDir, "studio-settings.json");
+    let port = options.port;
+    if (port === undefined) {
+      try {
+        const settings = z
+          .object({ version: z.literal(1), port: z.number().int().min(49152).max(65535) })
+          .strict()
+          .parse(JSON.parse(await readFile(settingsPath, "utf8")));
+        port = settings.port;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+          throw new Error(
+            "Invalid saved studio port. Start with --port to choose the studio address again.",
+          );
+      }
+    }
     for (let attempt = 0; ; attempt++) {
       try {
         await new Promise<void>((accept, reject) => {
@@ -363,19 +379,29 @@ export async function startStudio(options: StudioOptions = {}) {
           };
           server.once("error", onError);
           server.once("listening", onReady);
-          server.listen(options.port ?? randomInt(49152, 65536), "127.0.0.1");
+          server.listen(port ?? randomInt(49152, 65536), "127.0.0.1");
         });
         break;
       } catch (error) {
+        if (port !== undefined && (error as NodeJS.ErrnoException).code === "EADDRINUSE")
+          throw new Error(
+            `Studio port ${port} is already in use. Stop the other listener or choose a different address with --port. The studio will not switch ports automatically.`,
+          );
         if (
-          options.port !== undefined ||
+          port !== undefined ||
           (error as NodeJS.ErrnoException).code !== "EADDRINUSE" ||
           attempt >= 2
         )
           throw error;
       }
     }
-    origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const boundPort = (server.address() as AddressInfo).port;
+    origin = `http://127.0.0.1:${boundPort}`;
+    // An explicit ephemeral port is for isolated tests and temporary clients.
+    // Normal launches retain their origin so browser password matching survives
+    // restarts. The bearer capability is still rotated for every process.
+    if (options.port !== 0 && boundPort >= 49152)
+      await writePrivateJson(settingsPath, { version: 1, port: boundPort });
     await writePrivateJson(join(service.stateDir, "connection.json"), {
       origin,
       token,

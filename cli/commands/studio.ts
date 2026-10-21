@@ -32,7 +32,7 @@ export function registerStudioCommand(program: Command) {
     )
     .option(
       "--port <number>",
-      "loopback port (default: choose a free high port)",
+      "loopback port (default: reuse the saved studio port; choose a free high port on first start)",
       (value: string) => {
         const port = Number(value);
         if (!Number.isInteger(port) || port < 49152 || port > 65535)

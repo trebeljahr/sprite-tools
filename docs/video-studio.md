@@ -14,6 +14,8 @@ The static Web app and stdio MCP server share one loopback companion. The hosted
 
 Default state is `~/.config/sprite-tools/video`. Override it with `SPRITE_TOOLS_VIDEO_HOME` or the companion's `--state-dir`. The MCP process must use the same location.
 
+The studio remembers its loopback port in `studio-settings.json` inside that state directory. The first launch chooses a free high port; later launches reuse the same address so saved browser logins keep matching. Use `sprite-tools studio --port <number>` once to choose or change the saved port. If the saved port is occupied, startup stops with a clear error rather than switching to another address. Internal callers can pass `port: 0` for an isolated temporary listener without changing the saved address.
+
 The directory is private, and credential/state files use mode 0600. The connection capability authorizes local paid requests within the configured budget. Protect it like a local session cookie. The setup URL carries it in a fragment, which is removed after pairing. Provider keys never appear in that URL.
 
 ## Budget and recovery
