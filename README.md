@@ -140,7 +140,9 @@ Restart Claude Desktop — the sprite tools appear under the MCP menu. If `sprit
 
 ## What's in the box
 
-**Web app**: `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Character layers**: [prepare and review articulated artwork](https://sprites.trebeljahr.com/docs/character-layers) through `/character-layers`, `sprite-tools character`, or `sprite_prepare_character_layers`. Local plans preserve source pixels; optional xAI drafts and hidden-area completion require explicit paid actions.
+
+**Web app**: `/character-layers`, `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
 
 **CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `aseprite` (alias `ase`), `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
 

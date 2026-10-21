@@ -1,0 +1,142 @@
+export const metadata = {
+  title: "Character Layers",
+  description: "Prepare aligned character art layers, complete hidden areas, and test joints before rigging.",
+  alternates: { canonical: "/docs/character-layers" },
+};
+
+# Prepare character layers
+
+[Open Character Layers](/character-layers) to separate an illustration into editable parts before rigging it.
+
+Start with a transparent character PNG. For a flat background, use [Background Removal](/background-removal) first.
+
+## Review a draft
+
+1. Open an image. The empty editor also offers a labeled geometric joint-test sample.
+2. Import a reviewed plan, paste it with **Edit plan JSON**, or expand **AI preparation** and request an xAI draft.
+3. Select a part. Edit its polygon, parent, pivot, tip and drawing order.
+4. Complete its hidden area with xAI, or import an aligned completion PNG.
+5. Use **Exploded** and **Bend test** to inspect overlaps and missing joint artwork.
+6. Choose **Export layers**, then **Download project ZIP**. Open that ZIP later to restore the full project.
+
+Drag polygon vertices to adjust a mask. Shift-click adds a vertex. Mask extraction updates when you release the pointer.
+Choose **Joint pivot**, **Joint tip**, or **Ground origin**, then click its source-image position.
+Undo and redo cover edits, completion imports and layer changes.
+
+Part names and hierarchies are editable. Use the same format for creatures, wings, tails, hinges, props and weapons.
+Save each sprite as its own ZIP; the editor restores one current local draft. No fixed humanoid skeleton is required.
+
+Polygons include a part's hidden shape. Drawing order runs back to front in the plan.
+A later polygon owns overlapping visible pixels. The inspector lists layers front to back.
+Unassigned pixels remain in a separate layer and appear in the report.
+
+## Preserve the source
+
+Each visible source pixel belongs to one layer. Hidden pixels can be filled only beneath opaque foreground parts.
+The original visible pixels and soft alpha edges remain unchanged. The rest-pose comparison reports changed pixels.
+
+Completion images use the source canvas. Provider results can be resized only when their aspect ratio matches within 1.5%.
+Imported completion PNGs must match the canvas exactly. The export separates original and reconstructed pixels.
+Generated candidates use a chroma background selected to avoid the source colours. That background is removed before hidden pixels are accepted.
+Local completion imports keep their own alpha; use a transparent PNG.
+
+AI planning proposes polygons and joints. It does not provide pixel-accurate segmentation or a finished anatomical rig.
+Review the masks, hand identity, draw order and completed anatomy. The bend test uses rigid parts and inherited joint rotation.
+It does not preview mesh skinning, IK or final game animations. Qwen and other decomposition backends are not included.
+
+## Control paid requests
+
+Local edits, extraction, imports, bend tests and exports do not call a provider.
+Browser AI actions send your image directly to xAI. The key stays in page memory and is excluded from saved projects.
+Drafts and completion images stay in local IndexedDB until replaced. Export them for backup.
+
+The planner uses `grok-4.20-0309-non-reasoning`, with at most 8,000 output tokens.
+Its $0.05 planning reservation is an estimate, not a provider billing cap.
+Completion uses `grok-imagine-image-2.0`, pinned to 1K and low quality.
+Its estimate is $0.05 per part: one $0.01 input and one $0.04 output.
+Prices checked on 21 October 2026 against [xAI pricing](https://docs.x.ai/developers/pricing).
+
+Browser results are cached for the current page session. Accepted completion images persist with the project.
+CLI/MCP results use a persistent content-addressed cache in the output directory.
+No request is automatically retried. A stopped request may still be charged.
+Check provider usage before retrying an uncertain request.
+
+## Automate with the CLI
+
+A supplied plan requires no API key or provider request:
+
+```bash
+sprite-tools character hero.png --plan plan.json --bend-tests all -o hero-layers
+```
+
+An AI draft requires `XAI_API_KEY` in the process environment and explicit paid opt-in:
+
+```bash
+sprite-tools character hero.png --ai --allow-paid --max-cost-usd 0.05 -o hero-layers
+```
+
+Review `hero-layers/plan.json`, then complete selected parts:
+
+```bash
+sprite-tools character hero.png --plan hero-layers/plan.json \
+  --complete torso,upper-arm --allow-paid --max-cost-usd 0.10 -o hero-layers
+```
+
+`--complete all` processes parts with missing hidden pixels in sequence.
+The cap covers estimated reservations for new requests in that invocation. Cached results cost no new reservation.
+If the cap stops processing, the successful plan and completed parts remain exported.
+`--retry-uncertain` explicitly permits another paid attempt after an uncertain dispatch. It may cause a duplicate charge.
+
+Use `--completions files.json` to import local PNGs. That file maps part ids to PNG paths.
+Headless source and imported completion images must be PNG files.
+Provider JPEG/WebP results and resized images require installed `ffmpeg` and `ffprobe`.
+
+## Automate with MCP
+
+Call `sprite_prepare_character_layers` with `input_path`, `output_dir`, and either `plan`, `plan_path`, or `ai_draft: true`.
+Optional `bend_test_parts` writes fixed +/-35-degree joint stress previews and clipping flags. These need visual review.
+Optional `completion_paths` imports local PNGs. `complete_parts` selects paid hidden-area completion.
+
+Paid calls also require `allow_paid: true`, `max_cost_usd`, and `XAI_API_KEY` in the MCP server environment.
+Never put provider keys in tool arguments. Restart an existing MCP process to load the new tool.
+
+## Plan format
+
+Coordinates are source-image pixels. Ids are lowercase slugs and must be unique. `unassigned` is reserved.
+Parents reference ids; hierarchy cycles are rejected. Parts can appear in any hierarchy order but must follow drawing order.
+
+```json
+{
+  "version": 1,
+  "width": 128,
+  "height": 128,
+  "origin": { "x": 64, "y": 120 },
+  "parts": [{
+    "id": "torso",
+    "name": "Torso",
+    "parent": null,
+    "pivot": { "x": 64, "y": 80 },
+    "tip": { "x": 64, "y": 40 },
+    "polygon": [{ "x": 40, "y": 40 }, { "x": 85, "y": 40 }, { "x": 85, "y": 85 }, { "x": 40, "y": 85 }],
+    "description": "Complete the coat behind the forearm."
+  }],
+  "notes": []
+}
+```
+
+Limits: 32 parts, 128 vertices per part, four megapixels per canvas, and 32 million canvas pixels across parts.
+Reduce image size or part count if that aggregate limit is exceeded.
+
+## Export files
+
+- `source.png`, `plan.json`: source artwork and editable preparation plan.
+- `character.json`: format/version, canvas, origin, hierarchy, file paths, completion provenance and review report.
+- `layers/`: composed parts, aligned to the common canvas.
+- `visible/`: original source pixels owned by each part.
+- `generated/`: accepted reconstructed pixels, including imported completions.
+- `masks/`: areas hidden by opaque foreground layers.
+- `completions/`: full accepted candidate images for later mask edits.
+- `reconstruction.png`: assembled rest pose.
+- `bend-tests/` and `bend-tests.json`: optional headless stress previews with angles, origin and potential clipping flags.
+
+The bundle prepares artwork for a rigging tool. It is not a Godot Skeleton2D, Spine project, or baked animation export.

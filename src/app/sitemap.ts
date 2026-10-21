@@ -20,6 +20,7 @@ const TOOL_ROUTES = [
   "/atlas",
   "/gif",
   "/lasso",
+  "/character-layers",
   "/background-removal",
   "/outline",
   "/export",

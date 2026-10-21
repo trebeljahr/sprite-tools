@@ -6,6 +6,7 @@
 // responses include a `path` field so agents can chain tools.
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerCharacterTools } from "./character-tools";
 import { registerVideoTools } from "./video-tools";
 import { z } from "zod";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -385,6 +386,7 @@ function gridFromImage(image: ImageData, args: SheetGridArgs = {}): SheetGrid {
 
 export function registerAllTools(server: McpServer) {
   registerVideoTools(server);
+  registerCharacterTools(server);
   // ------- info -------
   server.registerTool(
     "sprite_info",

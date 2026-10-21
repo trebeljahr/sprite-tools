@@ -34,9 +34,11 @@ import { registerInfoCommand } from "./commands/info";
 import { registerLintCommand } from "./commands/lint";
 import { registerMetaCommand } from "./commands/meta";
 import { registerExportCommand } from "./commands/export";
+import { registerCharacterCommand } from "./commands/character";
 import { registerStudioCommand } from "./commands/studio";
 
 const program = new Command();
+registerCharacterCommand(program);
 
 program
   .name("sprite-tools")
@@ -48,6 +50,9 @@ program
 program.addHelpText(
   "after",
   [
+    "",
+    "Character preparation:",
+    "  character  aligned layers, hidden masks and joint anchors       (files + JSON)",
     "",
     "Inspect / slice:",
     "  lint       structured findings about a sheet (run this first)    (JSON)",
