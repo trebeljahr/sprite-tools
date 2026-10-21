@@ -187,13 +187,18 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     }
   }
   if (s.grounded && (s.motion === "walk" || s.motion === "run")) {
-    const stride = strideFor(set, s.motion);
+    // Run cadence has its own clock rate; changing travel speed must not quicken the feet.
+    const stride =
+      s.motion === "run" ? (runSpeedFor(set) * runCycleMsFor(set)) / 1000 : strideFor(set, "walk");
     s.gaitPhase = (s.gaitPhase + Math.abs(s.x - previous.x) / stride) % 1;
   }
   return s;
 }
 export function runSpeedFor(set: AnimationSet) {
   return set.controller?.runSpeed ?? movement.run;
+}
+export function runCycleMsFor(set: AnimationSet) {
+  return set.controller?.runCycleMs ?? roleDuration(set, "run") * 1000;
 }
 export function strideFor(set: AnimationSet, role: "walk" | "run") {
   return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);

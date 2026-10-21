@@ -20,6 +20,7 @@ import {
   VIEWPORT,
   strideFor,
   runSpeedFor,
+  runCycleMsFor,
   type Input,
   type Preview,
 } from "@/lib/playground/controller";
@@ -541,9 +542,9 @@ export default function Playground() {
             <b>F</b> attack · <b>Esc</b> release keys
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Walk and run cadence follows distance travelled. Explore left and right through the
-            woodland. Keep a direction held through a jump. Press F during a roll to queue a stab.
-            Press F again near the end of an attack to chain the next attack.
+            Run movement speed and animation rhythm have separate controls. Explore the woodland.
+            Keep a direction held through a jump. Press F during a roll to queue a stab. Press F
+            again near the end of an attack to chain the next attack.
           </p>
           {loaded && (
             <label className="mt-4 flex max-w-lg flex-wrap items-center gap-3 text-sm">
@@ -565,6 +566,34 @@ export default function Playground() {
                           set: {
                             ...current.set,
                             controller: { ...current.set.controller, runSpeed },
+                          },
+                        }
+                      : current,
+                  );
+                }}
+              />
+            </label>
+          )}
+          {loaded && (
+            <label className="mt-3 flex max-w-lg flex-wrap items-center gap-3 text-sm">
+              Run animation · {Math.round(runCycleMsFor(loaded.set))} ms/cycle
+              <input
+                aria-label="Run animation cycle"
+                type="range"
+                min={100}
+                max={2000}
+                step={25}
+                value={runCycleMsFor(loaded.set)}
+                className="min-w-40 flex-1"
+                onChange={(e) => {
+                  const runCycleMs = Number(e.target.value);
+                  setLoaded((current) =>
+                    current
+                      ? {
+                          ...current,
+                          set: {
+                            ...current.set,
+                            controller: { ...current.set.controller, runCycleMs },
                           },
                         }
                       : current,
@@ -768,7 +797,7 @@ export default function Playground() {
                     />
                   </label>
                 ))}
-                {(view.role === "walk" || view.role === "run") && (
+                {view.role === "walk" && (
                   <label className="block text-xs text-muted-foreground">
                     Stride distance · {strideFor(loaded.set, view.role)} px per cycle
                     <input

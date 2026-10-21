@@ -11,6 +11,7 @@ import {
   stepBody,
   bodyFrame,
   stepPreview,
+  runCycleMsFor,
   WORLD,
   VIEWPORT,
   type Body,
@@ -79,6 +80,27 @@ describe("controller movement and transitions", () => {
     expect(stopped.x - running.x).toBeLessThan(230);
     for (const runSpeed of [399, 2401, NaN])
       expect(() => validateAnimationSet({ ...base, controller: { runSpeed } })).toThrow();
+  });
+  it("keeps the run rhythm unchanged when travel speed changes", () => {
+    const slow = validateAnimationSet({ ...base, controller: { runSpeed: 800, runCycleMs: 325 } });
+    const fast = validateAnimationSet({ ...base, controller: { runSpeed: 1600, runCycleMs: 325 } });
+    const initial = { ...createBody(), motion: "run" as const };
+    const a = advance({ ...initial, vx: 800 }, 0.5, { axis: 1, sprint: true }, slow);
+    const b = advance({ ...initial, vx: 1600 }, 0.5, { axis: 1, sprint: true }, fast);
+    expect(b.x - initial.x).toBeCloseTo(2 * (a.x - initial.x));
+    expect(b.gaitPhase).toBeCloseTo(a.gaitPhase);
+    expect(a.gaitPhase).toBeCloseTo((0.5 / 0.325) % 1);
+    expect(bodyFrame(b, fast).frame).toBe(bodyFrame(a, slow).frame);
+    const slowerFeet = validateAnimationSet({
+      ...base,
+      controller: { runSpeed: 1600, runCycleMs: 650 },
+    });
+    const c = advance({ ...initial, vx: 1600 }, 0.5, { axis: 1, sprint: true }, slowerFeet);
+    expect(c.x).toBe(b.x);
+    expect(c.gaitPhase).toBeCloseTo(0.5 / 0.65);
+    expect(runCycleMsFor(set())).toBe(roleDuration(set(), "run") * 1000);
+    for (const runCycleMs of [99, 2001, NaN])
+      expect(() => validateAnimationSet({ ...base, controller: { runCycleMs } })).toThrow();
   });
   it("advances gait by actual distance rather than elapsed action time", () => {
     const initial = { ...createBody(), motion: "walk" as const, vx: 350 };

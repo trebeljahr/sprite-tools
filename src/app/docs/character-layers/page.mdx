@@ -171,7 +171,7 @@ A run fallback speeds up the walk cycle. A roll fallback transforms an idle pose
 Replace these bindings with authored clips before production use.
 
 Per-clip saturation, contrast and brightness affect preview rendering only.
-**Run speed** adjusts sprinting immediately, from 400 to 2,400 world pixels per second. Walking stays at 350 px/s. **Save set settings** keeps run speed, bindings and colour settings in JSON. It does not bake corrected PNGs or export a game controller.
+**Run speed** adjusts sprinting immediately, from 400 to 2,400 world pixels per second. Walking stays at 350 px/s. **Run animation** sets milliseconds per complete run cycle independently of movement speed. **Save set settings** keeps both speeds, bindings and colour settings in JSON. It does not bake corrected PNGs or export a game controller.
 
 This format also accepts the existing animation-set structure with `canvas`, `origin` and `clips`.
 Optional `controller.bindings` maps `idle`, `walk`, `run`, `jump`, `roll`, `attack1`, `attack2` and `attack3` to clip ids.
@@ -184,7 +184,7 @@ Optional `controller.labels` overrides action names without changing their bindi
 
 The playground has a 1280 × 600 viewport over a 7680px-wide world, with room in both directions from the starting point. The camera follows movement and jumping. Distant woodland, ruins and nearer trunks scroll at different parallax rates. Ground marks stay fixed in world space for checking foot contact.
 
-Walk/run frame phase advances with actual distance travelled, rather than the action timer. Acceleration slows cadence; blocked movement stops it. Attack, roll, idle and airborne timing remain independent. In **Animation bindings & colour**, select Walk or Run to adjust **Stride distance**. Save set settings to retain the value.
+Walking frame phase follows distance travelled. Running uses **Run animation** for the full-speed cycle length, stored as optional `controller.runCycleMs`; without it, the bound clip’s duration supplies the rhythm. Changing **Run speed** changes travel distance while keeping that cycle length. Acceleration slows cadence; blocked movement stops it. Attack, roll, idle and airborne timing remain independent. In **Animation bindings & colour**, select Walk to adjust **Stride distance**. Save set settings to retain the value.
 
 An optional clip `locomotion` object stores `stridePixels` (world pixels per complete cycle), `phaseOffset` (0–1), and one `groundOffsets` Y correction per frame (source-art pixels). These settings work with arbitrary character sets. They calibrate flattened clips; they do not create foot IK or fix incorrect generated poses. Clip review uses the original durations, so controller cadence may differ from clip playback.
 
