@@ -470,3 +470,62 @@ describe("bounded same-site project links", () => {
     ).rejects.toThrow(/404/);
   });
 });
+
+describe("crouch and low attacks", () => {
+  const combat = () =>
+    validateAnimationSet({
+      ...base,
+      clips: {
+        ...base.clips,
+        "crouch-down": clip(false),
+        "crouch-hold": clip(),
+        "stand-up": clip(false),
+        "crouched-stab": clip(false),
+        "standing-low": clip(false),
+      },
+      controller: {
+        bindings: {
+          crouchDown: "crouch-down",
+          crouch: "crouch-hold",
+          crouchUp: "stand-up",
+          crouchAttack: "crouched-stab",
+          lowAttack: "standing-low",
+        },
+      },
+    });
+  it("holds a stationary crouch and stands through the authored transition on release", () => {
+    const s = advance(createBody(), 0.6, { crouch: true, axis: 1 }, combat());
+    expect(s.motion).toBe("crouch");
+    expect(s.vx).toBe(0);
+    expect(s.x).toBe(180);
+    const rising = advance(s, 0.1, {}, combat());
+    expect(rising.motion).toBe("crouchUp");
+    expect(advance(rising, 0.7, {}, combat()).motion).toBe("idle");
+  });
+  it("queues F during crouch entry, then recovers through crouch before standing", () => {
+    let s = stepBody(createBody(), { ...neutral, crouch: true, attack: true }, 1 / 120, combat());
+    expect(s.motion).toBe("crouchDown");
+    s = advance(s, 0.45, { crouch: true }, combat());
+    expect(s.motion).toBe("crouchAttack");
+    const held = advance(s, 0.45, { crouch: true }, combat());
+    expect(held.motion).toBe("crouch");
+    expect(advance(held, 0.05, {}, combat()).motion).toBe("crouchUp");
+  });
+  it("plays G as a standing low attack without entering crouch", () => {
+    const s = stepBody(createBody(), { ...neutral, lowAttack: true }, 1 / 120, combat());
+    expect(s.motion).toBe("lowAttack");
+    expect(bodyFrame(s, combat()).role).toBe("lowAttack");
+    expect(advance(s, 0.8, {}, combat()).motion).toBe("idle");
+  });
+  it("stands before jumping and leaves the roll key available", () => {
+    const s = advance(createBody(), 0.6, { crouch: true }, combat());
+    const rise = stepBody(s, { ...neutral, crouch: true, jump: true }, 1 / 120, combat());
+    expect(rise.motion).toBe("crouchUp");
+    const air = advance(rise, 0.5, {}, combat());
+    expect(air.motion).toBe("jump");
+    expect(air.grounded).toBe(false);
+    expect(stepBody(createBody(), { ...neutral, roll: true }, 1 / 120, combat()).motion).toBe(
+      "roll",
+    );
+  });
+});

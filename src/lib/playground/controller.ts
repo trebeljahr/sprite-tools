@@ -5,6 +5,8 @@ export interface Input {
   jump: boolean;
   roll: boolean;
   attack: boolean;
+  crouch?: boolean;
+  lowAttack?: boolean;
 }
 export interface Body {
   x: number;
@@ -18,6 +20,7 @@ export interface Body {
   jumpAge: number;
   attack: number;
   queuedStab: boolean;
+  queuedCrouchAttack: boolean;
   attackBuffer: number;
   jumpBuffer: number;
   rollCooldown: number;
@@ -65,6 +68,7 @@ export function createBody(): Body {
     jumpAge: 0,
     attack: 0,
     queuedStab: false,
+    queuedCrouchAttack: false,
     attackBuffer: 0,
     jumpBuffer: 0,
     rollCooldown: 0,
@@ -73,7 +77,13 @@ export function createBody(): Body {
   };
 }
 const attackRole = (n: number): Role => `attack${(n % 3) + 1}` as Role;
-const attacking = (s: Body) => s.motion.startsWith("attack");
+const attacking = (s: Body) =>
+  s.motion.startsWith("attack") || s.motion === "lowAttack" || s.motion === "crouchAttack";
+const crouching = (s: Body) =>
+  s.motion === "crouchDown" ||
+  s.motion === "crouch" ||
+  s.motion === "crouchUp" ||
+  s.motion === "crouchAttack";
 function begin(s: Body, role: Role | "land" | "settle") {
   s.motion = role;
   s.time = 0;
@@ -100,13 +110,45 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   s.rollCooldown = Math.max(0, s.rollCooldown - dt);
   s.attackBuffer = Math.max(0, s.attackBuffer - dt);
   s.jumpBuffer = Math.max(0, s.jumpBuffer - dt);
-  if (input.jump) s.jumpBuffer = 0.13;
+  const canCrouch = !!(set.bindings.crouchDown && set.bindings.crouch && set.bindings.crouchUp);
+  const wantsCrouch = !!input.crouch && s.grounded && canCrouch;
+  if (input.jump)
+    s.jumpBuffer = crouching(s)
+      ? roleDuration(set, "crouchUp") +
+        (s.motion === "crouchDown" ? Math.max(0, roleDuration(set, "crouchDown") - s.time) : 0) +
+        0.15
+      : 0.13;
   if (input.attack) {
-    if (s.motion === "roll") s.queuedStab = true;
+    if (
+      (wantsCrouch ||
+        s.motion === "crouchDown" ||
+        s.motion === "crouch" ||
+        s.motion === "crouchAttack") &&
+      set.bindings.crouchAttack
+    )
+      s.queuedCrouchAttack = true;
+    else if (s.motion === "roll") s.queuedStab = true;
     else s.attackBuffer = 0.18;
   }
   const axis = Math.sign(input.axis);
   if (s.motion !== "roll" && !attacking(s) && axis) s.facing = axis as 1 | -1;
+  if (s.motion === "crouchDown" && s.time >= roleDuration(set, "crouchDown")) begin(s, "crouch");
+  if (s.motion === "crouchAttack" && s.time >= roleDuration(set, "crouchAttack")) {
+    begin(s, "crouch");
+  }
+  if (s.motion === "crouch") {
+    if (s.queuedCrouchAttack && set.bindings.crouchAttack && !s.jumpBuffer) {
+      s.queuedCrouchAttack = false;
+      s.attackBuffer = 0;
+      begin(s, "crouchAttack");
+    } else if (!wantsCrouch || s.jumpBuffer > 0) {
+      s.queuedCrouchAttack = false;
+      begin(s, "crouchUp");
+    }
+  } else if (s.motion === "crouchUp" && s.time >= roleDuration(set, "crouchUp")) {
+    s.queuedCrouchAttack = false;
+    settleIntoIdle(s, set);
+  }
   if (s.motion === "roll" && s.time >= roleDuration(set, "roll")) {
     s.rollCooldown = 0.15;
     if (s.queuedStab) {
@@ -124,7 +166,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     s.motion = "idle";
     s.settleFrom = null;
   }
-  const locked = s.motion === "roll" || attacking(s);
+  const locked = s.motion === "roll" || attacking(s) || crouching(s);
   if (!locked) {
     if (s.jumpBuffer > 0 && s.grounded) {
       s.vy = -movement.jump;
@@ -137,12 +179,19 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
       s.queuedStab = input.attack;
       if (input.attack) s.attackBuffer = 0;
     }
-    if (s.motion !== "roll" && s.attackBuffer > 0) startAttack(s);
+    if (s.motion !== "roll" && s.grounded && wantsCrouch && !s.jumpBuffer) {
+      begin(s, "crouchDown");
+      s.attackBuffer = 0;
+    } else if (s.motion !== "roll" && input.lowAttack && set.bindings.lowAttack) {
+      begin(s, "lowAttack");
+      s.attackBuffer = 0;
+    } else if (s.motion !== "roll" && s.attackBuffer > 0) startAttack(s);
   }
   if (s.motion === "roll") s.vx = s.facing * movement.roll;
   else {
-    const target =
-      axis * (input.sprint ? runSpeedFor(set) : movement.walk) * (attacking(s) ? 0.32 : 1);
+    const target = crouching(s)
+      ? 0
+      : axis * (input.sprint ? runSpeedFor(set) : movement.walk) * (attacking(s) ? 0.32 : 1);
     const groundAcceleration =
       input.sprint || Math.abs(s.vx) > movement.walk
         ? movement.runAcceleration
@@ -180,6 +229,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   if (
     s.motion !== "roll" &&
     !attacking(s) &&
+    !crouching(s) &&
     s.motion !== "land" &&
     (s.motion !== "settle" || axis !== 0 || !s.grounded)
   ) {

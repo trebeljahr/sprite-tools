@@ -9,6 +9,11 @@ export const roles = [
   "attack1",
   "attack2",
   "attack3",
+  "crouchDown",
+  "crouch",
+  "crouchUp",
+  "crouchAttack",
+  "lowAttack",
 ] as const;
 export type Role = (typeof roles)[number];
 const colour = z.object({

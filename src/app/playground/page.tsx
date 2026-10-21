@@ -37,6 +37,11 @@ const labels: Record<Role, string> = {
   attack1: "Attack 1",
   attack2: "Attack 2",
   attack3: "Attack 3",
+  crouchDown: "Crouch down",
+  crouch: "Crouched guard",
+  crouchUp: "Stand up",
+  crouchAttack: "Crouched stab",
+  lowAttack: "Standing low stab",
 };
 const SPRITE_SCALE = 1.15;
 const emptyInput = (): Input => ({
@@ -45,6 +50,8 @@ const emptyInput = (): Input => ({
   jump: false,
   roll: false,
   attack: false,
+  crouch: false,
+  lowAttack: false,
 });
 type Loaded = { set: AnimationSet; images: Record<string, HTMLImageElement>; url: string };
 function paintSprite(
@@ -118,10 +125,10 @@ export default function Playground() {
     keys = useRef(new Set<string>()),
     preview = useRef<Preview>({ role: "idle", time: 0, queued: null }),
     loadRequest = useRef<AbortController | null>(null);
-  const held = useRef({ left: false, right: false, sprint: false });
+  const held = useRef({ left: false, right: false, sprint: false, crouch: false });
   const clear = useCallback(() => {
     keys.current.clear();
-    held.current = { left: false, right: false, sprint: false };
+    held.current = { left: false, right: false, sprint: false, crouch: false };
     input.current = emptyInput();
   }, []);
   const load = useCallback(
@@ -234,18 +241,21 @@ export default function Playground() {
                     ...input.current,
                     axis: Number(held.current.right) - Number(held.current.left),
                     sprint: held.current.sprint,
+                    crouch: held.current.crouch,
                   }
                 : emptyInput();
               if (!first) {
                 i.jump = false;
                 i.roll = false;
                 i.attack = false;
+                i.lowAttack = false;
               }
               body.current = stepBody(body.current, i, 1 / 120, loaded.set);
               if (first) {
                 input.current.jump = false;
                 input.current.roll = false;
                 input.current.attack = false;
+                input.current.lowAttack = false;
               }
               first = false;
               accumulator -= 1 / 120;
@@ -358,6 +368,8 @@ export default function Playground() {
         "KeyS",
         "KeyE",
         "KeyF",
+        "KeyG",
+        "ArrowDown",
         "Space",
         "ArrowLeft",
         "ArrowRight",
@@ -379,13 +391,15 @@ export default function Playground() {
     else keys.current.delete(code);
     held.current.left = keys.current.has("KeyA") || keys.current.has("ArrowLeft");
     held.current.right = keys.current.has("KeyD") || keys.current.has("ArrowRight");
+    held.current.crouch = keys.current.has("KeyS") || keys.current.has("ArrowDown");
     // Embedded browsers can forward Shift only as a modifier on movement events.
     held.current.sprint =
       e.shiftKey || keys.current.has("ShiftLeft") || keys.current.has("ShiftRight");
     if (down && !e.repeat) {
       if (["KeyW", "Space", "ArrowUp"].includes(code)) input.current.jump = true;
-      if (["KeyS", "KeyE"].includes(code)) input.current.roll = true;
+      if (code === "KeyE") input.current.roll = true;
       if (code === "KeyF") input.current.attack = true;
+      if (code === "KeyG") input.current.lowAttack = true;
     }
   };
   const choose = (role: Role) => {
@@ -514,7 +528,7 @@ export default function Playground() {
           width={VIEWPORT.width}
           height={VIEWPORT.height}
           tabIndex={0}
-          aria-label="Sprite playground. A and D move, Shift runs, W or Space jumps, S or E rolls, F attacks."
+          aria-label="Sprite playground. A and D move, Shift runs, W or Space jumps, S or Down crouches, E rolls, F attacks, G stabs low."
           className="block w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
           onFocus={() => {
             if (loaded && mode === "play") setActive(true);
@@ -557,13 +571,15 @@ export default function Playground() {
       {mode === "play" ? (
         <>
           <p className="mt-3 text-sm text-muted-foreground">
-            <b>A / D</b> move · <b>Shift</b> run · <b>W / Space</b> jump · <b>S / E</b> roll ·{" "}
-            <b>F</b> attack · <b>Esc</b> release keys
+            <b>A / D</b> move · <b>Shift</b> run · <b>W / Space</b> jump · <b>S / Down</b> crouch ·{" "}
+            <b>E</b> roll · <b>F</b> attack (low while crouched) · <b>G</b> standing low stab ·{" "}
+            <b>Esc</b> release keys
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Run movement speed and animation rhythm have separate controls. Explore the woodland.
             Keep a direction held through a jump. Press F during a roll to queue a stab. Press F
-            again near the end of an attack to chain the next attack.
+            again near the end of an attack to chain the next attack. Hold S or Down to crouch; F
+            uses the crouched stab. G makes a low thrust while standing.
           </p>
           {loaded && (
             <label className="mt-4 flex max-w-lg flex-wrap items-center gap-3 text-sm">
@@ -629,6 +645,8 @@ export default function Playground() {
                 ["Run", "sprint"],
                 ["Jump", "jump"],
                 ["Roll", "roll"],
+                ["Crouch", "crouch"],
+                ["Low stab", "lowAttack"],
                 ["Attack", "attack"],
               ] as const
             ).map(([label, action]) => (
@@ -641,7 +659,7 @@ export default function Playground() {
                   setActive(true);
                   if (action in held.current)
                     held.current[action as keyof typeof held.current] = true;
-                  else input.current[action as "jump" | "roll" | "attack"] = true;
+                  else input.current[action as "jump" | "roll" | "attack" | "lowAttack"] = true;
                 }}
                 onPointerUp={() => {
                   if (action in held.current)
