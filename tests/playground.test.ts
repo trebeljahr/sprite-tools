@@ -12,9 +12,11 @@ import {
   bodyFrame,
   stepPreview,
   WORLD,
+  VIEWPORT,
   type Body,
   type Input,
 } from "../src/lib/playground/controller";
+import { cameraFor } from "../src/lib/playground/scene";
 import { boundedFile, sameOriginFile } from "../src/lib/browser-files";
 const clip = (loop = true) => ({
   sheet: "hero.png",
@@ -62,9 +64,49 @@ describe("controller movement and transitions", () => {
     expect(walk.motion).toBe("walk");
     expect(run.motion).toBe("run");
     expect(walk.vx).toBe(350);
-    expect(run.vx).toBe(520);
+    expect(run.vx).toBe(640);
     expect(run.x).toBeGreaterThan(walk.x);
     expect(initial.x).toBe(180);
+  });
+  it("advances gait by actual distance rather than elapsed action time", () => {
+    const initial = { ...createBody(), motion: "walk" as const, vx: 350 };
+    const moved = advance(initial, 0.3, { axis: 1 });
+    expect(moved.gaitPhase).toBeCloseTo((moved.x - initial.x) / 220);
+    expect(bodyFrame({ ...moved, time: 900 }, set()).frame).toBe(bodyFrame(moved, set()).frame);
+    const custom = validateAnimationSet({
+      ...base,
+      clips: {
+        ...base.clips,
+        walk: { ...clip(), locomotion: { stridePixels: 400, phaseOffset: 0.25 } },
+      },
+    });
+    const longerStride = advance(initial, 0.3, { axis: 1 }, custom);
+    expect(longerStride.gaitPhase).toBeCloseTo((longerStride.x - initial.x) / 400);
+    expect(bodyFrame({ ...initial, gaitPhase: 0 }, custom).frame).toBe(1);
+  });
+  it("stops locomotion at world boundaries instead of running feet against an invisible wall", () => {
+    const edge = WORLD.left + WORLD.width - 340;
+    const initial = {
+      ...createBody(),
+      x: edge - 2,
+      vx: 640,
+      motion: "run" as const,
+      gaitPhase: 0.3,
+    };
+    const stopped = advance(initial, 1, { axis: 1, sprint: true });
+    expect(stopped.x).toBe(edge);
+    expect(stopped.vx).toBe(0);
+    expect(stopped.motion).toBe("idle");
+    expect(stopped.gaitPhase).toBe(initial.gaitPhase);
+  });
+  it("has several screens of travel in both directions and a bounded following camera", () => {
+    expect(advance(createBody(), 3, { axis: -1, sprint: true }).x).toBeLessThan(-1000);
+    expect(advance(createBody(), 3, { axis: 1, sprint: true }).x).toBeGreaterThan(1600);
+    const camera = cameraFor(2000, 320);
+    expect(2000 - camera.x).toBe(VIEWPORT.width / 2);
+    expect(320 - camera.y).toBe(400);
+    expect(cameraFor(-99999, 500).x).toBe(WORLD.left);
+    expect(cameraFor(99999, 500).x).toBe(WORLD.left + WORLD.width - VIEWPORT.width);
   });
   it("switches to the run clip immediately when sprint starts and back on release", () => {
     const clips = validateAnimationSet({ ...base, clips: { ...base.clips, run: clip() } });
@@ -85,7 +127,7 @@ describe("controller movement and transitions", () => {
       set(),
     );
     expect(airborne.motion).toBe("jump");
-    expect(airborne.vx).toBe(-520);
+    expect(airborne.vx).toBe(-640);
     expect(airborne.facing).toBe(-1);
     expect(airborne.y).toBeLessThan(WORLD.ground);
   });
@@ -202,6 +244,20 @@ describe("clip queues and reusable sets", () => {
     expect(stepPreview({ role: "attack1", time: 0.39, queued: null }, 0.05, set()).role).toBe(
       "idle",
     );
+  });
+  it("rejects unsafe stride metadata and mismatched frame grounding offsets", () => {
+    expect(() =>
+      validateAnimationSet({
+        ...base,
+        clips: { idle: { ...clip(), locomotion: { stridePixels: 0 } } },
+      }),
+    ).toThrow();
+    expect(() =>
+      validateAnimationSet({
+        ...base,
+        clips: { idle: { ...clip(), locomotion: { stridePixels: 200, groundOffsets: [0] } } },
+      }),
+    ).toThrow(/Ground offsets/);
   });
   it("accepts custom non-mouse clip names through explicit bindings", () => {
     const s = validateAnimationSet({

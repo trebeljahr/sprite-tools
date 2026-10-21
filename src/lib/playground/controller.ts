@@ -21,20 +21,29 @@ export interface Body {
   attackBuffer: number;
   jumpBuffer: number;
   rollCooldown: number;
+  gaitPhase: number;
 }
+export const VIEWPORT = { width: 1280, height: 600 };
 export const WORLD = {
-  width: 1280,
+  left: -3200,
+  width: 7680,
   height: 600,
   ground: 500,
   platforms: [
     { x: 310, y: 320, width: 220 },
-    { x: 795, y: 200, width: 190 },
+    { x: 795, y: 200, width: 260 },
+    { x: -1490, y: 320, width: 220 },
+    { x: -1005, y: 200, width: 260 },
+    { x: -2700, y: 340, width: 260 },
+    { x: 2110, y: 320, width: 220 },
+    { x: 2595, y: 200, width: 260 },
+    { x: 3800, y: 340, width: 260 },
   ],
 };
 const movement = {
   walk: 350,
-  run: 520,
-  roll: 620,
+  run: 640,
+  roll: 720,
   jump: 820,
   gravity: 1650,
   groundAcceleration: 2600,
@@ -56,6 +65,7 @@ export function createBody(): Body {
     attackBuffer: 0,
     jumpBuffer: 0,
     rollCooldown: 0,
+    gaitPhase: 0,
   };
 }
 const attackRole = (n: number): Role => `attack${(n % 3) + 1}` as Role;
@@ -122,11 +132,14 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     );
   }
   const oldY = s.y;
-  s.x = Math.max(110, Math.min(WORLD.width - 110, s.x + s.vx * dt));
+  const left = WORLD.left + 340,
+    right = WORLD.left + WORLD.width - 340;
+  s.x = Math.max(left, Math.min(right, s.x + s.vx * dt));
+  if ((s.x === left && s.vx < 0) || (s.x === right && s.vx > 0)) s.vx = 0;
   s.vy += movement.gravity * dt;
   s.y += s.vy * dt;
   s.grounded = false;
-  const floors = [...WORLD.platforms, { x: 0, y: WORLD.ground, width: WORLD.width }];
+  const floors = [...WORLD.platforms, { x: WORLD.left, y: WORLD.ground, width: WORLD.width }];
   if (s.vy >= 0)
     for (const floor of floors) {
       if (
@@ -152,11 +165,22 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
         : "idle";
     if (s.motion !== next) begin(s, next);
   }
+  if (s.grounded && (s.motion === "walk" || s.motion === "run")) {
+    const stride = strideFor(set, s.motion);
+    s.gaitPhase = (s.gaitPhase + Math.abs(s.x - previous.x) / stride) % 1;
+  }
   return s;
+}
+export function strideFor(set: AnimationSet, role: "walk" | "run") {
+  return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);
 }
 export function bodyFrame(s: Body, set: AnimationSet) {
   const role: Role = s.motion === "land" ? "jump" : s.motion,
     { clip } = clipFor(set, role);
+  if (s.motion === "walk" || s.motion === "run") {
+    const phase = (s.gaitPhase + (clip.locomotion?.phaseOffset ?? 0)) % 1;
+    return { role, frame: frameAt(set, role, phase * roleDuration(set, role), true) };
+  }
   if ((s.motion === "jump" || s.motion === "land") && set.bindings.jump) {
     const p = clip.phase;
     if (s.motion === "land" && p?.land)

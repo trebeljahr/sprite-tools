@@ -17,9 +17,13 @@ import {
   stepBody,
   stepPreview,
   WORLD,
+  VIEWPORT,
+  strideFor,
   type Input,
   type Preview,
 } from "@/lib/playground/controller";
+
+import { cameraFor, paintScene } from "@/lib/playground/scene";
 
 const labels: Record<Role, string> = {
   idle: "Idle",
@@ -67,6 +71,8 @@ function paintSprite(
   }
   ctx.scale(1.15, 1.15);
   const renderFrame = role === "roll" && fallback ? 0 : frame;
+  if (role === "walk" || role === "run")
+    ctx.translate(0, clip.locomotion?.groundOffsets?.[renderFrame] ?? 0);
   ctx.drawImage(
     im,
     (renderFrame % clip.grid.cols) * w,
@@ -79,36 +85,6 @@ function paintSprite(
     h,
   );
   ctx.restore();
-}
-function background(ctx: CanvasRenderingContext2D, play: boolean) {
-  const { width: w, height: h, ground: g } = WORLD;
-  ctx.fillStyle = "#eee4ce";
-  ctx.fillRect(-w, -h, w * 3, h * 3);
-  ctx.strokeStyle = "#ded3bd";
-  ctx.lineWidth = 1;
-  for (let x = -400; x < w + 400; x += 160) {
-    ctx.beginPath();
-    ctx.moveTo(x, 90);
-    ctx.lineTo(x, g);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x + 80, 160, 80, Math.PI, 0);
-    ctx.stroke();
-  }
-  ctx.fillStyle = "#e1d4bb";
-  ctx.fillRect(-w, g, w * 3, h * 3);
-  ctx.strokeStyle = "#998a6f";
-  ctx.beginPath();
-  ctx.moveTo(-w, g + 0.5);
-  ctx.lineTo(w * 2, g + 0.5);
-  ctx.stroke();
-  if (play)
-    for (const p of WORLD.platforms) {
-      ctx.fillStyle = "#bca78a";
-      ctx.fillRect(p.x, p.y, p.width, 9);
-      ctx.fillStyle = "#d5c4a9";
-      ctx.fillRect(p.x + 7, p.y + 9, p.width - 14, 13);
-    }
 }
 export default function Playground() {
   const [loaded, setLoaded] = useState<Loaded | null>(null),
@@ -235,7 +211,7 @@ export default function Playground() {
     const tick = (now: number) => {
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
       last = now;
-      background(ctx, mode === "play");
+      if (!loaded) paintScene(ctx, { x: -460, y: 0 }, mode === "play");
       if (loaded) {
         let role: Role, frame: number, x: number, y: number, facing: number, time: number;
         if (mode === "play") {
@@ -276,16 +252,15 @@ export default function Playground() {
           const p = preview.current;
           role = p.role;
           frame = frameAt(loaded.set, role, p.time, clipFor(loaded.set, role).clip.loop);
-          x = WORLD.width / 2;
+          x = VIEWPORT.width / 2;
           y = WORLD.ground;
           facing = 1;
           time = p.time;
         }
+        const camera = mode === "play" ? cameraFor(x, y) : { x: 0, y: 0 };
+        paintScene(ctx, camera, mode === "play");
         ctx.save();
-        if (mode === "play") {
-          ctx.translate(x < 340 ? 340 - x : x > 940 ? 940 - x : 0, Math.max(0, 400 - y));
-          background(ctx, true);
-        }
+        ctx.translate(-camera.x, -camera.y);
         ctx.fillStyle = "#84725422";
         ctx.beginPath();
         ctx.ellipse(x, Math.min(WORLD.ground, y) + 3, 28, 5, 0, 0, Math.PI * 2);
@@ -499,8 +474,8 @@ export default function Playground() {
       <div className="relative overflow-hidden bg-[#eee4ce]">
         <canvas
           ref={canvas}
-          width={WORLD.width}
-          height={WORLD.height}
+          width={VIEWPORT.width}
+          height={VIEWPORT.height}
           tabIndex={0}
           aria-label="Sprite playground. A and D move, Shift runs, W or Space jumps, S or E rolls, F attacks."
           className="block w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
@@ -549,8 +524,9 @@ export default function Playground() {
             <b>F</b> attack · <b>Esc</b> release keys
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Keep a direction held through a jump. Press F during a roll to queue a stab. Press F
-            again near the end of an attack to chain the next attack.
+            Walk and run cadence follows distance travelled. Explore left and right through the
+            woodland. Keep a direction held through a jump. Press F during a roll to queue a stab.
+            Press F again near the end of an attack to chain the next attack.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(
@@ -747,6 +723,44 @@ export default function Playground() {
                     />
                   </label>
                 ))}
+                {(view.role === "walk" || view.role === "run") && (
+                  <label className="block text-xs text-muted-foreground">
+                    Stride distance · {strideFor(loaded.set, view.role)} px per cycle
+                    <input
+                      aria-label="Stride distance"
+                      className="mt-2 block w-full"
+                      type="range"
+                      min={80}
+                      max={600}
+                      step={10}
+                      value={strideFor(loaded.set, view.role)}
+                      onChange={(e) => {
+                        const clip = loaded.set.clips[colourId!];
+                        setLoaded({
+                          ...loaded,
+                          set: {
+                            ...loaded.set,
+                            clips: {
+                              ...loaded.set.clips,
+                              [colourId!]: {
+                                ...clip,
+                                locomotion: {
+                                  ...clip.locomotion,
+                                  phaseOffset: clip.locomotion?.phaseOffset ?? 0,
+                                  stridePixels: Number(e.target.value),
+                                },
+                              },
+                            },
+                          },
+                        });
+                      }}
+                    />
+                    <span className="mt-1 block">
+                      Smaller strides quicken the feet in the controller. Clip review keeps the
+                      source timing.
+                    </span>
+                  </label>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Adjustments affect only the selected clip in this preview. Source PNGs stay
                   unchanged. Save set settings to keep them.

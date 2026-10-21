@@ -179,3 +179,11 @@ Each clip can include `colour: { saturation: 1, contrast: 1, brightness: 1 }`.
 Optional `controller.layerProject` links back to a same-site character ZIP.
 
 Optional `controller.labels` overrides action names without changing their bindings. Source provenance and extra clip metadata survive a settings export.
+
+### Distance-driven locomotion and scrolling
+
+The playground has a 1280 × 600 viewport over a 7680px-wide world, with room in both directions from the starting point. The camera follows movement and jumping. Distant woodland, ruins and nearer trunks scroll at different parallax rates. Ground marks stay fixed in world space for checking foot contact.
+
+Walk/run frame phase advances with actual distance travelled, rather than the action timer. Acceleration slows cadence; blocked movement stops it. Attack, roll, idle and airborne timing remain independent. In **Animation bindings & colour**, select Walk or Run to adjust **Stride distance**. Save set settings to retain the value.
+
+An optional clip `locomotion` object stores `stridePixels` (world pixels per complete cycle), `phaseOffset` (0–1), and one `groundOffsets` Y correction per frame (source-art pixels). These settings work with arbitrary character sets. They calibrate flattened clips; they do not create foot IK or fix incorrect generated poses. Clip review uses the original durations, so controller cadence may differ from clip playback.

@@ -41,6 +41,13 @@ const clip = z
       .nullable()
       .optional(),
     colour: colour.optional(),
+    locomotion: z
+      .object({
+        stridePixels: z.number().min(40).max(2000),
+        phaseOffset: z.number().min(0).lt(1).default(0),
+        groundOffsets: z.array(z.number().min(-100).max(100)).max(1024).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 const schema = z
@@ -73,6 +80,8 @@ export function validateAnimationSet(value: unknown): AnimationSet {
   for (const c of Object.values(s.clips)) {
     if (c.count > c.grid.cols * c.grid.rows || c.durations.length !== c.count)
       throw Error("Clip frame counts, grid and durations must agree.");
+    if (c.locomotion?.groundOffsets && c.locomotion.groundOffsets.length !== c.count)
+      throw Error("Ground offsets must match the clip frame count.");
     total += s.canvas.width * s.canvas.height * c.grid.cols * c.grid.rows;
     for (const p of Object.values(c.phase ?? {})) {
       if (!p) continue;
