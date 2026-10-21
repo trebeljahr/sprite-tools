@@ -3,7 +3,11 @@ import { getMigrations } from "better-auth/db/migration";
 import { Pool } from "pg";
 
 const LOCK = 71324001;
-export const MIGRATIONS = ["001-video-budgets.sql", "002-credit-purchases.sql"];
+export const MIGRATIONS = [
+  "001-video-budgets.sql",
+  "002-credit-purchases.sql",
+  "003-generation-usage.sql",
+];
 
 /**
  * Apply the pinned Better Auth schema, then the budget/job tables, under one

@@ -2,6 +2,7 @@ import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import helmet from "helmet";
 import { getAuth } from "./auth.js";
+import { usage } from "./routes/usage.js";
 import { account } from "./routes/account.js";
 import { creditsCheckout, creditsInfo, generateImage, stripeWebhook } from "./routes/credits.js";
 import { envelope } from "./routes/envelope.js";
@@ -51,6 +52,7 @@ export function createApp() {
   });
 
   app.get("/api/account", account);
+  app.get("/api/account/usage", usage);
   app.get("/api/credits", creditsInfo);
   app.post("/api/credits/checkout", express.json({ limit: "4kb" }), creditsCheckout);
   // Stripe signs the raw bytes, so this route must not parse JSON first.

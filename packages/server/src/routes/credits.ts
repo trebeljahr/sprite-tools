@@ -143,7 +143,7 @@ export async function generateImage(req: Request, res: Response) {
   const price = imagePriceMicros(model.costUsd);
   let job: { id: string; created: boolean };
   try {
-    job = await ledger.reserve(user.id, requestKey, price);
+    job = await ledger.reserve(user.id, requestKey, price, { model: model.id, provider: "xai" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "Insufficient generation credits")

@@ -135,6 +135,14 @@ describe("durable local video service", () => {
     const input = { requestId: randomUUID(), generation };
     const [a, b] = await Promise.all([service.createJob(input), service.createJob(input)]);
     expect(a.id).toBe(b.id);
+    expect(a.createdAt).toEqual(expect.any(String));
+    expect(a.generationInfo).toEqual({
+      provider: generation.provider,
+      model: generation.model,
+      durationSeconds: 4,
+      resolution: "720p",
+    });
+    expect(JSON.stringify(a)).not.toContain(generation.prompt);
     await done(service, a.id);
     expect(network.mock.calls.filter(([, request]) => request?.method === "POST")).toHaveLength(1);
     expect((await service.status()).budget.committedUsd).toBe(0.4);

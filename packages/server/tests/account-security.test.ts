@@ -30,6 +30,9 @@ beforeAll(async () => {
   await fixture.database.exec(
     await readFile(new URL("../db/migrations/001-video-budgets.sql", import.meta.url), "utf8"),
   );
+  await fixture.database.exec(
+    await readFile(new URL("../db/migrations/003-generation-usage.sql", import.meta.url), "utf8"),
+  );
   for (const id of ["alice", "bob", "carol"]) {
     await fixture.pool.query(
       'INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt") VALUES($1,$1,$2,true,now(),now())',

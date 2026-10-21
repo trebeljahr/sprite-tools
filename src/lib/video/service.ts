@@ -250,6 +250,17 @@ export class VideoService {
       id: job.id,
       status: job.status,
       reservedUsd: job.reservedUsd,
+      ...(job.createdAt ? { createdAt: job.createdAt } : {}),
+      ...(job.generation
+        ? {
+            generationInfo: {
+              provider: job.generation.provider,
+              model: job.generation.model,
+              durationSeconds: job.generation.durationSeconds,
+              resolution: job.generation.resolution,
+            },
+          }
+        : {}),
       outputRevision: job.outputRevision,
       processing: validateProcessing(job.processing),
       ...(job.error ? { error: job.error } : {}),
@@ -384,6 +395,7 @@ export class VideoService {
           : undefined;
       const job: StoredJob = {
         id: randomUUID(),
+        createdAt: new Date().toISOString(),
         requestId: idempotency,
         digest: hashes[0],
         status: "queued",
@@ -439,6 +451,7 @@ export class VideoService {
       this.requireIdle();
       const job: StoredJob = {
         id: randomUUID(),
+        createdAt: new Date().toISOString(),
         requestId: idempotency,
         digest: hashes[0],
         status: "processing",

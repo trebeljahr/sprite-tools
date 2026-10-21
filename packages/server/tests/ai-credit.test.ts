@@ -286,6 +286,20 @@ describe("generating with credit", () => {
     });
     const sent = xaiCalls.at(-1)!;
     expect(sent.headers.get("authorization")).toBe("Bearer xai-test-fake-server-key");
+    const usage = (await call("GET", "/api/account/usage", { cookie })).json;
+    expect(usage).toMatchObject({
+      spentMicros: 26000,
+      total: 1,
+      unknownCount: 0,
+      jobs: [
+        {
+          model: "grok-imagine-image",
+          provider: "xai",
+          billingStatus: "charged",
+          costMicros: 26000,
+        },
+      ],
+    });
     expect(sent.body).toEqual({
       model: "grok-imagine-image",
       prompt: "a knight",
@@ -305,6 +319,13 @@ describe("generating with credit", () => {
     expect(result.status).toBe(502);
     expect(String(result.json?.error)).toContain("Your credit was not charged.");
     expect(await balance()).toBe(4.974);
+    const usage = (await call("GET", "/api/account/usage", { cookie })).json;
+    expect(usage).toMatchObject({ spentMicros: 26000, unknownCount: 0 });
+    expect(
+      ((usage?.jobs ?? []) as { billingStatus: string }[]).filter(
+        (job) => job.billingStatus === "refunded",
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps the price when xAI never answers, since it may have billed", async () => {

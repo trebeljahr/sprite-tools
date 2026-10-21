@@ -11,7 +11,12 @@ export const STALE_RESERVATION_MINUTES = 10;
 export class VideoLedger {
   constructor(private readonly pool: Pick<Pool, "connect" | "query">) {}
 
-  async reserve(owner: string, requestKey: string, cost: number) {
+  async reserve(
+    owner: string,
+    requestKey: string,
+    cost: number,
+    metadata?: { model: string; provider: string },
+  ) {
     if (
       !owner ||
       owner === "__global__" ||
@@ -49,7 +54,10 @@ export class VideoLedger {
           );
           if (!updated.rowCount) throw new Error("Budget ledger mismatch");
         }
-        await db.query("UPDATE video_jobs SET status='failed' WHERE id=$1", [job.id]);
+        await db.query(
+          "UPDATE video_jobs SET status='failed',billing_status='charged' WHERE id=$1",
+          [job.id],
+        );
       }
       const active = await db.query(
         "SELECT id FROM video_jobs WHERE owner_id=$1 AND status IN ('reserved','submitted','uncertain')",
@@ -64,12 +72,10 @@ export class VideoLedger {
         if (!updated.rowCount) throw new Error("Insufficient generation credits");
       }
       const id = randomUUID();
-      await db.query("INSERT INTO video_jobs(id,owner_id,request_key,cost) VALUES($1,$2,$3,$4)", [
-        id,
-        owner,
-        requestKey,
-        cost,
-      ]);
+      await db.query(
+        "INSERT INTO video_jobs(id,owner_id,request_key,cost,model,provider) VALUES($1,$2,$3,$4,$5,$6)",
+        [id, owner, requestKey, cost, metadata?.model ?? null, metadata?.provider ?? null],
+      );
       await db.query("COMMIT");
       return { id, created: true };
     } catch (error) {
@@ -115,10 +121,10 @@ export class VideoLedger {
           );
           if (!updated.rowCount) throw new Error("Budget ledger mismatch");
         }
-        await db.query("UPDATE video_jobs SET status='failed' WHERE id=$1 AND owner_id=$2", [
-          id,
-          owner,
-        ]);
+        await db.query(
+          "UPDATE video_jobs SET status='failed',billing_status='refunded' WHERE id=$1 AND owner_id=$2",
+          [id, owner],
+        );
       }
       await db.query("COMMIT");
     } catch (error) {
@@ -186,11 +192,10 @@ export class VideoLedger {
           );
           if (!updated.rowCount) throw new Error("Budget ledger mismatch");
         }
-        await db.query("UPDATE video_jobs SET status=$3 WHERE id=$1 AND owner_id=$2", [
-          id,
-          owner,
-          outcome,
-        ]);
+        await db.query(
+          "UPDATE video_jobs SET status=$3,billing_status='charged' WHERE id=$1 AND owner_id=$2",
+          [id, owner, outcome],
+        );
       }
       await db.query("COMMIT");
     } catch (error) {

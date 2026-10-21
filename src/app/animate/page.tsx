@@ -437,6 +437,9 @@ export default function AnimatePage() {
             polygons and frame timing.
           </p>
         </div>
+        <a href="/usage" className="text-sm underline underline-offset-4">
+          Usage &amp; spending
+        </a>
         {local && (
           <a href="/setup" className="flex items-center gap-2 text-sm underline underline-offset-4">
             <Settings2 className="h-4 w-4" />

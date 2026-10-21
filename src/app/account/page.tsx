@@ -98,6 +98,9 @@ export default function AccountPage() {
       ) : session && mode !== "reset" ? (
         <>
           <p>Signed in as {session.user.email}.</p>
+          <a href="/usage" className="block text-sm underline underline-offset-4">
+            View generation usage and credit history
+          </a>
           <p>
             {balanceUsd === null
               ? "AI credit balance unavailable."

@@ -283,6 +283,13 @@ export interface PublicJob {
   id: string;
   status: JobStatus;
   reservedUsd: number;
+  createdAt?: string;
+  generationInfo?: {
+    provider: ProviderId;
+    model: string;
+    durationSeconds: number;
+    resolution: VideoResolution;
+  };
   /** Increases after each successful processing run, including reprocessing through MCP. */
   outputRevision: number;
   /** Saved non-secret output controls; selecting a job restores these settings. */

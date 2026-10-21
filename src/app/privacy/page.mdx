@@ -62,6 +62,11 @@ server counts requests to the sign-in and account endpoints per IP
 address. It keeps one counter per IP address and endpoint, with the time
 of the last request.
 
+For prepaid generations, the server keeps the request ID, model, provider,
+reservation amount, result, credit outcome and request time. You can view
+these records on the [usage dashboard](/usage). Historical records may lack
+a model or credit outcome.
+
 You buy credit through [Stripe](https://stripe.com/privacy). Stripe takes
 your card details; the sprite-tools server never sees them. The server
 keeps the Stripe checkout ID, the amount and the time of each purchase.

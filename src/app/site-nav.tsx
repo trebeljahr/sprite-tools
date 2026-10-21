@@ -39,7 +39,10 @@ interface ToolLink {
 const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
   {
     label: "AI",
-    items: [{ href: "/generate", label: "AI Character", hint: "generate sprite art" }],
+    items: [
+      { href: "/generate", label: "AI Character", hint: "generate sprite art" },
+      { href: "/usage", label: "Usage", hint: "credits and generation history" },
+    ],
   },
   {
     label: "Extract",
