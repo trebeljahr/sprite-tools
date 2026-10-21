@@ -73,6 +73,7 @@ export async function exportCharacterZip(
   return zip.generateAsync({ type: "blob" });
 }
 export interface CharacterSession {
+  projectUrl?: string;
   source: Pixels;
   plan: CharacterPlan;
   completions: Record<string, Pixels>;

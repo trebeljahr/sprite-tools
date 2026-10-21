@@ -140,3 +140,42 @@ Reduce image size or part count if that aggregate limit is exceeded.
 - `bend-tests/` and `bend-tests.json`: optional headless stress previews with angles, origin and potential clipping flags.
 
 The bundle prepares artwork for a rigging tool. It is not a Godot Skeleton2D, Spine project, or baked animation export.
+
+
+## Open a shared project link
+
+A link such as `/character-layers?project=/sprites/hero.zip` opens a hosted project in any browser.
+The ZIP must be hosted on the same site. Opening it does not require a provider key.
+Edits remain in that browser's local draft. Export a ZIP to transfer them to another browser.
+When a linked project replaces an existing draft, Undo restores that draft during the same session.
+
+## Test animation movement
+
+[Sprite Playground](/playground) loads an animation-set JSON with `?set=/sprites/animation-set.json`.
+The set lists PNG sheets, frame sizes, a shared origin, frame durations and looping rules.
+Sheets must use the declared grid. Sources remain unchanged.
+
+Use **Play controller** to test A/D movement, Shift running, W/Space jumping, S/E rolling and F attacks.
+Physics moves the shared origin; the animation supplies local body motion.
+Jumps retain horizontal momentum. Press F during a roll to queue a stab.
+Another F near attack recovery queues the next attack. Escape releases keyboard control.
+Input is captured only while the stage is focused. Losing focus clears held keys.
+
+Use **Clips & transitions** to choose two actions and preview their transition.
+**Switch at clip end** queues a selected action until the current cycle finishes.
+Frame stepping, scrubbing and playback speed help review the transition.
+The bindings map controller actions to clip names, so other characters can use the same controller.
+
+Run and roll have explicitly labelled preview fallbacks when their bindings are empty.
+A run fallback speeds up the walk cycle. A roll fallback transforms an idle pose; it is not finished roll artwork.
+Replace these bindings with authored clips before production use.
+
+Per-clip saturation, contrast and brightness affect preview rendering only.
+**Save set settings** keeps bindings and colour settings in JSON. It does not bake corrected PNGs or export a game controller.
+
+This format also accepts the existing animation-set structure with `canvas`, `origin` and `clips`.
+Optional `controller.bindings` maps `idle`, `walk`, `run`, `jump`, `roll`, `attack1`, `attack2` and `attack3` to clip ids.
+Each clip can include `colour: { saturation: 1, contrast: 1, brightness: 1 }`.
+Optional `controller.layerProject` links back to a same-site character ZIP.
+
+Optional `controller.labels` overrides action names without changing their bindings. Source provenance and extra clip metadata survive a settings export.

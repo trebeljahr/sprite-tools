@@ -14,6 +14,8 @@ import {
   sha256,
   type CharacterSession,
 } from "@/lib/character/browser";
+import { linkedCharacterProject } from "@/lib/character/linked-project";
+import { sameOriginFile } from "@/lib/browser-files";
 import { characterDemo } from "@/lib/character/demo";
 import { explodedLayout } from "@/lib/character/exploded";
 import { completionBackground, removeCompletionBackground } from "@/lib/character/completion";
@@ -71,21 +73,51 @@ export default function CharacterLayersPage() {
     cache = useRef(new Map<string, unknown>());
   useEffect(() => {
     let active = true;
-    sessionStore()
-      .then((s) => {
-        if (active && s && revision.current === 0) {
-          setSession(s);
-          setSelected(s.plan.parts.at(-1)?.id ?? "");
+    const ac = new AbortController();
+    const initialRevision = revision.current;
+    const restore = async () => {
+      let saved: CharacterSession | null = null;
+      try {
+        saved = await sessionStore();
+      } catch {
+        setStatus("Local draft storage is unavailable. Export your project before closing.");
+      }
+      if (!active || revision.current !== initialRevision) return;
+      const path = new URLSearchParams(window.location.search).get("project");
+      let next = saved;
+      if (saved) {
+        setSession(saved);
+        setSelected(saved.plan.parts.at(-1)?.id ?? "");
+      }
+      if (path) {
+        const projectUrl = sameOriginFile(path, window.location.href);
+        if (saved?.projectUrl !== projectUrl) {
+          setStatus("Loading linked character project…");
+          next = await linkedCharacterProject(projectUrl, window.location.href, ac.signal);
         }
+      }
+      if (active && next && revision.current === initialRevision) {
+        if (saved && next !== saved) history.current = [saved];
+        setSession(next);
+        setSelected(next.plan.parts.at(-1)?.id ?? "");
+        setStatus(
+          path
+            ? "Linked project loaded. Edits are saved in this browser; export a ZIP to move them elsewhere."
+            : "Local draft restored.",
+        );
+      }
+    };
+    void restore()
+      .catch((e) => {
+        if (active)
+          setError(e instanceof Error ? e.message : "Linked project could not be loaded.");
       })
-      .catch(() =>
-        setStatus("Local draft storage is unavailable. Export your project before closing."),
-      )
       .finally(() => {
         if (active) setReady(true);
       });
     return () => {
       active = false;
+      ac.abort();
       controller.current?.abort();
     };
   }, []);
@@ -798,15 +830,18 @@ export default function CharacterLayersPage() {
               />
             ) : (
               <div className="px-8 text-center">
-                <p className="text-xl font-medium">One drawing. Editable parts.</p>
+                <p className="text-xl font-medium">
+                  {ready ? "One drawing. Editable parts." : "Loading character project…"}
+                </p>
                 <p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">
-                  Open artwork for a character, creature, or articulated object. Keep its style
-                  while separating parts for animation.
+                  {ready
+                    ? "Open artwork for a character, creature, or articulated object. Keep its style while separating parts for animation."
+                    : "Restoring the source artwork, masks and joints."}
                 </p>
                 <button
                   type="button"
                   className="mt-5 text-xs underline"
-                  disabled={!!busy}
+                  disabled={!!busy || !ready}
                   onClick={() => {
                     commit(characterDemo());
                     setSelected("forearm");
