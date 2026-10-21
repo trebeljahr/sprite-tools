@@ -19,6 +19,7 @@ import {
   WORLD,
   VIEWPORT,
   strideFor,
+  runSpeedFor,
   type Input,
   type Preview,
 } from "@/lib/playground/controller";
@@ -544,6 +545,34 @@ export default function Playground() {
             woodland. Keep a direction held through a jump. Press F during a roll to queue a stab.
             Press F again near the end of an attack to chain the next attack.
           </p>
+          {loaded && (
+            <label className="mt-4 flex max-w-lg flex-wrap items-center gap-3 text-sm">
+              Run speed · {runSpeedFor(loaded.set)} px/s
+              <input
+                aria-label="Run speed"
+                type="range"
+                min={400}
+                max={2400}
+                step={100}
+                value={runSpeedFor(loaded.set)}
+                className="min-w-40 flex-1"
+                onChange={(e) => {
+                  const runSpeed = Number(e.target.value);
+                  setLoaded((current) =>
+                    current
+                      ? {
+                          ...current,
+                          set: {
+                            ...current.set,
+                            controller: { ...current.set.controller, runSpeed },
+                          },
+                        }
+                      : current,
+                  );
+                }}
+              />
+            </label>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [

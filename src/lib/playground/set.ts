@@ -64,6 +64,7 @@ const schema = z
       .object({
         bindings: z.record(z.enum(roles), z.string().nullable()).optional(),
         layerProject: z.string().max(2048).optional(),
+        runSpeed: z.number().min(400).max(2400).optional(),
         labels: z.record(z.enum(roles), z.string().max(100)).optional(),
       })
       .optional(),

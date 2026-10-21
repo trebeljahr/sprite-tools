@@ -43,11 +43,12 @@ export const WORLD = {
 };
 const movement = {
   walk: 350,
-  run: 800,
+  run: 1600,
   roll: 720,
   jump: 820,
   gravity: 1650,
   groundAcceleration: 2600,
+  runAcceleration: 10000,
   airAcceleration: 800,
 };
 export function createBody(): Body {
@@ -128,11 +129,16 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   }
   if (s.motion === "roll") s.vx = s.facing * movement.roll;
   else {
-    const target = axis * (input.sprint ? movement.run : movement.walk) * (attacking(s) ? 0.32 : 1);
+    const target =
+      axis * (input.sprint ? runSpeedFor(set) : movement.walk) * (attacking(s) ? 0.32 : 1);
+    const groundAcceleration =
+      input.sprint || Math.abs(s.vx) > movement.walk
+        ? movement.runAcceleration
+        : movement.groundAcceleration;
     s.vx = approach(
       s.vx,
       target,
-      (s.grounded ? movement.groundAcceleration : movement.airAcceleration) * dt,
+      (s.grounded ? groundAcceleration : movement.airAcceleration) * dt,
     );
   }
   const oldY = s.y;
@@ -185,6 +191,9 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     s.gaitPhase = (s.gaitPhase + Math.abs(s.x - previous.x) / stride) % 1;
   }
   return s;
+}
+export function runSpeedFor(set: AnimationSet) {
+  return set.controller?.runSpeed ?? movement.run;
 }
 export function strideFor(set: AnimationSet, role: "walk" | "run") {
   return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);

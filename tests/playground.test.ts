@@ -64,9 +64,21 @@ describe("controller movement and transitions", () => {
     expect(walk.motion).toBe("walk");
     expect(run.motion).toBe("run");
     expect(walk.vx).toBe(350);
-    expect(run.vx).toBe(800);
+    expect(run.vx).toBe(1600);
     expect(run.x).toBeGreaterThan(walk.x);
     expect(initial.x).toBe(180);
+  });
+  it("applies saved run speed, accelerates promptly and brakes without a long slide", () => {
+    const custom = validateAnimationSet({ ...base, controller: { runSpeed: 2000 } });
+    const running = advance(createBody(), 0.2, { axis: 1, sprint: true }, custom);
+    expect(running.vx).toBeCloseTo(2000);
+    const walking = advance(running, 0.2, { axis: 1 }, custom);
+    expect(walking.vx).toBe(350);
+    const stopped = advance(running, 0.4, {}, custom);
+    expect(stopped.vx).toBe(0);
+    expect(stopped.x - running.x).toBeLessThan(230);
+    for (const runSpeed of [399, 2401, NaN])
+      expect(() => validateAnimationSet({ ...base, controller: { runSpeed } })).toThrow();
   });
   it("advances gait by actual distance rather than elapsed action time", () => {
     const initial = { ...createBody(), motion: "walk" as const, vx: 350 };
@@ -142,7 +154,7 @@ describe("controller movement and transitions", () => {
       set(),
     );
     expect(airborne.motion).toBe("jump");
-    expect(airborne.vx).toBe(-800);
+    expect(airborne.vx).toBe(-1600);
     expect(airborne.facing).toBe(-1);
     expect(airborne.y).toBeLessThan(WORLD.ground);
   });
@@ -173,17 +185,28 @@ describe("controller movement and transitions", () => {
     expect(landed.y).toBe(WORLD.platforms[0].y);
     expect(landed.grounded).toBe(true);
   });
-  it("can climb both raised platforms using the configured jump and a running approach", () => {
+  it("can climb both raised platforms using the configured jump and a controlled running approach", () => {
+    const platformSet = validateAnimationSet({ ...base, controller: { runSpeed: 800 } });
     const jumpTo = (initial: Body, targetX: number) => {
-      let s = stepBody(initial, { ...neutral, axis: 1, sprint: true, jump: true }, 1 / 120, set());
+      let s = stepBody(
+        initial,
+        { ...neutral, axis: 1, sprint: true, jump: true },
+        1 / 120,
+        platformSet,
+      );
       for (let i = 0; i < 160 && !s.grounded; i++)
-        s = stepBody(s, { ...neutral, axis: s.x < targetX ? 1 : 0, sprint: true }, 1 / 120, set());
+        s = stepBody(
+          s,
+          { ...neutral, axis: s.x < targetX ? 1 : 0, sprint: true },
+          1 / 120,
+          platformSet,
+        );
       return s;
     };
     const lower = jumpTo(createBody(), 410);
     expect(lower.grounded).toBe(true);
     expect(lower.y).toBe(WORLD.platforms[0].y);
-    const approach = advance(lower, 0.08, { axis: 1, sprint: true });
+    const approach = advance(lower, 0.08, { axis: 1, sprint: true }, platformSet);
     expect(approach.x).toBeLessThan(WORLD.platforms[0].x + WORLD.platforms[0].width);
     const upper = jumpTo(approach, 880);
     expect(upper.grounded).toBe(true);
