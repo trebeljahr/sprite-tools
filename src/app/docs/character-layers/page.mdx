@@ -211,3 +211,31 @@ When movement stops, the controller blends its last gait pose into idle over 240
 **Stop and landing transitions** buttons review the exact exit pose, recovery clip and idle entry. The playback speed selector also slows this review. Geometry and route validation cannot certify natural motion: inspect the step, planted foot, weapon hand, body volume and both joins. A route's bounded lead can accelerate the final portion of a gait; author additional exit variants when that is visible.
 
 A clip can store a losslessly cropped sheet with `frameCrop: { x, y, width, height }`. Each physical sheet cell has that width and height; the rectangle locates it inside the set's unchanged virtual `canvas`. Origins and movement stay in virtual coordinates. This saves transparent-sheet memory without resizing or moving painted pixels. The loader validates the physical PNG grid, crop bounds and total decoded pixel budget. Set a route’s `enabled: false` to keep an unapproved trial available in transition review while excluding it from controller playback. Settings export retains crops and transition routes. Sets without routes retain the earlier fallback behavior.
+
+### Bake guided inbetween frames locally
+
+The CLI can add intermediate poses without a provider request:
+
+```sh
+sprite-tools inbetween exit.png idle.png --recipe guides.json -o recovery.png --json recovery.json
+```
+
+Both PNGs use the same canvas and ground origin. A recipe names matching directed lines on both poses:
+
+```json
+{
+  "version": 1,
+  "frames": 6,
+  "durationMs": 240,
+  "easing": "smoothstep",
+  "guides": [
+    { "name": "sword", "from": [[120, 80], [180, 110]], "to": [[118, 82], [178, 112]] }
+  ]
+}
+```
+
+Use several guides for the head, torso, limbs, weapon and clothing. Keep each line's endpoint order consistent. Coordinates refer to pixels within the PNG. The tool moves both endpoint textures toward each intermediate pose before blending them, using premultiplied alpha at edges. It keeps both endpoint frames unchanged and outputs `frames + 2` cells, timing metadata and the recipe. Output canvases must match and the packed sheet is limited to 32 million pixels.
+
+Put these frames in a separate non-looping recovery clip. Appending idle recovery to a looping walk or run would play the stop on every stride. Bind the recovery with `controller.idleTransitions` and review it in the playground. Existing sheets, timing and bindings remain under your control.
+
+Guides require manual placement. Warping cannot paint hidden anatomy or reliably resolve crossing arms, changing silhouettes or a weapon switching hands. Close poses usually need less correction; larger changes may stretch, soften or double details. Treat the output as a candidate and inspect both joins before production use. This command does not call an external service.

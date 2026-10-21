@@ -35,6 +35,7 @@ import { registerLintCommand } from "./commands/lint";
 import { registerMetaCommand } from "./commands/meta";
 import { registerExportCommand } from "./commands/export";
 import { registerCharacterCommand } from "./commands/character";
+import { registerInbetweenCommand } from "./commands/inbetween";
 import { registerStudioCommand } from "./commands/studio";
 
 const program = new Command();
@@ -80,10 +81,11 @@ program.addHelpText(
     "  pixelate   downscale + quantize + dither + palette-snap           (PNG)",
     "  normal-map alpha/luminance → tangent-space normals               (PNG)",
     "  outline    add an outer/inner outline and/or drop shadow            (PNG)",
+    "  inbetween  guided pose interpolation between aligned PNGs        (PNG + JSON)",
     "  gif        animated GIF from sheet                               (GIF)",
     "",
-    "Any <input> may be '-' to read PNG bytes from stdin. Any -o target may be '-'",
-    "for stdout. So you can pipe:",
+    "Most <input> arguments may be '-' to read PNG bytes from stdin. Any -o target may be '-'",
+    "for stdout. The inbetween command requires named files. Other commands can pipe:",
     "",
     "  cat hero.png | sprite-tools trim - -o - | sprite-tools collision -",
     "",
@@ -129,6 +131,7 @@ registerAtlasCommand(program);
 registerGifCommand(program);
 registerExportCommand(program);
 registerStudioCommand(program);
+registerInbetweenCommand(program);
 
 program.parseAsync(process.argv).catch((err) => {
   process.stderr.write(`sprite-tools: ${err instanceof Error ? err.message : String(err)}\n`);
