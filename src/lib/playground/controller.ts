@@ -175,7 +175,9 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
       const route = set.controller!.idleTransitions![s.bridge.route];
       if (route.from === "walk" || route.from === "run") {
         const clip = clipFor(set, route.from).clip;
-        const elapsed = clip.durations.slice(0, route.exitFrame).reduce((a, b) => a + b, 0);
+        const elapsed = clip.durations
+          .slice(0, route.resumeFrame ?? route.exitFrame)
+          .reduce((a, b) => a + b, 0);
         s.gaitPhase =
           (elapsed / clip.durations.reduce((a, b) => a + b, 0) -
             (clip.locomotion?.phaseOffset ?? 0) +

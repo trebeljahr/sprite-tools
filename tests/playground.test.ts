@@ -411,6 +411,50 @@ describe("authored stop and landing routes", () => {
     expect(reviewBridgeFrame(set, 0, end + 10)).toEqual(reviewBridgeFrame(set, 0, end));
     expect(reviewBridgeFrame(set, 0, end + 10).role).toBe("idle");
   });
+  it("enters a shared recovery at the exact release phase without rushing its source frames", () => {
+    const s = configured();
+    const routed = validateAnimationSet({
+      ...s,
+      controller: {
+        idleTransitions: [0, 1, 2, 3].map((frame) => ({
+          from: "walk",
+          exitFrame: frame,
+          clip: "stop",
+          entryFrame: frame,
+          resumeFrame: 1,
+          idleFrame: 2,
+          leadMs: 0,
+        })),
+      },
+    });
+    for (let sourceFrame = 0; sourceFrame < 4; sourceFrame++) {
+      const b = chooseIdleBridge(routed, "walk", sourceFrame)!;
+      expect(b.steps).toBe(0);
+      expect(b.leadSeconds).toBe(0);
+      expect(bridgeFrame(routed, b, 0)).toEqual({
+        role: "idle",
+        clipId: "stop",
+        frame: sourceFrame,
+      });
+      expect(bridgeFrame(routed, b, 0.099).frame).toBe(sourceFrame);
+      expect(bridgeFrame(routed, b, 0.101).frame).toBe(Math.min(3, sourceFrame + 1));
+      expect(bridgeSeconds(routed, b)).toBeCloseTo((4 - sourceFrame) * 0.1);
+    }
+    expect(reviewBridgeSeconds(routed, 2)).toBeCloseTo(1.2);
+    expect(reviewBridgeFrame(routed, 2, 0.21)).toEqual({ role: "idle", clipId: "stop", frame: 2 });
+    expect(reviewBridgeFrame(routed, 2, 0.41)).toEqual({ role: "idle", frame: 2 });
+    const stopped = stepBody(
+      { ...createBody(), motion: "walk", vx: 350, gaitPhase: 0.55 },
+      neutral,
+      1 / 120,
+      routed,
+    );
+    expect(bodyFrame(stopped, routed).frame).toBe(2);
+    const settled = advance(stopped, 0.21, {}, routed);
+    expect(settled.motion).toBe("idle");
+    expect(settled.gaitPhase).toBeCloseTo(0.25);
+    expect(bodyFrame(settled, routed).frame).toBe(2);
+  });
   it("keeps unapproved trial routes out of controller playback", () => {
     const s = configured();
     const reviewOnly = validateAnimationSet({
@@ -437,6 +481,8 @@ describe("authored stop and landing routes", () => {
       { from: "walk", exitFrame: 1, clip: "missing" },
       { from: "walk", exitFrame: 1, clip: "idle" },
       { from: "walk", exitFrame: 1, clip: "stop", idleFrame: 4 },
+      { from: "walk", exitFrame: 1, clip: "stop", entryFrame: 4 },
+      { from: "walk", exitFrame: 1, clip: "stop", resumeFrame: 4 },
     ])
       expect(() =>
         validateAnimationSet({ ...set, controller: { idleTransitions: [route] } }),

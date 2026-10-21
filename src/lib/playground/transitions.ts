@@ -52,8 +52,15 @@ export function chooseIdleBridge(
     leadSeconds: Math.min(nativeMs, selected.r.leadMs) / 1000,
   };
 }
+function recoveryStart(set: AnimationSet, route: number) {
+  const r = set.controller!.idleTransitions![route];
+  return set.clips[r.clip].durations.slice(0, r.entryFrame).reduce((a, b) => a + b, 0) / 1000;
+}
+function recoverySeconds(set: AnimationSet, route: number) {
+  return clipSeconds(set, set.controller!.idleTransitions![route].clip) - recoveryStart(set, route);
+}
 export function bridgeSeconds(set: AnimationSet, state: BridgeState) {
-  return state.leadSeconds + clipSeconds(set, set.controller!.idleTransitions![state.route].clip);
+  return state.leadSeconds + recoverySeconds(set, state.route);
 }
 export function bridgeFrame(set: AnimationSet, state: BridgeState, seconds: number): PoseFrame {
   const route = set.controller!.idleTransitions![state.route];
@@ -68,20 +75,28 @@ export function bridgeFrame(set: AnimationSet, state: BridgeState, seconds: numb
   return {
     role: "idle",
     clipId: route.clip,
-    frame: sampleClip(set, route.clip, seconds - state.leadSeconds),
+    frame: sampleClip(
+      set,
+      route.clip,
+      recoveryStart(set, state.route) + seconds - state.leadSeconds,
+    ),
   };
 }
 /** Isolated endpoint/bridge/idle review. Source and target use exact saved frames. */
 export function reviewBridgeSeconds(set: AnimationSet, index: number) {
-  return 0.2 + clipSeconds(set, set.controller!.idleTransitions![index].clip) + 0.8;
+  return 0.2 + recoverySeconds(set, index) + 0.8;
 }
 export function reviewBridgeFrame(set: AnimationSet, index: number, seconds: number): PoseFrame {
   const route = set.controller!.idleTransitions![index],
-    duration = clipSeconds(set, route.clip);
+    duration = recoverySeconds(set, index);
   const t = Math.min(Math.max(0, seconds), reviewBridgeSeconds(set, index));
   if (t < 0.2) return { role: route.from, frame: route.exitFrame };
   if (t < 0.2 + duration)
-    return { role: "idle", clipId: route.clip, frame: sampleClip(set, route.clip, t - 0.2) };
+    return {
+      role: "idle",
+      clipId: route.clip,
+      frame: sampleClip(set, route.clip, recoveryStart(set, index) + t - 0.2),
+    };
   const idle = clipFor(set, "idle");
   return {
     role: "idle",

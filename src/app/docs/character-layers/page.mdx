@@ -240,3 +240,12 @@ Use several guides for the head, torso, limbs, weapon and clothing. Keep each li
 Put these frames in a separate non-looping recovery clip. Appending idle recovery to a looping walk or run would play the stop on every stride. Bind the recovery with `controller.idleTransitions` and review it in the playground. Existing sheets, timing and bindings remain under your control.
 
 Guides require manual placement. Warping cannot paint hidden anatomy or reliably resolve crossing arms, changing silhouettes or a weapon switching hands. Close poses usually need less correction; larger changes may stretch, soften or double details. Treat the output as a candidate and inspect both joins before production use. This command does not call an external service.
+
+
+### Resume a recovery from the current phase
+
+A route's optional `entryFrame` starts inside a shared recovery sheet. Its duration and isolated review include only that frame and the following frames. It defaults to zero. Give each source phase its own route, with `exitFrame` matching that phase and `leadMs: 0`, to enter the matching original pose immediately. Several routes can reuse one sheet without storing duplicate pixels.
+
+For example, a sheet can contain the remaining forward walk poses, then a short settle. Phase-specific entries preserve the arm swing and its original durations instead of compressing a search for an exit pose or warping a forward arm through the torso. An optional `resumeFrame` restores the gait phase at the actual recovery ending; without it the controller uses `exitFrame`. Both indices are validated. New input still interrupts recovery immediately.
+
+When a set has many recovery routes, **Recovery to review** selects a phase and **Preview recovery** plays it in isolation. Source-frame continuation cannot create a new stopping action: a long arm return may take much longer than a purpose-drawn stop. A close final-pose interpolation can still soften artwork.

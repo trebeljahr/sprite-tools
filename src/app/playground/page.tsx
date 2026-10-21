@@ -819,21 +819,64 @@ export default function Playground() {
         <div className="mt-5 space-y-2 border-t pt-4">
           <p className="text-sm">Stop and landing transitions</p>
           <div className="flex flex-wrap gap-2">
-            {loaded.set.controller.idleTransitions.map((route, index) => (
-              <Button
-                key={`${route.from}-${route.exitFrame}-${route.clip}`}
-                variant="outline"
-                onClick={() => {
-                  setMode("clips");
-                  setBridgeReview(index);
-                  preview.current = { role: route.from, time: 0, queued: null };
-                  setPlaying(true);
-                }}
-              >
-                {!route.enabled ? "Trial · " : ""}
-                {route.label ?? `${names[route.from]} → ${names.idle}`}
-              </Button>
-            ))}
+            {loaded.set.controller.idleTransitions.length > 8 ? (
+              <>
+                <select
+                  aria-label="Recovery to review"
+                  className="max-w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={bridgeReview ?? 0}
+                  onChange={(e) => {
+                    const index = Number(e.target.value);
+                    setBridgeReview(index);
+                    preview.current = {
+                      role: loaded.set.controller!.idleTransitions![index].from,
+                      time: 0,
+                      queued: null,
+                    };
+                    setPlaying(false);
+                  }}
+                >
+                  {loaded.set.controller.idleTransitions.map((route, index) => (
+                    <option key={`${route.from}-${route.exitFrame}-${route.clip}`} value={index}>
+                      {!route.enabled ? "Trial · " : ""}
+                      {route.label ?? `${names[route.from]} → ${names.idle}`}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const index = bridgeReview ?? 0;
+                    setMode("clips");
+                    setBridgeReview(index);
+                    preview.current = {
+                      role: loaded.set.controller!.idleTransitions![index].from,
+                      time: 0,
+                      queued: null,
+                    };
+                    setPlaying(true);
+                  }}
+                >
+                  Preview recovery
+                </Button>
+              </>
+            ) : (
+              loaded.set.controller.idleTransitions.map((route, index) => (
+                <Button
+                  key={`${route.from}-${route.exitFrame}-${route.clip}`}
+                  variant="outline"
+                  onClick={() => {
+                    setMode("clips");
+                    setBridgeReview(index);
+                    preview.current = { role: route.from, time: 0, queued: null };
+                    setPlaying(true);
+                  }}
+                >
+                  {!route.enabled ? "Trial · " : ""}
+                  {route.label ?? `${names[route.from]} → ${names.idle}`}
+                </Button>
+              ))
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             Review the source exit pose, recovery clip and idle entry in sequence. Trial clips are

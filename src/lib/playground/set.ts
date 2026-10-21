@@ -86,6 +86,8 @@ const schema = z
               clip: z.string().min(1).max(64),
               exitFrame: z.number().int().min(0),
               idleFrame: z.number().int().min(0).default(0),
+              entryFrame: z.number().int().min(0).default(0),
+              resumeFrame: z.number().int().min(0).optional(),
               leadMs: z.number().min(0).max(400).default(180),
               label: z.string().max(100).optional(),
               enabled: z.boolean().default(true),
@@ -149,7 +151,12 @@ export function validateAnimationSet(value: unknown): AnimationSet {
       idle = bindings.idle!;
     if (route.from === "idle" || !from || !s.clips[route.clip] || s.clips[route.clip].loop)
       throw Error("Idle transitions need a bound source and a non-looping bridge clip.");
-    if (route.exitFrame >= s.clips[from].count || route.idleFrame >= s.clips[idle].count)
+    if (
+      route.exitFrame >= s.clips[from].count ||
+      route.idleFrame >= s.clips[idle].count ||
+      route.entryFrame >= s.clips[route.clip].count ||
+      (route.resumeFrame !== undefined && route.resumeFrame >= s.clips[from].count)
+    )
       throw Error("Transition endpoint is outside its clip.");
   }
   return { ...s, bindings };
