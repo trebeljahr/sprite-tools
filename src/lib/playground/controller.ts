@@ -22,8 +22,9 @@ export interface Body {
   jumpBuffer: number;
   rollCooldown: number;
   gaitPhase: number;
-  settleFrom: { role: "walk" | "run"; frame: number } | null;
+  settleFrom: { role: Role; frame: number; time: number } | null;
 }
+export const IDLE_BLEND_SECONDS = 0.24;
 export const VIEWPORT = { width: 1280, height: 600 };
 export const WORLD = {
   left: -3200,
@@ -83,6 +84,11 @@ function startAttack(s: Body, stab = false) {
   if (stab) s.attack = 2;
   s.attackBuffer = 0;
 }
+function settleIntoIdle(s: Body, set: AnimationSet) {
+  const from = { ...bodyFrame(s, set), time: s.time };
+  begin(s, "settle");
+  s.settleFrom = from;
+}
 const approach = (a: number, b: number, delta: number) =>
   a < b ? Math.min(b, a + delta) : Math.max(b, a - delta);
 export function stepBody(previous: Body, input: Input, delta: number, set: AnimationSet): Body {
@@ -106,12 +112,18 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     if (s.queuedStab) {
       s.queuedStab = false;
       startAttack(s, true);
-    } else begin(s, s.grounded ? "idle" : "jump");
+    } else if (s.grounded) settleIntoIdle(s, set);
+    else begin(s, "jump");
   } else if (attacking(s) && s.time >= roleDuration(set, s.motion as Role)) {
     if (s.attackBuffer > 0) startAttack(s);
-    else begin(s, s.grounded ? "idle" : "jump");
-  } else if (s.motion === "land" && s.time >= 0.14) begin(s, "idle");
-  else if (s.motion === "settle" && s.time >= 0.18) begin(s, "idle");
+    else if (s.grounded) settleIntoIdle(s, set);
+    else begin(s, "jump");
+  } else if (s.motion === "land" && s.time >= 0.14) settleIntoIdle(s, set);
+  else if (s.motion === "settle" && s.time >= IDLE_BLEND_SECONDS) {
+    // Idle has already been playing during the blend. Keep its clock running.
+    s.motion = "idle";
+    s.settleFrom = null;
+  }
   const locked = s.motion === "roll" || attacking(s);
   if (!locked) {
     if (s.jumpBuffer > 0 && s.grounded) {
@@ -174,15 +186,15 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     const next: Role = !s.grounded
       ? "jump"
       : Math.abs(s.vx) > 12
-        ? input.sprint
-          ? "run"
-          : "walk"
+        ? !axis && (s.motion === "walk" || s.motion === "run")
+          ? s.motion
+          : input.sprint
+            ? "run"
+            : "walk"
         : "idle";
     if (s.motion !== next) {
       if (next === "idle" && (s.motion === "walk" || s.motion === "run")) {
-        const from = { role: s.motion, frame: bodyFrame(s, set).frame };
-        begin(s, "settle");
-        s.settleFrom = from;
+        settleIntoIdle(s, set);
       } else begin(s, next);
     }
   }

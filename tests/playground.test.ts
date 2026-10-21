@@ -8,6 +8,7 @@ import {
 } from "../src/lib/playground/set";
 import {
   createBody,
+  IDLE_BLEND_SECONDS,
   stepBody,
   bodyFrame,
   stepPreview,
@@ -133,6 +134,40 @@ describe("controller movement and transitions", () => {
     expect(resumed.motion).toBe("walk");
     expect(resumed.settleFrom).toBeNull();
   });
+  it("continues the idle clock when settling finishes instead of restarting frame one", () => {
+    const moving = advance(createBody(), 0.3, { axis: 1 });
+    let s = advance(moving, 0.15);
+    while (s.time < IDLE_BLEND_SECONDS - 1 / 120) s = stepBody(s, neutral, 1 / 120, set());
+    const before = s.time;
+    const resting = stepBody(s, neutral, 1 / 120, set());
+    expect(resting.motion).toBe("idle");
+    expect(resting.time).toBeCloseTo(before + 1 / 120);
+    expect(bodyFrame(resting, set()).frame).toBe(frameAt(set(), "idle", resting.time));
+    expect(bodyFrame(resting, set()).frame).not.toBe(0);
+  });
+  it("keeps the run pose while braking with all movement keys released", () => {
+    const moving = advance(createBody(), 0.3, { axis: 1, sprint: true });
+    let s = stepBody(moving, neutral, 1 / 120, set());
+    expect(s.motion).toBe("run");
+    while (s.motion === "run") s = stepBody(s, neutral, 1 / 120, set());
+    expect(s.motion).toBe("settle");
+    expect(s.settleFrom?.role).toBe("run");
+  });
+  it.each(["attack1", "roll", "land"] as const)("blends the final %s pose into idle", (motion) => {
+    const initial = {
+      ...createBody(),
+      motion,
+      time: motion === "land" ? 0.14 : roleDuration(set(), motion),
+      vx: 0,
+    };
+    const settled = stepBody(initial, neutral, 1 / 120, set());
+    expect(settled.motion).toBe("settle");
+    expect(settled.settleFrom?.role).toBe(motion === "land" ? "jump" : motion);
+    expect(settled.settleFrom?.frame).toBe(3);
+    const interrupted = stepBody(settled, { ...neutral, attack: true }, 1 / 120, set());
+    expect(interrupted.motion).toBe("attack1");
+    expect(interrupted.settleFrom).toBeNull();
+  });
   it("stops locomotion at world boundaries instead of running feet against an invisible wall", () => {
     const edge = WORLD.left + WORLD.width - 340;
     const initial = {
@@ -186,7 +221,7 @@ describe("controller movement and transitions", () => {
     expect(s.grounded).toBe(true);
     s = stepBody(s, { ...neutral, jump: true }, 1 / 120, set());
     let landed = false;
-    for (let i = 0; i < 160; i++) {
+    for (let i = 0; i < 180; i++) {
       s = stepBody(s, neutral, 1 / 120, set());
       if (s.motion === "land") landed = true;
     }
@@ -268,6 +303,9 @@ describe("controller movement and transitions", () => {
     let s = stepBody(createBody(), { ...neutral, attack: true }, 1 / 120, set());
     s = stepBody(s, { ...neutral, attack: true }, 1 / 120, set());
     s = advance(s, 0.5);
+    expect(s.motion).toBe("settle");
+    expect(s.settleFrom?.role).toBe("attack1");
+    s = advance(s, IDLE_BLEND_SECONDS);
     expect(s.motion).toBe("idle");
   });
   it("returns from an attack to locomotion when movement remains held", () => {

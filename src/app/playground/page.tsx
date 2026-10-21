@@ -13,6 +13,7 @@ import {
 } from "@/lib/playground/set";
 import {
   bodyFrame,
+  IDLE_BLEND_SECONDS,
   createBody,
   stepBody,
   stepPreview,
@@ -37,6 +38,7 @@ const labels: Record<Role, string> = {
   attack2: "Attack 2",
   attack3: "Attack 3",
 };
+const SPRITE_SCALE = 1.15;
 const emptyInput = (): Input => ({
   axis: 0,
   sprint: false,
@@ -71,7 +73,7 @@ function paintSprite(
     ctx.scale(0.65, 0.65);
     ctx.translate(0, 120);
   }
-  ctx.scale(1.15, 1.15);
+  ctx.scale(SPRITE_SCALE, SPRITE_SCALE);
   const renderFrame = role === "roll" && fallback ? 0 : frame;
   if (role === "walk" || role === "run")
     ctx.translate(0, clip.locomotion?.groundOffsets?.[renderFrame] ?? 0);
@@ -206,6 +208,12 @@ export default function Playground() {
     const c = canvas.current;
     if (!c) return;
     const ctx = c.getContext("2d")!;
+    const blendCanvas = document.createElement("canvas");
+    if (loaded) {
+      blendCanvas.width = Math.ceil((loaded.set.canvas.width + 240) * SPRITE_SCALE);
+      blendCanvas.height = Math.ceil((loaded.set.canvas.height + 240) * SPRITE_SCALE);
+    }
+    const blendCtx = blendCanvas.getContext("2d")!;
     let raf = 0,
       last = 0,
       accumulator = 0,
@@ -272,14 +280,25 @@ export default function Playground() {
         const from =
           mode === "play" && body.current.motion === "settle" ? body.current.settleFrom : null;
         if (from) {
-          const t = Math.min(1, time / 0.18),
-            blend = t * t * (3 - 2 * t);
-          ctx.save();
-          ctx.globalAlpha = 1 - blend;
-          paintSprite(ctx, loaded, from.role, from.frame, x, y, facing, 0);
-          ctx.globalAlpha = blend;
-          paintSprite(ctx, loaded, "idle", frame, x, y, facing, time);
-          ctx.restore();
+          const t = Math.min(1, time / IDLE_BLEND_SECONDS),
+            blend = t * t * (3 - 2 * t),
+            ox =
+              (120 +
+                (facing === 1
+                  ? loaded.set.origin.x
+                  : loaded.set.canvas.width - loaded.set.origin.x)) *
+              SPRITE_SCALE,
+            oy = (120 + loaded.set.origin.y) * SPRITE_SCALE;
+          blendCtx.clearRect(0, 0, blendCanvas.width, blendCanvas.height);
+          blendCtx.save();
+          // Add premultiplied poses offscreen so overlapping body pixels keep full opacity.
+          blendCtx.globalCompositeOperation = "lighter";
+          blendCtx.globalAlpha = 1 - blend;
+          paintSprite(blendCtx, loaded, from.role, from.frame, ox, oy, facing, from.time);
+          blendCtx.globalAlpha = blend;
+          paintSprite(blendCtx, loaded, "idle", frame, ox, oy, facing, time);
+          blendCtx.restore();
+          ctx.drawImage(blendCanvas, x - ox, y - oy);
         } else paintSprite(ctx, loaded, role, frame, x, y, facing, time);
         ctx.restore();
         c.dataset.state = mode === "play" ? body.current.motion : role;
