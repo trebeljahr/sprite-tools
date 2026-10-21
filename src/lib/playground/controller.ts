@@ -27,9 +27,18 @@ export const WORLD = {
   height: 600,
   ground: 500,
   platforms: [
-    { x: 310, y: 410, width: 170 },
-    { x: 795, y: 340, width: 190 },
+    { x: 310, y: 320, width: 220 },
+    { x: 795, y: 200, width: 190 },
   ],
+};
+const movement = {
+  walk: 350,
+  run: 520,
+  roll: 620,
+  jump: 820,
+  gravity: 1650,
+  groundAcceleration: 2600,
+  airAcceleration: 800,
 };
 export function createBody(): Body {
   return {
@@ -91,7 +100,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   const locked = s.motion === "roll" || attacking(s);
   if (!locked) {
     if (s.jumpBuffer > 0 && s.grounded) {
-      s.vy = -610;
+      s.vy = -movement.jump;
       s.grounded = false;
       s.jumpBuffer = 0;
       s.jumpAge = 0;
@@ -103,14 +112,18 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     }
     if (s.motion !== "roll" && s.attackBuffer > 0) startAttack(s);
   }
-  if (s.motion === "roll") s.vx = s.facing * 410;
+  if (s.motion === "roll") s.vx = s.facing * movement.roll;
   else {
-    const target = axis * (input.sprint ? 360 : 230) * (attacking(s) ? 0.32 : 1);
-    s.vx = approach(s.vx, target, (s.grounded ? 1850 : 600) * dt);
+    const target = axis * (input.sprint ? movement.run : movement.walk) * (attacking(s) ? 0.32 : 1);
+    s.vx = approach(
+      s.vx,
+      target,
+      (s.grounded ? movement.groundAcceleration : movement.airAcceleration) * dt,
+    );
   }
   const oldY = s.y;
   s.x = Math.max(110, Math.min(WORLD.width - 110, s.x + s.vx * dt));
-  s.vy += 1650 * dt;
+  s.vy += movement.gravity * dt;
   s.y += s.vy * dt;
   s.grounded = false;
   const floors = [...WORLD.platforms, { x: 0, y: WORLD.ground, width: WORLD.width }];
@@ -157,7 +170,7 @@ export function bodyFrame(s: Body, set: AnimationSet) {
         frame: Math.floor(p.takeoff.from + (s.jumpAge / 0.1) * (p.takeoff.to - p.takeoff.from)),
       };
     if (p?.air) {
-      const q = Math.max(0, Math.min(1, (s.vy + 610) / 1220));
+      const q = Math.max(0, Math.min(1, (s.vy + movement.jump) / (movement.jump * 2)));
       return { role, frame: Math.round(p.air.from + q * (p.air.to - p.air.from)) };
     }
   }

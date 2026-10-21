@@ -61,8 +61,8 @@ describe("controller movement and transitions", () => {
       run = advance(initial, 0.4, { axis: 1, sprint: true });
     expect(walk.motion).toBe("walk");
     expect(run.motion).toBe("run");
-    expect(walk.vx).toBe(230);
-    expect(run.vx).toBe(360);
+    expect(walk.vx).toBe(350);
+    expect(run.vx).toBe(520);
     expect(run.x).toBeGreaterThan(walk.x);
     expect(initial.x).toBe(180);
   });
@@ -85,7 +85,7 @@ describe("controller movement and transitions", () => {
       set(),
     );
     expect(airborne.motion).toBe("jump");
-    expect(airborne.vx).toBe(-360);
+    expect(airborne.vx).toBe(-520);
     expect(airborne.facing).toBe(-1);
     expect(airborne.y).toBeLessThan(WORLD.ground);
   });
@@ -95,7 +95,7 @@ describe("controller movement and transitions", () => {
     expect(s.grounded).toBe(true);
     s = stepBody(s, { ...neutral, jump: true }, 1 / 120, set());
     let landed = false;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 160; i++) {
       s = stepBody(s, neutral, 1 / 120, set());
       if (s.motion === "land") landed = true;
     }
@@ -107,14 +107,30 @@ describe("controller movement and transitions", () => {
     const s = {
       ...createBody(),
       x: 350,
-      y: 400,
+      y: WORLD.platforms[0].y - 10,
       vy: 200,
       grounded: false,
       motion: "jump" as const,
     };
     const landed = advance(s, 0.1);
-    expect(landed.y).toBe(410);
+    expect(landed.y).toBe(WORLD.platforms[0].y);
     expect(landed.grounded).toBe(true);
+  });
+  it("can climb both raised platforms using the configured jump and a running approach", () => {
+    const jumpTo = (initial: Body, targetX: number) => {
+      let s = stepBody(initial, { ...neutral, axis: 1, sprint: true, jump: true }, 1 / 120, set());
+      for (let i = 0; i < 160 && !s.grounded; i++)
+        s = stepBody(s, { ...neutral, axis: s.x < targetX ? 1 : 0, sprint: true }, 1 / 120, set());
+      return s;
+    };
+    const lower = jumpTo(createBody(), 410);
+    expect(lower.grounded).toBe(true);
+    expect(lower.y).toBe(WORLD.platforms[0].y);
+    const approach = advance(lower, 0.22, { axis: 1, sprint: true });
+    expect(approach.x).toBeLessThan(WORLD.platforms[0].x + WORLD.platforms[0].width);
+    const upper = jumpTo(approach, 880);
+    expect(upper.grounded).toBe(true);
+    expect(upper.y).toBe(WORLD.platforms[1].y);
   });
   it("locks roll direction and queues a stab without interrupting the roll", () => {
     let s = stepBody(createBody(), { ...neutral, roll: true }, 1 / 120, set());
