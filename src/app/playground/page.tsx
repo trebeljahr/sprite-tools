@@ -26,7 +26,7 @@ import {
   type Preview,
 } from "@/lib/playground/controller";
 
-import { reviewBridgeFrame } from "@/lib/playground/transitions";
+import { reviewBridgeFrame, reviewBridgeSeconds } from "@/lib/playground/transitions";
 import { cameraFor, paintScene } from "@/lib/playground/scene";
 
 const labels: Record<Role, string> = {
@@ -279,8 +279,11 @@ export default function Playground() {
           time = s.time;
         } else {
           if (playing) {
-            if (bridgeReview !== null) preview.current.time += dt * speed;
-            else preview.current = stepPreview(preview.current, dt * speed, loaded.set);
+            if (bridgeReview !== null) {
+              preview.current.time += dt * speed;
+              if (preview.current.time >= reviewBridgeSeconds(loaded.set, bridgeReview))
+                setPlaying(false);
+            } else preview.current = stepPreview(preview.current, dt * speed, loaded.set);
           }
           const p = preview.current;
           const pose =
@@ -367,12 +370,22 @@ export default function Playground() {
     p.queued = null;
     setPlaying(false);
   };
+  const togglePlayback = () => {
+    if (
+      !playing &&
+      loaded &&
+      bridgeReview !== null &&
+      preview.current.time >= reviewBridgeSeconds(loaded.set, bridgeReview)
+    )
+      preview.current.time = 0;
+    setPlaying(!playing);
+  };
   const key = (e: React.KeyboardEvent<HTMLCanvasElement>, down: boolean) => {
     const code = e.code;
     if (mode === "clips") {
       if (!down || !["Space", "ArrowLeft", "ArrowRight"].includes(code)) return;
       e.preventDefault();
-      if (code === "Space") setPlaying(!playing);
+      if (code === "Space") togglePlayback();
       else scrub(view.frame + (code === "ArrowRight" ? 1 : -1));
       return;
     }
@@ -539,7 +552,7 @@ export default function Playground() {
           Reset
         </Button>
         {mode === "clips" && (
-          <Button variant="outline" onClick={() => setPlaying(!playing)}>
+          <Button variant="outline" onClick={togglePlayback}>
             {playing ? "Pause" : "Play"}
           </Button>
         )}
@@ -729,14 +742,16 @@ export default function Playground() {
               aria-label="Animation frame"
               disabled={bridgeReview !== null}
               type="range"
-              className="min-w-24 flex-1"
+              className={bridgeReview === null ? "min-w-24 flex-1" : "hidden"}
               min={0}
               max={loaded ? clipFor(loaded.set, preview.current.role).clip.count - 1 : 0}
               value={view.frame}
               onChange={(e) => scrub(Number(e.target.value))}
             />
             <span className="text-xs text-muted-foreground">
-              {view.frame + 1} / {loaded ? clipFor(loaded.set, preview.current.role).clip.count : 0}
+              {bridgeReview === null
+                ? `${view.frame + 1} / ${loaded ? clipFor(loaded.set, preview.current.role).clip.count : 0}`
+                : "Exit → recovery → idle"}
             </span>
             <select
               aria-label="Playback speed"

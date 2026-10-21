@@ -72,16 +72,23 @@ export function bridgeFrame(set: AnimationSet, state: BridgeState, seconds: numb
   };
 }
 /** Isolated endpoint/bridge/idle review. Source and target use exact saved frames. */
+export function reviewBridgeSeconds(set: AnimationSet, index: number) {
+  return 0.2 + clipSeconds(set, set.controller!.idleTransitions![index].clip) + 0.8;
+}
 export function reviewBridgeFrame(set: AnimationSet, index: number, seconds: number): PoseFrame {
   const route = set.controller!.idleTransitions![index],
     duration = clipSeconds(set, route.clip);
-  const t = seconds % (0.2 + duration + 0.8);
+  const t = Math.min(Math.max(0, seconds), reviewBridgeSeconds(set, index));
   if (t < 0.2) return { role: route.from, frame: route.exitFrame };
   if (t < 0.2 + duration)
     return { role: "idle", clipId: route.clip, frame: sampleClip(set, route.clip, t - 0.2) };
   const idle = clipFor(set, "idle");
   return {
     role: "idle",
-    frame: sampleClip(set, idle.id, idleEntrySeconds(set, index) + t - 0.2 - duration),
+    frame: sampleClip(
+      set,
+      idle.id,
+      (idleEntrySeconds(set, index) + t - 0.2 - duration) % clipSeconds(set, idle.id),
+    ),
   };
 }

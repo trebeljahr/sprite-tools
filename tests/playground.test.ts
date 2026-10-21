@@ -23,6 +23,7 @@ import {
   bridgeFrame,
   bridgeSeconds,
   reviewBridgeFrame,
+  reviewBridgeSeconds,
 } from "../src/lib/playground/transitions";
 import { cameraFor } from "../src/lib/playground/scene";
 import { boundedFile, sameOriginFile } from "../src/lib/browser-files";
@@ -406,6 +407,9 @@ describe("authored stop and landing routes", () => {
     expect(reviewBridgeFrame(set, 0, 0)).toEqual({ role: "walk", frame: 1 });
     expect(reviewBridgeFrame(set, 0, 0.25).clipId).toBe("stop");
     expect(reviewBridgeFrame(set, 0, 0.61)).toEqual({ role: "idle", frame: 2 });
+    const end = reviewBridgeSeconds(set, 0);
+    expect(reviewBridgeFrame(set, 0, end + 10)).toEqual(reviewBridgeFrame(set, 0, end));
+    expect(reviewBridgeFrame(set, 0, end + 10).role).toBe("idle");
   });
   it("keeps unapproved trial routes out of controller playback", () => {
     const s = configured();
