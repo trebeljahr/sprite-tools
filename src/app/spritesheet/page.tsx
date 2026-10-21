@@ -909,7 +909,7 @@ function SpritesheetContent() {
   const tutorial = useTutorial({ id: "spritesheet", steps: tutorialSteps });
 
   return (
-    <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
+    <>
       {studioImportError && (
         <p role="alert" className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive">
           {studioImportError}{" "}
@@ -919,13 +919,6 @@ function SpritesheetContent() {
         </p>
       )}
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-          <Scissors className="w-8 h-8 text-primary" />
-          Sheet Builder
-        </h1>
-        <p className="text-muted-foreground">
-          Video, sprite sheets, or Aseprite files — chroma key, crop, stitch, and export.
-        </p>
         <div className="flex items-center justify-center gap-2 mt-3">
           <Button
             size="sm"
@@ -1555,7 +1548,7 @@ function SpritesheetContent() {
           {pipeline.state.error}
         </div>
       )}
-    </main>
+    </>
   );
 }
 
@@ -1563,14 +1556,25 @@ function SpritesheetContent() {
 
 export default function SpritesheetPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-          <Loader2 className="w-8 h-8 animate-spin mr-2" /> Loading Sheet Builder…
-        </div>
-      }
-    >
-      <SpritesheetContent />
-    </Suspense>
+    <main className="flex-1 container max-w-7xl mx-auto py-8 px-4">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
+          <Scissors className="w-8 h-8 text-primary" />
+          Sheet Builder
+        </h1>
+        <p className="text-muted-foreground">
+          Video, sprite sheets, or Aseprite files — chroma key, crop, stitch, and export.
+        </p>
+      </div>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center min-h-screen text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin mr-2" /> Loading Sheet Builder…
+          </div>
+        }
+      >
+        <SpritesheetContent />
+      </Suspense>
+    </main>
   );
 }
