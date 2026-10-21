@@ -69,6 +69,18 @@ it("isolates accounts, separates charged/refunded/unknown requests, and keeps in
   });
   expect(data.jobs).toHaveLength(5);
   expect(
+    data.activity.reduce((sum: number, row: { requests: number }) => sum + row.requests, 0),
+  ).toBe(5);
+  expect(
+    data.activity.reduce((sum: number, row: { costMicros: number }) => sum + row.costMicros, 0),
+  ).toBe(52000);
+  expect(
+    data.activity.reduce((sum: number, row: { completed: number }) => sum + row.completed, 0),
+  ).toBe(1);
+  expect(
+    data.activity.reduce((sum: number, row: { unknownCosts: number }) => sum + row.unknownCosts, 0),
+  ).toBe(1);
+  expect(
     data.jobs.filter((job: { billingStatus: string }) => job.billingStatus === "refunded"),
   ).toHaveLength(1);
   expect(JSON.stringify(data)).not.toContain("999999");
@@ -78,6 +90,31 @@ it("validates pagination and returns an empty later page without losing totals",
   expect((await fetch(`${origin}/usage?page=1.2`)).status).toBe(400);
   const data = await (await fetch(`${origin}/usage?page=1`)).json();
   expect(data).toMatchObject({ total: 5, page: 1, jobs: [] });
+  expect(
+    data.activity.reduce((sum: number, row: { requests: number }) => sum + row.requests, 0),
+  ).toBe(5);
+});
+it("charts include all records beyond the 50-row history page", async () => {
+  try {
+    for (let i = 0; i < 55; i++)
+      await fixture.pool.query(
+        "INSERT INTO video_jobs(id,owner_id,request_key,cost,status,billing_status,model,provider,created_at) VALUES($1,'alice',$2,1000,'done','charged','bulk-model','xai','2026-10-01T00:00:00Z')",
+        [randomUUID(), randomUUID()],
+      );
+    const first = await (await fetch(`${origin}/usage`)).json();
+    const next = await (await fetch(`${origin}/usage?page=1`)).json();
+    expect(first.jobs).toHaveLength(50);
+    expect(next.jobs).toHaveLength(10);
+    expect(first.activity).toEqual(next.activity);
+    expect(
+      first.activity.reduce((sum: number, row: { requests: number }) => sum + row.requests, 0),
+    ).toBe(60);
+    expect(
+      first.activity.find((row: { model: string }) => row.model === "bulk-model"),
+    ).toMatchObject({ day: "2026-10-01", requests: 55, completed: 55, costMicros: 55000 });
+  } finally {
+    await fixture.pool.query("DELETE FROM video_jobs WHERE model='bulk-model'");
+  }
 });
 it("requires a session even when another account has usage", async () => {
   owner = null;

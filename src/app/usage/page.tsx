@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { UsageExplorer } from "@/components/usage-explorer";
+import { localActivity } from "@/lib/usage-analytics";
 import { Input } from "@/components/ui/input";
 import {
   type CreditUsage,
@@ -23,30 +25,6 @@ function Totals({ values }: { values: [string, string][] }) {
         </div>
       ))}
     </dl>
-  );
-}
-function Breakdown({ groups }: { groups: { model: string; count: number; micros: number }[] }) {
-  const max = Math.max(1, ...groups.map((group) => group.micros));
-  return (
-    <div className="space-y-4 py-6">
-      {groups.map((group) => (
-        <div
-          key={group.model}
-          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 text-sm"
-        >
-          <span className="break-words">
-            {group.model} <span className="text-muted-foreground">· {group.count} requests</span>
-          </span>
-          <span className="tabular-nums">{money(group.micros)}</span>
-          <div className="col-span-2 h-1 rounded bg-muted">
-            <div
-              className="h-full rounded bg-primary transition-[width] duration-300 motion-reduce:transition-none"
-              style={{ width: `${(group.micros / max) * 100}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 const cell = "px-3 py-3 text-left align-top";
@@ -72,7 +50,6 @@ export default function UsagePage() {
     const local = isLocalStudio();
     setLocal(local);
     setBusy(true);
-    setCredits(null);
     setCreditError("");
     setStudioError("");
     const account = fetch(`/api/account/usage?page=${page}`, {
@@ -92,7 +69,10 @@ export default function UsagePage() {
         if (!controller.signal.aborted) setCredits(data);
       })
       .catch((error) => {
-        if (!controller.signal.aborted) setCreditError(error.message);
+        if (!controller.signal.aborted) {
+          setCredits(null);
+          setCreditError(error.message);
+        }
       });
     const video = local
       ? studioStatus()
@@ -177,14 +157,17 @@ export default function UsagePage() {
               <p className="text-sm text-muted-foreground">No prepaid generations yet.</p>
             ) : (
               <>
-                <h3 className="text-sm font-medium">Recorded charges by model</h3>
-                <Breakdown
-                  groups={credits.models.map((group) => ({
-                    model: group.model ?? "Historical model not recorded",
-                    count: group.count,
-                    micros: group.chargedMicros,
-                  }))}
-                />
+                {credits.activity ? (
+                  <UsageExplorer
+                    activity={credits.activity}
+                    costLabel="Credit deducted"
+                    noun="images"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Update the accounts server to view full-history charts.
+                  </p>
+                )}
                 {credits.unknownCount > 0 && (
                   <p className="text-sm text-muted-foreground">
                     {credits.unknownCount} historical failed requests lack a charge or return
@@ -300,8 +283,11 @@ export default function UsagePage() {
               Active / uncertain: {money(summary.activeMicros)}. Failed reservations remain
               committed.
             </p>
-            <h3 className="text-sm font-medium">Reservations by model</h3>
-            <Breakdown groups={summary.models} />
+            <UsageExplorer
+              activity={localActivity(studio.jobs)}
+              costLabel="Reserved cost"
+              noun="videos"
+            />
             <div className="flex flex-wrap items-end gap-4">
               <div className="min-w-56 flex-1 space-y-2">
                 <label htmlFor="usage-search" className="text-xs text-muted-foreground">

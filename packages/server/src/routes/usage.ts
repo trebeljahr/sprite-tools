@@ -33,6 +33,16 @@ export async function usage(req: Request, res: Response) {
        FROM video_jobs WHERE owner_id=$1 ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET $2`,
       [owner, page * 50],
     );
+    // Full-history daily aggregates; independent of the paginated detail table.
+    const activity = await db.query(
+      `SELECT to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS day,
+        model,provider,status,count(*)::int AS requests,
+        coalesce(sum(cost) FILTER (WHERE billing_status='charged'),0) AS cost,
+        count(*) FILTER (WHERE status='failed' AND billing_status IS NULL)::int AS unknown
+       FROM video_jobs WHERE owner_id=$1
+       GROUP BY day,model,provider,status ORDER BY day`,
+      [owner],
+    );
     await db.query("COMMIT");
     const row = budget.rows[0];
     return res.json({
@@ -46,6 +56,16 @@ export async function usage(req: Request, res: Response) {
         provider: group.provider,
         count: group.count,
         chargedMicros: Number(group.charged),
+      })),
+      activity: activity.rows.map((row) => ({
+        day: row.day,
+        model: row.model ?? "Not recorded",
+        provider: row.provider ?? "Unknown",
+        status: row.status,
+        requests: row.requests,
+        completed: row.status === "done" ? row.requests : 0,
+        costMicros: Number(row.cost),
+        unknownCosts: row.unknown,
       })),
       page,
       jobs: jobs.rows.map((job) => ({

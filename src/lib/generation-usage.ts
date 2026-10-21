@@ -1,3 +1,4 @@
+import type { UsageActivity } from "./usage-analytics";
 import type { PublicJob } from "./video/schema";
 
 export interface CreditUsage {
@@ -7,6 +8,7 @@ export interface CreditUsage {
   total: number;
   unknownCount: number;
   page: number;
+  activity?: UsageActivity[];
   models: { model: string | null; provider: string | null; count: number; chargedMicros: number }[];
   jobs: {
     id: string;
