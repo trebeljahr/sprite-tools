@@ -370,7 +370,9 @@ export default function Playground() {
     else keys.current.delete(code);
     held.current.left = keys.current.has("KeyA") || keys.current.has("ArrowLeft");
     held.current.right = keys.current.has("KeyD") || keys.current.has("ArrowRight");
-    held.current.sprint = keys.current.has("ShiftLeft") || keys.current.has("ShiftRight");
+    // Embedded browsers can forward Shift only as a modifier on movement events.
+    held.current.sprint =
+      e.shiftKey || keys.current.has("ShiftLeft") || keys.current.has("ShiftRight");
     if (down && !e.repeat) {
       if (["KeyW", "Space", "ArrowUp"].includes(code)) input.current.jump = true;
       if (["KeyS", "KeyE"].includes(code)) input.current.roll = true;

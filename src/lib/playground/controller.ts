@@ -105,7 +105,7 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   }
   if (s.motion === "roll") s.vx = s.facing * 410;
   else {
-    const target = axis * (input.sprint ? 310 : 155) * (attacking(s) ? 0.32 : 1);
+    const target = axis * (input.sprint ? 360 : 230) * (attacking(s) ? 0.32 : 1);
     s.vx = approach(s.vx, target, (s.grounded ? 1850 : 600) * dt);
   }
   const oldY = s.y;

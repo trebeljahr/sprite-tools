@@ -61,9 +61,20 @@ describe("controller movement and transitions", () => {
       run = advance(initial, 0.4, { axis: 1, sprint: true });
     expect(walk.motion).toBe("walk");
     expect(run.motion).toBe("run");
-    expect(run.vx).toBe(310);
+    expect(walk.vx).toBe(230);
+    expect(run.vx).toBe(360);
     expect(run.x).toBeGreaterThan(walk.x);
     expect(initial.x).toBe(180);
+  });
+  it("switches to the run clip immediately when sprint starts and back on release", () => {
+    const clips = validateAnimationSet({ ...base, clips: { ...base.clips, run: clip() } });
+    const walking = advance(createBody(), 0.3, { axis: 1 }, clips);
+    const running = stepBody(walking, { ...neutral, axis: 1, sprint: true }, 1 / 120, clips);
+    expect(running.motion).toBe("run");
+    expect(clipFor(clips, bodyFrame(running, clips).role).id).toBe("run");
+    expect(running.vx).toBeGreaterThan(walking.vx);
+    const released = stepBody(running, { ...neutral, axis: 1 }, 1 / 120, clips);
+    expect(released.motion).toBe("walk");
   });
   it("carries running velocity and facing into a directed jump", () => {
     const moving = advance(createBody(), 0.3, { axis: -1, sprint: true });
@@ -74,7 +85,7 @@ describe("controller movement and transitions", () => {
       set(),
     );
     expect(airborne.motion).toBe("jump");
-    expect(airborne.vx).toBe(-310);
+    expect(airborne.vx).toBe(-360);
     expect(airborne.facing).toBe(-1);
     expect(airborne.y).toBeLessThan(WORLD.ground);
   });
