@@ -47,6 +47,7 @@ function Slider({
   step = 0.01,
   onChange,
   text,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -55,6 +56,7 @@ function Slider({
   step?: number;
   onChange: (v: number) => void;
   text?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className="block space-y-2 text-sm">
@@ -63,7 +65,8 @@ function Slider({
         <span className="font-mono text-xs text-muted-foreground">{text ?? value.toFixed(2)}</span>
       </span>
       <input
-        className="w-full accent-teal-600"
+        className="w-full accent-teal-600 disabled:opacity-40"
+        disabled={disabled}
         aria-label={label}
         type="range"
         min={min}
@@ -266,8 +269,8 @@ export default function MotionWorkbench() {
     const pad = project.settings.padding,
       w = bundle.plan.width + pad * 2,
       h = bundle.plan.height + pad * 2;
-    c.width = w;
-    c.height = h;
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
     const ctx = c.getContext("2d")!;
     ctx.fillStyle = "#142225";
     ctx.fillRect(0, 0, w, h);
@@ -401,6 +404,10 @@ export default function MotionWorkbench() {
     !selectedKey
   )
     return <main className="p-8 text-sm text-muted-foreground">Loading motion workbench…</main>;
+  const solvedLeg =
+    project.settings.footTargets &&
+    /^(front|rear)-(thigh|shin|foot)$/.test(role) &&
+    !!selectedKey.feet[role.startsWith("front") ? "front" : "rear"];
   const unmapped = [
     "torso",
     "front-thigh",
@@ -704,7 +711,7 @@ export default function MotionWorkbench() {
             </Button>
           </section>
         </aside>
-        <section className="min-w-0 border-y xl:border-x xl:border-y-0">
+        <section className="order-first min-w-0 border-y xl:order-none xl:border-x xl:border-y-0">
           <div className="flex flex-wrap justify-between gap-3 border-b px-4 py-3 text-xs">
             <span className="font-mono">BIPED · SIDE VIEW</span>
             <div className="flex gap-4">
@@ -920,6 +927,7 @@ export default function MotionWorkbench() {
             </div>
             <Slider
               label="Joint rotation"
+              disabled={solvedLeg}
               min={-180}
               max={180}
               step={1}
@@ -930,6 +938,12 @@ export default function MotionWorkbench() {
                 updateKey({ angles: { ...selectedKey.angles, [role]: v } });
               }}
             />
+            {solvedLeg && (
+              <p className="text-xs text-muted-foreground">
+                Foot targets control this leg. Edit its targets below, or turn off Solve foot
+                targets.
+              </p>
+            )}
             <Slider
               label="Body horizontal offset"
               min={-0.5}
