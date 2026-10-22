@@ -77,6 +77,7 @@ const schema = z
       .object({
         bindings: z.record(z.enum(roles), z.string().nullable()).optional(),
         layerProject: z.string().max(2048).optional(),
+        restPose: z.enum(["idle", "hold"]).optional(),
         runSpeed: z.number().min(400).max(2400).optional(),
         runCycleMs: z.number().min(100).max(2000).optional(),
         idleTransitions: z

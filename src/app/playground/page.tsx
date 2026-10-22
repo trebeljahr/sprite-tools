@@ -117,6 +117,7 @@ export default function Playground() {
     [to, setTo] = useState<Role>("jump"),
     [view, setView] = useState({
       role: "idle",
+      sourceRole: "idle" as Role,
       frame: 0,
       x: 180,
       y: 500,
@@ -186,7 +187,16 @@ export default function Playground() {
         setUrl(file);
         body.current = createBody();
         preview.current = { role: "idle", time: 0, queued: null };
-        setView({ role: "idle", frame: 0, x: 180, y: 500, speed: 0, facing: 1, queued: "" });
+        setView({
+          role: "idle",
+          sourceRole: "idle",
+          frame: 0,
+          x: 180,
+          y: 500,
+          speed: 0,
+          facing: 1,
+          queued: "",
+        });
       } catch (e) {
         if (!ac.signal.aborted)
           setError(e instanceof Error ? e.message : "Animation set could not be loaded.");
@@ -276,7 +286,7 @@ export default function Playground() {
           x = s.x;
           y = s.y;
           facing = s.facing;
-          time = s.time;
+          time = s.motion === "hold" ? (s.heldPose?.time ?? 0) : s.time;
         } else {
           if (playing) {
             if (bridgeReview !== null) {
@@ -338,6 +348,7 @@ export default function Playground() {
           report = now;
           setView({
             role: mode === "play" ? body.current.motion : role,
+            sourceRole: role,
             frame,
             x: Math.round(x),
             y: Math.round(y),
@@ -444,16 +455,7 @@ export default function Playground() {
     setBridgeReview(null);
     setActive(false);
   };
-  const colourId = loaded
-    ? clipFor(
-        loaded.set,
-        (view.role === "land"
-          ? "jump"
-          : view.role === "settle" || view.role === "transition"
-            ? "idle"
-            : view.role) as Role,
-      ).id
-    : null;
+  const colourId = loaded ? clipFor(loaded.set, view.sourceRole).id : null;
   const grade =
     colourId && loaded
       ? (loaded.set.clips[colourId].colour ?? { saturation: 1, contrast: 1, brightness: 1 })
@@ -672,6 +674,33 @@ export default function Playground() {
               />
             </label>
           )}
+          {loaded && (
+            <label className="mt-3 flex max-w-lg flex-wrap items-center gap-3 text-sm">
+              When stopped
+              <select
+                aria-label="Resting pose"
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+                value={loaded.set.controller?.restPose ?? "idle"}
+                onChange={(e) => {
+                  const restPose = e.target.value === "hold" ? "hold" : "idle";
+                  setLoaded((current) =>
+                    current
+                      ? {
+                          ...current,
+                          set: {
+                            ...current.set,
+                            controller: { ...current.set.controller, restPose },
+                          },
+                        }
+                      : current,
+                  );
+                }}
+              >
+                <option value="hold">Hold last frame</option>
+                <option value="idle">Play idle animation</option>
+              </select>
+            </label>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {(
               [
@@ -815,7 +844,8 @@ export default function Playground() {
           </div>
         </div>
       )}
-      {loaded?.set.controller?.idleTransitions?.length ? (
+      {loaded?.set.controller?.idleTransitions?.length &&
+      (mode === "clips" || loaded.set.controller.restPose !== "hold") ? (
         <div className="mt-5 space-y-2 border-t pt-4">
           <p className="text-sm">Stop and landing transitions</p>
           <div className="flex flex-wrap gap-2">

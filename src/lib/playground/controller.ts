@@ -23,7 +23,8 @@ export interface Body {
   vy: number;
   facing: 1 | -1;
   grounded: boolean;
-  motion: Role | "land" | "settle" | "transition";
+  motion: Role | "land" | "settle" | "transition" | "hold";
+  heldPose: (PoseFrame & { time: number }) | null;
   bridge: BridgeState | null;
   time: number;
   jumpAge: number;
@@ -73,6 +74,7 @@ export function createBody(): Body {
     facing: 1,
     grounded: true,
     motion: "idle",
+    heldPose: null,
     bridge: null,
     time: 0,
     jumpAge: 0,
@@ -97,6 +99,7 @@ const crouching = (s: Body) =>
 function begin(s: Body, role: Body["motion"]) {
   s.motion = role;
   s.time = 0;
+  if (role !== "hold") s.heldPose = null;
   if (role !== "transition") s.bridge = null;
   if (role !== "settle") s.settleFrom = null;
 }
@@ -105,7 +108,13 @@ function startAttack(s: Body, stab = false) {
   if (stab) s.attack = 2;
   s.attackBuffer = 0;
 }
+function holdPose(s: Body, set: AnimationSet) {
+  const pose = { ...bodyFrame(s, set), time: s.time };
+  begin(s, "hold");
+  s.heldPose = pose;
+}
 function startIdleBridge(s: Body, set: AnimationSet, role: Role) {
+  if (set.controller?.restPose === "hold") return false;
   const bridge = chooseIdleBridge(set, role, bodyFrame(s, set).frame);
   if (!bridge) return false;
   begin(s, "transition");
@@ -113,6 +122,10 @@ function startIdleBridge(s: Body, set: AnimationSet, role: Role) {
   return true;
 }
 function settleIntoIdle(s: Body, set: AnimationSet) {
+  if (set.controller?.restPose === "hold") {
+    holdPose(s, set);
+    return;
+  }
   const source = bodyFrame(s, set).role;
   if (startIdleBridge(s, set, source)) return;
   const from = { ...bodyFrame(s, set), time: s.time };
@@ -126,6 +139,10 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
   const dt = Math.max(0, Math.min(delta, 1 / 30));
   if (!dt) return s;
   s.time += dt;
+  if (set.controller?.restPose === "hold") {
+    // A resting character needs no new artwork or intermediate image blend.
+    if (s.motion === "idle" || s.motion === "settle" || s.motion === "transition") holdPose(s, set);
+  } else if (s.motion === "hold") begin(s, "idle");
   s.jumpAge += dt;
   s.rollCooldown = Math.max(0, s.rollCooldown - dt);
   s.attackBuffer = Math.max(0, s.attackBuffer - dt);
@@ -277,7 +294,8 @@ export function stepBody(previous: Body, input: Input, delta: number, set: Anima
     !crouching(s) &&
     s.motion !== "land" &&
     s.motion !== "transition" &&
-    (s.motion !== "settle" || axis !== 0 || !s.grounded)
+    (s.motion !== "settle" || axis !== 0 || !s.grounded) &&
+    (s.motion !== "hold" || axis !== 0 || !s.grounded)
   ) {
     const next: Role = !s.grounded
       ? "jump"
@@ -313,11 +331,15 @@ export function strideFor(set: AnimationSet, role: "walk" | "run") {
   return clipFor(set, role).clip.locomotion?.stridePixels ?? (role === "run" ? 260 : 220);
 }
 export function bodyFrame(s: Body, set: AnimationSet): PoseFrame {
+  if (s.motion === "hold" && s.heldPose) {
+    const { role, frame, clipId } = s.heldPose;
+    return clipId ? { role, frame, clipId } : { role, frame };
+  }
   if (s.motion === "transition" && s.bridge) return bridgeFrame(set, s.bridge, s.time);
   const role: Role =
       s.motion === "land"
         ? "jump"
-        : s.motion === "settle" || s.motion === "transition"
+        : s.motion === "settle" || s.motion === "transition" || s.motion === "hold"
           ? "idle"
           : s.motion,
     { clip } = clipFor(set, role);

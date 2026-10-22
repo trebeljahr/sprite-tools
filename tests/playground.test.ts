@@ -710,3 +710,99 @@ describe("crouch and low attacks", () => {
     );
   });
 });
+
+describe("hold-last-frame resting mode", () => {
+  const holdingSet = () =>
+    validateAnimationSet({
+      ...base,
+      clips: { ...base.clips, run: clip(), recovery: clip(false) },
+      controller: {
+        restPose: "hold",
+        idleTransitions: [
+          { from: "walk", exitFrame: 0, clip: "recovery" },
+          { from: "run", exitFrame: 0, clip: "recovery" },
+          { from: "jump", exitFrame: 3, clip: "recovery" },
+        ],
+      },
+    });
+  it("holds each gait phase exactly without entering a recovery or idle loop", () => {
+    const custom = holdingSet();
+    for (const role of ["walk", "run"] as const) {
+      for (const gaitPhase of [0.02, 0.29, 0.56, 0.82]) {
+        const source: Body = { ...createBody(), motion: role, gaitPhase };
+        const pose = bodyFrame(source, custom);
+        const stopped = stepBody(source, neutral, 1 / 120, custom);
+        expect(stopped.motion).toBe("hold");
+        expect(stopped.bridge).toBeNull();
+        expect(stopped.settleFrom).toBeNull();
+        expect(bodyFrame(stopped, custom)).toEqual(pose);
+        const later = advance(stopped, 2, {}, custom);
+        expect(bodyFrame(later, custom)).toEqual(pose);
+        expect(later.gaitPhase).toBe(gaitPhase);
+        expect(later.x).toBe(source.x);
+      }
+    }
+  });
+  it("finishes braking, then holds and resumes the saved gait phase", () => {
+    const custom = holdingSet();
+    for (const sprint of [false, true]) {
+      const moving = advance(createBody(), 0.45, { axis: -1, sprint }, custom);
+      const braking = stepBody(moving, neutral, 1 / 120, custom);
+      expect(braking.motion).toBe(sprint ? "run" : "walk");
+      const stopped = advance(braking, 0.3, {}, custom);
+      expect(stopped.motion).toBe("hold");
+      expect(stopped.vx).toBe(0);
+      expect(bodyFrame(stopped, custom).role).toBe(sprint ? "run" : "walk");
+      const waiting = advance(stopped, 2, {}, custom);
+      expect(bodyFrame(waiting, custom)).toEqual(bodyFrame(stopped, custom));
+      const resumed = stepBody(waiting, { ...neutral, axis: -1, sprint }, 1 / 120, custom);
+      expect(resumed.motion).toBe(sprint ? "run" : "walk");
+      expect(resumed.heldPose).toBeNull();
+      const stride = sprint ? 1600 * 0.4 : 220;
+      expect(resumed.gaitPhase).toBeCloseTo(
+        (waiting.gaitPhase + Math.abs(resumed.x - waiting.x) / stride) % 1,
+      );
+    }
+  });
+  it("holds the initial still and supports changing back to animated idle", () => {
+    const custom = holdingSet();
+    const start = stepBody(createBody(), neutral, 1 / 120, custom);
+    expect(start.motion).toBe("hold");
+    expect(bodyFrame(advance(start, 1, {}, custom), custom)).toEqual({ role: "idle", frame: 0 });
+    const restored = stepBody(start, neutral, 1 / 120, set());
+    expect(restored.motion).toBe("idle");
+    expect(restored.heldPose).toBeNull();
+    expect(bodyFrame(advance(restored, 0.15), set()).frame).not.toBe(0);
+    expect(() => validateAnimationSet({ ...base, controller: { restPose: "unknown" } })).toThrow();
+  });
+  it("interrupts a held pose with movement, jump, roll or attack", () => {
+    const custom = holdingSet();
+    const held = advance(advance(createBody(), 0.3, { axis: 1 }, custom), 0.3, {}, custom);
+    for (const [input, motion] of [
+      [{ axis: 1 }, "walk"],
+      [{ jump: true }, "jump"],
+      [{ roll: true }, "roll"],
+      [{ attack: true }, "attack1"],
+    ] as const) {
+      const next = stepBody(held, { ...neutral, ...input }, 1 / 120, custom);
+      expect(next.motion).toBe(motion);
+      expect(next.heldPose).toBeNull();
+    }
+  });
+  it("holds completed actions and the landing endpoint instead of cutting to idle", () => {
+    const custom = holdingSet();
+    const attack = advance(
+      stepBody(createBody(), { ...neutral, attack: true }, 1 / 120, custom),
+      0.5,
+      {},
+      custom,
+    );
+    expect(attack.motion).toBe("hold");
+    expect(bodyFrame(attack, custom)).toEqual({ role: "attack1", frame: 3 });
+    const landing: Body = { ...createBody(), motion: "land", time: 0.14, jumpAge: 1 };
+    const landed = stepBody(landing, neutral, 1 / 120, custom);
+    expect(landed.motion).toBe("hold");
+    expect(bodyFrame(landed, custom)).toEqual({ role: "jump", frame: 3 });
+    expect(bodyFrame(advance(landed, 1, {}, custom), custom)).toEqual(bodyFrame(landed, custom));
+  });
+});
