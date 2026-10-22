@@ -11,7 +11,7 @@ import {
   transformPoint,
 } from "../src/lib/motion/core";
 import { motionMannequin, newMotionProject, starterClips } from "../src/lib/motion/presets";
-import { poseTransforms } from "../src/lib/character/core";
+import { poseTransforms, prepareCharacter } from "../src/lib/character/core";
 import { validatePlan } from "../src/lib/character/types";
 
 import { motionStudy } from "../src/lib/motion/study";
@@ -30,6 +30,9 @@ describe("reusable motion authoring", () => {
     for (const profile of ["balanced", "compact", "long-legged"] as const) {
       const session = motionMannequin(profile);
       expect(validatePlan(session.plan)).toEqual(session.plan);
+      const bundle = prepareCharacter(session.source, session.plan, session.completions);
+      expect(bundle.report.unassignedPixels).toBe(0);
+      expect(bundle.layers.every((l) => l.filledPixels === l.hiddenPixels)).toBe(true);
       expect(projectSchema.parse(newMotionProject(session.plan)).clips).toHaveLength(6);
     }
     for (const clip of starterClips()) expect(clipSchema.parse(clip)).toEqual(clip);

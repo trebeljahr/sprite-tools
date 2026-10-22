@@ -83,6 +83,7 @@ export default function MotionWorkbench() {
     [playing, setPlaying] = useState(true),
     [actionPhase, setActionPhase] = useState<number | undefined>(),
     [role, setRole] = useState<JointRole>("front-arm");
+  const [clipped, setClipped] = useState(false);
   const [showRig, setShowRig] = useState(true),
     [showArt, setShowArt] = useState(true),
     [error, setError] = useState(""),
@@ -302,6 +303,7 @@ export default function MotionWorkbench() {
           ),
           matrices: null,
         };
+    setClipped("clipped" in r ? r.clipped : false);
     if (showRig) {
       const matrices = r.matrices ?? poseTransforms(bundle.plan, r.angles);
       ctx.save();
@@ -799,12 +801,16 @@ export default function MotionWorkbench() {
               game movement stays separate.
             </p>
           </div>
-          {(unmapped.length > 0 ||
+          {(clipped ||
+            unmapped.length > 0 ||
             result.warnings.length > 0 ||
             bundle.report.unassignedPixels > 0 ||
             bundle.layers.some((l) => l.filledPixels < l.hiddenPixels)) && (
             <div className="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
               <p className="mb-1 font-semibold text-foreground">Character review</p>
+              {clipped && (
+                <p>Artwork reaches the canvas edge. Increase export padding or adjust this pose.</p>
+              )}
               {unmapped.length > 0 && <p>Unmapped: {unmapped.join(", ")}.</p>}
               {result.warnings.map((w) => (
                 <p key={w}>{w}</p>
@@ -922,6 +928,16 @@ export default function MotionWorkbench() {
               onChange={(v) => {
                 inspectKey(keyIndex);
                 updateKey({ angles: { ...selectedKey.angles, [role]: v } });
+              }}
+            />
+            <Slider
+              label="Body horizontal offset"
+              min={-0.5}
+              max={0.5}
+              value={selectedKey.root.x}
+              onChange={(v) => {
+                inspectKey(keyIndex);
+                updateKey({ root: { ...selectedKey.root, x: v } });
               }}
             />
             <Slider
@@ -1153,6 +1169,34 @@ export default function MotionWorkbench() {
                 </Button>
               </div>
             </details>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={project.clips.length >= 24}
+              onClick={() => {
+                let n = 2,
+                  id = `${selectedClip.id.slice(0, 56)}-${n}`;
+                while (project.clips.some((c) => c.id === id))
+                  id = `${selectedClip.id.slice(0, 56)}-${++n}`;
+                commit({
+                  ...project,
+                  clips: [
+                    ...project.clips,
+                    {
+                      ...structuredClone(selectedClip),
+                      id,
+                      name: `${selectedClip.name.slice(0, 70)} copy`,
+                    },
+                  ],
+                  settings: { ...project.settings, mode: "clip", selected: id },
+                });
+                setKeyIndex(0);
+                setPhase(0);
+                setActionPhase(undefined);
+              }}
+            >
+              Duplicate clip
+            </Button>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" onClick={() => motionFile.current?.click()}>
                 Import motion

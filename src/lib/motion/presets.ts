@@ -1,4 +1,4 @@
-import { composite, pixels } from "../character/core";
+import { composite, insidePolygon, pixels } from "../character/core";
 import type { CharacterPart, CharacterPlan } from "../character/types";
 import {
   ROLE_PARENT,
@@ -244,48 +244,52 @@ export function motionMannequin(profile: "balanced" | "compact" | "long-legged" 
     "front-hand",
     "weapon",
   ];
+  const polygons = Object.fromEntries(
+    order.map((r) => {
+      const { a, b, width } = joints[r],
+        angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const points = [b, a].flatMap((center, end) =>
+        Array.from({ length: 9 }, (_, i) => {
+          const t = angle - Math.PI / 2 + end * Math.PI + (i * Math.PI) / 8;
+          return {
+            x: center[0] + (Math.cos(t) * width) / 2,
+            y: center[1] + (Math.sin(t) * width) / 2,
+          };
+        }),
+      );
+      return [r, points];
+    }),
+  );
   const images = order.map((r) => {
-    const { a, b, width } = joints[r],
-      im = pixels(512, 512);
-    const dx = b[0] - a[0],
-      dy = b[1] - a[1],
-      squared = dx * dx + dy * dy;
-    const rear = r.startsWith("rear"),
-      color =
-        r === "weapon"
-          ? [221, 198, 143]
-          : rear
-            ? [90, 111, 113]
-            : r === "torso"
-              ? [65, 135, 130]
-              : [175, 204, 197];
-    for (let y = 0; y < 512; y++)
-      for (let x = 0; x < 512; x++) {
-        const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / squared));
-        if (Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy) < width / 2)
+    const im = pixels(512, 512),
+      polygon = polygons[r];
+    const color =
+      r === "weapon"
+        ? [221, 198, 143]
+        : r.startsWith("rear")
+          ? [90, 111, 113]
+          : r === "torso"
+            ? [65, 135, 130]
+            : [175, 204, 197];
+    const x0 = Math.floor(Math.min(...polygon.map((p) => p.x))),
+      x1 = Math.ceil(Math.max(...polygon.map((p) => p.x)));
+    const y0 = Math.floor(Math.min(...polygon.map((p) => p.y))),
+      y1 = Math.ceil(Math.max(...polygon.map((p) => p.y)));
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x <= x1; x++)
+        if (insidePolygon(x + 0.5, y + 0.5, polygon))
           im.data.set([...color, 255], (y * 512 + x) * 4);
-      }
     return im;
   });
   const parts: CharacterPart[] = order.map((r) => {
-    const { a, b, width } = joints[r],
-      pad = width / 2 + 2;
-    const x = Math.min(a[0], b[0]) - pad,
-      y = Math.min(a[1], b[1]) - pad,
-      right = Math.max(a[0], b[0]) + pad,
-      bottom = Math.max(a[1], b[1]) + pad;
+    const { a, b } = joints[r];
     return {
       id: r,
       name: r.replaceAll("-", " "),
       parent: ROLE_PARENT[r] ?? null,
       pivot: { x: a[0], y: a[1] },
       tip: { x: b[0], y: b[1] },
-      polygon: [
-        { x, y },
-        { x: right, y },
-        { x: right, y: bottom },
-        { x, y: bottom },
-      ],
+      polygon: polygons[r],
       description: "Authored motion mannequin segment",
     };
   });
