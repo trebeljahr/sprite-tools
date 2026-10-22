@@ -20,6 +20,10 @@ export function SiteFooter() {
             imprint
           </Link>
           <span aria-hidden>·</span>
+          <Link href="/privacy" className="hover:text-foreground transition-colors">
+            privacy
+          </Link>
+          <span aria-hidden>·</span>
           <Link
             href={`${REPO_URL}/blob/main/LICENSE`}
             className="hover:text-foreground transition-colors"

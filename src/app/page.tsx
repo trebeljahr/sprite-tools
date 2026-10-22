@@ -7,6 +7,7 @@ import {
   Boxes,
   Compass,
   Crop,
+  Crosshair,
   Eraser,
   FileCode2,
   Film,
@@ -39,6 +40,12 @@ const TOOLS = [
     label: "Collision",
     icon: Hexagon,
     blurb: "Trace tight per-frame collision polygons for physics engines.",
+  },
+  {
+    href: "/pivot",
+    label: "Pivot",
+    icon: Crosshair,
+    blurb: "Set sprite anchor points for rotation, scaling, and placement.",
   },
   {
     href: "/background-removal",

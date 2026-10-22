@@ -23,6 +23,9 @@ const plausibleDomain = "sprites.trebeljahr.com";
 const plausibleScriptUrl =
   "https://plausible.trebeljahr.com/js/script.file-downloads.hash.outbound-links.pageview-props.revenue.tagged-events.js";
 
+const siteDescription =
+  "Prepare sprite sheets for your game. Remove backgrounds, set pivots, trace collision shapes, and export assets in the browser or CLI.";
+
 // Site-wide metadata. Individual routes can override via their own
 // `export const metadata` — the root values here serve as defaults and
 // as the fallback social preview.
@@ -35,8 +38,7 @@ export const metadata: Metadata = {
     default: "sprite-tools — game-ready 2D sprite toolkit",
     template: "%s · sprite-tools",
   },
-  description:
-    "Batteries-included toolkit for turning AI-generated or hand-drawn sprites into game-ready assets. Collision polygons, pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing, GIF export. Web app + CLI + MCP server.",
+  description: siteDescription,
   applicationName: "sprite-tools",
   keywords: [
     "sprite",
@@ -59,8 +61,7 @@ export const metadata: Metadata = {
     siteName: "sprite-tools",
     url: "/",
     title: "sprite-tools — game-ready 2D sprite toolkit",
-    description:
-      "Web app, CLI, and MCP server for collision polygons, pivots, animation tags, pixel-art conversion, normal maps, palette swap, atlas packing, and GIF export.",
+    description: siteDescription,
     images: [
       {
         url: "/opengraph-image",
@@ -73,8 +74,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "sprite-tools",
-    description:
-      "Game-ready 2D sprite toolkit — collision polygons, pivots, tags, pixel art, normals, palette, atlas, GIF.",
+    description: siteDescription,
     images: [
       {
         url: "/twitter-image",
