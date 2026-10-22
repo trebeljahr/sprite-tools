@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { Lock, Sparkles } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AI_ENABLED } from "@/lib/features";
@@ -28,10 +28,16 @@ export function AiGate({ feature, description, children }: AiGateProps) {
           <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto mb-3">
             <Lock className="w-6 h-6 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl flex items-center justify-center gap-2">
+          <h1
+            data-slot="card-title"
+            className={cn(
+              "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
+              "text-2xl flex items-center justify-center gap-2",
+            )}
+          >
             <Sparkles className="w-5 h-5 text-primary" />
             {feature}
-          </CardTitle>
+          </h1>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
