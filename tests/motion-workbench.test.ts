@@ -70,6 +70,32 @@ describe("reusable motion authoring", () => {
     const jump = starterClips().find((c) => c.id === "jump")!;
     expect(sampleClip(jump, 3).root).toEqual(jump.frames.at(-1)!.root);
   });
+  it("changes contacts at exact keys and preserves in-range sample times", () => {
+    const source = starterClips()[0],
+      frame = source.frames[0],
+      clip = clipSchema.parse({
+        ...source,
+        frames: [
+          { ...frame, t: 0, contacts: ["front"] },
+          { ...frame, t: 0.3, contacts: ["rear"] },
+          { ...frame, t: 0.5, contacts: [] },
+          { ...frame, t: 1, contacts: ["front", "rear"] },
+        ],
+      });
+    expect(sampleClip(clip, 0.3).t).toBe(0.3);
+    expect(sampleClip(clip, 0.3 - 0.000001).contacts).toEqual(["front"]);
+    expect(sampleClip(clip, 0.3).contacts).toEqual(["rear"]);
+    expect(sampleClip(clip, 0.3 + 0.000001).contacts).toEqual(["rear"]);
+    expect(sampleClip(clip, 0.5 - 0.000001).contacts).toEqual(["rear"]);
+    expect(sampleClip(clip, 0.5).contacts).toEqual([]);
+    expect(sampleClip(clip, 1 - 0.000001).contacts).toEqual([]);
+    expect(sampleClip(clip, 1).contacts).toEqual(["front", "rear"]);
+    expect(sampleClip(clip, 1.5).contacts).toEqual([]);
+    expect(sampleClip(clip, -0.5).contacts).toEqual([]);
+    expect(sampleClip(clip, 2).contacts).toEqual(["front"]);
+    expect(sampleClip({ ...clip, loop: false }, 3).contacts).toEqual(["front", "rear"]);
+    expect(sampleClip(starterClips()[1], 0.5).contacts).toEqual(["rear"]);
+  });
   it("interpolates rotations across the short arc, without mutating source", () => {
     const c = starterClips()[0],
       a = { ...c.frames[0], angles: { torso: 170 } },

@@ -193,14 +193,15 @@ export function blendPoses(
   };
 }
 export function sampleClip(clip: MotionClip, phase: number): MotionPose {
-  const t = clip.loop && phase !== 1 ? ((phase % 1) + 1) % 1 : clamp(phase);
+  const cycle = phase % 1;
+  const t = clip.loop && (phase < 0 || phase > 1) ? (cycle < 0 ? cycle + 1 : cycle) : clamp(phase);
   const i = clip.frames.findIndex((f, i) => i > 0 && f.t >= t);
   const hi = i < 0 ? clip.frames.length - 1 : i,
     lo = Math.max(0, hi - 1),
     a = clip.frames[lo],
     b = clip.frames[hi];
   const pose = blendPoses(a, b, a === b ? 0 : (t - a.t) / (b.t - a.t));
-  return { ...pose, t, contacts: a.contacts };
+  return { ...pose, t, contacts: t === b.t ? b.contacts : a.contacts };
 }
 export function evaluateMotion(project: MotionProject, phase: number, actionPhase?: number) {
   const s = project.settings;

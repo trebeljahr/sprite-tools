@@ -43,7 +43,7 @@ Use this to inspect joins and joint masks. A full-body sweep includes its own bo
 - `frames.json` with per-frame timing, local rotations, root offsets, contact markers and weapon grip coordinates.
 - `motion.json` with the reusable authoring recipe.
 
-Export padding expands the canvas without moving its ground origin relative to the artwork. Loop exports omit the duplicated endpoint; one-shot exports include the final pose. The export rejects clipped artwork and sheets exceeding its memory or dimension limits. Reach warnings remain in frame metadata for review.
+Export padding expands the canvas without moving its ground origin relative to the artwork. Loop exports omit the duplicated endpoint; one-shot exports include the final pose. The export rejects clipped artwork and sheets exceeding its memory or dimension limits. Reach warnings remain in frame metadata for review. Locomotion events come from walk below a 50 percent blend, and run at or above 50 percent. Moving-action exports use the action’s events.
 
 The exporter does not include collision polygons, an engine-specific skeletal runtime, 3D import or AI generation. Flat sheets contain only the combinations you bake. Continuous runtime blending requires the original rig and a compatible runtime.
 

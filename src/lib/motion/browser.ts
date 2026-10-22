@@ -18,6 +18,13 @@ import {
   type MotionProject,
 } from "./core";
 
+import {
+  decodeMotionProject,
+  encodeMotionProject,
+  motionEvents,
+  MOTION_JSON_MAX_BYTES,
+} from "./project";
+
 export type Artwork = ReturnType<typeof characterArtwork>;
 export function characterArtwork(bundle: CharacterBundle) {
   return Object.fromEntries(bundle.layers.map((l) => [l.id, croppedCanvas(l.image)]));
@@ -67,21 +74,20 @@ export async function exportMotionProject(
 ) {
   const original = await exportCharacterZip(bundle, session.source, session.completions);
   const zip = await JSZip.loadAsync(original);
-  zip.file("motion.json", JSON.stringify(projectSchema.parse(project), null, 2));
+  zip.file("motion.json", encodeMotionProject(project));
   const bytes = await zip.generateAsync({ type: "uint8array" });
   checkCharacterZip(bytes);
   return new Blob([new Uint8Array(bytes)], { type: "application/zip" });
 }
 export async function importMotionProject(file: File) {
+  if (file.size > 64 * 1024 * 1024) throw Error("Character ZIP exceeds 64 MB.");
   const bytes = new Uint8Array(await file.arrayBuffer());
   checkCharacterZip(bytes);
   const zip = await JSZip.loadAsync(bytes),
     entry = zip.file("motion.json");
   if (!entry)
     throw Error("This project has no motion.json. Use Import character for a layer project.");
-  const project = projectSchema.parse(
-    JSON.parse(new TextDecoder().decode(await readCharacterZipFile(entry, 1024 * 1024))),
-  );
+  const project = decodeMotionProject(await readCharacterZipFile(entry, MOTION_JSON_MAX_BYTES));
   const session = await importCharacterZip(file);
   const ids = new Set(session.plan.parts.map((p) => p.id));
   if (Object.values(project.binding).some((b) => !ids.has(b!.part)))
@@ -165,7 +171,7 @@ export async function bakeMotion(
   const zip = new JSZip(),
     duration = (sample.duration * 1000) / count;
   zip.file(`${id}.png`, await blob(canvas));
-  zip.file("motion.json", JSON.stringify(recipe, null, 2));
+  zip.file("motion.json", encodeMotionProject(recipe));
   zip.file(
     "frames.json",
     JSON.stringify(
@@ -177,11 +183,7 @@ export async function bakeMotion(
         origin: { x: bundle.plan.origin.x + pad, y: bundle.plan.origin.y + pad },
         grid: { cols, rows },
         frames,
-        events: action
-          ? recipe.clips.find((c) => c.id === recipe.settings.action)!.events
-          : recipe.settings.mode === "clip"
-            ? recipe.clips.find((c) => c.id === recipe.settings.selected)!.events
-            : recipe.clips.find((c) => c.id === "walk")!.events,
+        events: motionEvents(recipe, action),
         units: "source pixels; angles are local degrees; phase is normalized",
         inPlace: true,
       },
