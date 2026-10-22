@@ -11,7 +11,7 @@
 # dotenvx-encrypted .env.production is the at-rest store `hatchkit sync`
 # decrypts locally and pushes into that environment; it is not in the image,
 # so a rotated value can't be shadowed by a stale baked-in copy.
-ARG NODE_VERSION=24.21.0
+ARG NODE_VERSION=24.22.1
 
 FROM node:${NODE_VERSION}-bookworm-slim AS build
 WORKDIR /app
