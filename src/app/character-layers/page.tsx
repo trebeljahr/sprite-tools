@@ -623,6 +623,19 @@ export default function CharacterLayersPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={!session || !!busy}
+            onClick={() =>
+              act(async () => {
+                if (!session) return;
+                await sessionStore(session);
+                window.location.href = "/motion-workbench?draft=layers";
+              })
+            }
+          >
+            Animate character
+          </Button>
           <Button variant="outline" disabled={!!busy} onClick={() => fileRef.current?.click()}>
             Open image / project
           </Button>

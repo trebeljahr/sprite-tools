@@ -34,12 +34,14 @@ import { registerInfoCommand } from "./commands/info";
 import { registerLintCommand } from "./commands/lint";
 import { registerMetaCommand } from "./commands/meta";
 import { registerExportCommand } from "./commands/export";
+import { registerMotionCommand } from "./commands/motion";
 import { registerCharacterCommand } from "./commands/character";
 import { registerInbetweenCommand } from "./commands/inbetween";
 import { registerStudioCommand } from "./commands/studio";
 
 const program = new Command();
 registerCharacterCommand(program);
+registerMotionCommand(program);
 
 program
   .name("sprite-tools")

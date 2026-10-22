@@ -21,6 +21,7 @@ const TOOL_ROUTES = [
   "/gif",
   "/lasso",
   "/character-layers",
+  "/motion-workbench",
   "/playground",
   "/background-removal",
   "/outline",

@@ -50,6 +50,11 @@ const ALL_TOOL_GROUPS: Array<{ label: string; items: ToolLink[] }> = [
       { href: "/background-removal", label: "Background", hint: "chroma-key removal" },
       { href: "/lasso", label: "Lasso", hint: "manual polygon cutout" },
       { href: "/character-layers", label: "Character Layers", hint: "prepare articulated artwork" },
+      {
+        href: "/motion-workbench",
+        label: "Motion Workbench",
+        hint: "blend poses and author sprite motions",
+      },
       { href: "/playground", label: "Playground", hint: "test movement and transitions" },
       { href: "/lint", label: "Lint", hint: "check a sheet for problems" },
     ],

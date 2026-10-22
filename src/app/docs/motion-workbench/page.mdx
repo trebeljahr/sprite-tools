@@ -1,0 +1,60 @@
+export const metadata = { title: "Motion Workbench — Sprite Tools" };
+
+# Motion Workbench
+
+[Open the workbench](/motion-workbench) to adapt reusable motions to a layered character and bake transparent sprite sheets. All processing runs in your browser. No provider key or generation credits are needed.
+
+## Start with a motion
+
+The workbench includes balanced, compact and long-legged motion mannequins, plus six CC0 templates: breathe, walk, run, jump, stab and sweep. Switch mannequins to check the same motion on different proportions. These examples are motion guides, not finished character artwork.
+
+Walk and run share a gait phase: front-foot contact begins at phase 0 and rear-foot contact at 0.5. The blend slider combines joint rotations and foot targets before drawing the artwork. It does not crossfade finished sprite images. Playback rate changes cycle duration; the displayed stride estimate stays separate from game movement.
+
+## Use your artwork
+
+Prepare a character in [Character Layers](/character-layers), then choose **Animate character**. Alternatively, import its project ZIP or use the saved layer draft. Your motion library stays available when you change character.
+
+Map semantic joint roles to artwork parts. The neutral angle offset corrects their orientation. Foot targets need a direct thigh → shin → foot hierarchy. The weapon should be a child of the gripping hand in the character plan. Its grip then inherits the hand transform. Unmapped artwork inherits its parent transform; unassigned pixels remain at their source location.
+
+Complete hidden areas and review extreme bends in Character Layers. A mapped skeleton cannot reconstruct missing artwork. The workbench shows missing mappings, incomplete hidden areas and unreachable leg targets.
+
+## Edit and reuse motion
+
+Choose a source clip and keyframe. Adjust joint rotation, body height, foot targets and contact markers. Add a key at the scrubbed phase or remove an interior key. Boundary keys remain at phases 0 and 1. Loop endpoints should have matching poses and motion direction; the editor does not automatically repair a loop seam.
+
+Motion JSON uses the `biped-side-v1` family. Keyframe angles are local delta rotations in degrees on the shared neutral skeleton. Root offsets and foot targets use leg-length units. Retargeting computes artwork rotations from its source pivot/tip directions. The front-leg length supplies the scale. Short limbs, costumes and unusual rest poses may need adjusted targets and neutral offsets.
+
+Save an individual motion JSON to reuse it with another character. Imports validate clip family, numeric limits, increasing frame times and provenance fields. Changing character resets its mapping, not the motion library.
+
+## Actions and transition review
+
+Play an action over the current base motion with **F** or **Play action**. Select full-body or upper-body influence, adjust its weight, and scrub its phase while paused. Pose influence eases in and out over the first and last 12 percent of the action. Locomotion phase continues underneath it.
+
+Use this to inspect joins and joint masks. A full-body sweep includes its own body and foot targets. An upper-body action retains the base root and foot targets. This is a pose mixer, not a gameplay state machine. It does not determine attack cancellation, hit detection or jump physics.
+
+## Save and export
+
+**Save project** downloads a Character Layers ZIP with `motion.json` added. It preserves source artwork, completions, rig mapping, clips, events and workbench settings. **Open project** restores that package. The browser also saves one local workbench draft, separately from the layer editor's draft.
+
+**Export sprites** bakes the current single clip or walk/run blend. **Export moving action** bakes the chosen action over the base motion, beginning at base phase 0. Each ZIP contains:
+
+- A transparent PNG sprite sheet.
+- `animation-set.json` for Sprite Playground when served beside the PNG.
+- `frames.json` with per-frame timing, local rotations, root offsets, contact markers and weapon grip coordinates.
+- `motion.json` with the reusable authoring recipe.
+
+Export padding expands the canvas without moving its ground origin relative to the artwork. Loop exports omit the duplicated endpoint; one-shot exports include the final pose. The export rejects clipped artwork and sheets exceeding its memory or dimension limits. Reach warnings remain in frame metadata for review.
+
+The exporter does not include collision polygons, an engine-specific skeletal runtime, 3D import or AI generation. Flat sheets contain only the combinations you bake. Continuous runtime blending requires the original rig and a compatible runtime.
+
+
+## Use an agent or CLI
+
+The `sprite_motion_study` MCP tool returns an editable template and sampled pose controls. Supply an optional reviewed `character_plan` to include retargeted joint positions and reach warnings. It uses no provider, uploads no artwork and writes no files.
+
+```bash
+sprite-tools motion --template walk --samples 12
+sprite-tools motion --template stab --plan character/plan.json -o stab-study.json
+```
+
+Use **Import motion** in the workbench to open the output JSON or an individual clip JSON. An agent can change the clip's keyframes and events before import. Target-control coordinates are source pixels; motion offsets are leg lengths. CLI output files must be new paths.
