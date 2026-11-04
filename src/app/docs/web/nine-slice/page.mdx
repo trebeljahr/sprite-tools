@@ -94,7 +94,7 @@ A `.9.png` is Android's way of shipping the insets inside the image. The encoded
 
 ### Limitation: one contiguous run per edge
 
-Android's own `aapt` allows several separate black runs on an edge, producing several independent stretchable bands. Four insets cannot describe that, so sprite-tools supports **exactly one contiguous run per edge**, in both directions. A multi-run `.9.png` is rejected on import rather than approximated, and export always writes a single run. Multi-band stretching is a different data model than the one this page — and every engine's nine-slice widget — uses.
+Android's own `aapt` allows several separate black runs on an edge, producing several independent stretchable bands. Four insets cannot describe that, so Sprite Tools supports **exactly one contiguous run per edge**, in both directions. A multi-run `.9.png` is rejected on import rather than approximated, and export always writes a single run. Multi-band stretching is a different data model than the one this page — and every engine's nine-slice widget — uses.
 
 ## Export
 

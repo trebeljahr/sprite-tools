@@ -3,12 +3,12 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/privacy", {
   title: "Privacy policy",
   description:
-    "How sprite-tools handles local sprite images, AI generation with your own key or AI credit, accounts, anonymous visit counts, error reports, and what the site stores in your browser.",
+    "How Sprite Tools handles local sprite images, AI generation with your own key or AI credit, accounts, anonymous visit counts, error reports, and what the site stores in your browser.",
 });
 
 # Privacy
 
-sprite-tools runs almost entirely in your browser. Sprite images you
+Sprite Tools runs almost entirely in your browser. Sprite images you
 upload never leave your machine. Only the AI tools send anything out, and
 only when you use them.
 
@@ -43,8 +43,8 @@ depends on who pays:
 
 - **Your own xAI key**: your browser sends the prompt and the key straight
   to xAI. The key stays in the page's memory until you close the tab. It
-  never reaches the sprite-tools server.
-- **AI credit**: your browser sends the prompt to the sprite-tools server,
+  never reaches the Sprite Tools server.
+- **AI credit**: your browser sends the prompt to the Sprite Tools server,
   which passes it to xAI and sends the image back. The server keeps the
   price and time of each image, not the prompt or the image.
 
@@ -68,7 +68,7 @@ these records on the [usage dashboard](/usage). Historical records may lack
 a model or credit outcome.
 
 You buy credit through [Stripe](https://stripe.com/privacy). Stripe takes
-your card details; the sprite-tools server never sees them. The server
+your card details; the Sprite Tools server never sees them. The server
 keeps the Stripe checkout ID, the amount and the time of each purchase.
 
 ## Error reports
@@ -108,7 +108,7 @@ Clear the site data in your browser's settings to remove all of it.
 Visit counts and error reporting are off in local development and only
 activate in production. Plausible only loads on sprites.trebeljahr.com,
 and error reporting requires `NEXT_PUBLIC_GLITCHTIP_DSN` — if you
-self-host sprite-tools on another domain without setting it, neither
+self-host Sprite Tools on another domain without setting it, neither
 endpoint is contacted.
 
 Repo: [github.com/trebeljahr/sprite-tools](https://github.com/trebeljahr/sprite-tools).

@@ -1,6 +1,6 @@
-# Contributing to sprite-tools
+# Contributing to Sprite Tools
 
-Thanks for helping improve sprite-tools. The project is built around one rule: every tool should share one tested algorithm core across the web app, CLI, and MCP server.
+Thanks for helping improve Sprite Tools. The project is built around one rule: every tool should share one tested algorithm core across the web app, CLI, and MCP server.
 
 ## Good first contributions
 

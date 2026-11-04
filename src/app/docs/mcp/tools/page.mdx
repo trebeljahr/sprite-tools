@@ -3,7 +3,7 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/docs/mcp/tools", {
   title: "MCP tool catalog",
   description:
-    "Look up sprite-tools MCP tools for slicing, collision shapes, palettes, and exports. Check each tool's input and output schema.",
+    "Look up Sprite Tools MCP tools for slicing, collision shapes, palettes, and exports. Check each tool's input and output schema.",
 });
 
 # MCP tool catalog
@@ -291,7 +291,7 @@ Inputs:
 }
 ```
 
-Returns JSON with the tags array echoed. This is sprite-tools' own shape, not an Aseprite file — feed it to `sprite_export_engine` for that.
+Returns JSON with the tags array echoed. This is Sprite Tools' own shape, not an Aseprite file — feed it to `sprite_export_engine` for that.
 
 ### `frame_durations`
 
@@ -621,7 +621,7 @@ Writes atlas PNG + manifest JSON. Returns the manifest inline.
 
 ## `sprite_export_engine`
 
-Turns sprite-tools metadata into a file a game engine imports directly. No pixels are decoded or written; it is a JSON transform, so it is the last hop after `sprite_generate_meta` (or `sprite_generate_collision` + `sprite_generate_pivot` + `sprite_generate_tags`, or `sprite_pack_atlas`).
+Turns Sprite Tools metadata into a file a game engine imports directly. No pixels are decoded or written; it is a JSON transform, so it is the last hop after `sprite_generate_meta` (or `sprite_generate_collision` + `sprite_generate_pivot` + `sprite_generate_tags`, or `sprite_pack_atlas`).
 
 Inputs:
 

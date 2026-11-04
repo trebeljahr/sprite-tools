@@ -131,7 +131,7 @@ export default function HomePage() {
             <Sparkles className="w-3.5 h-3.5 text-primary" />
             Game-ready 2D sprite toolkit
           </div>
-          <h1 className="text-5xl font-bold tracking-tight mb-4">sprite-tools</h1>
+          <h1 className="text-5xl font-bold tracking-tight mb-4">Sprite Tools</h1>
           <p className="text-lg text-muted-foreground max-w-xl">
             A batteries-included toolkit for turning AI-generated or hand-drawn sprites into{" "}
             <strong className="text-foreground">game-ready assets</strong> — background removal,

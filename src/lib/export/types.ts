@@ -262,7 +262,7 @@ export function normalizeExportInput(
   const rec = asRecord(doc);
   if (!rec) {
     throw new Error(
-      "export: input must be a JSON object — expected a sprite-tools metadata document " +
+      "export: input must be a JSON object — expected a Sprite Tools metadata document " +
         "(frameWidth/frameHeight/grid) or an atlas manifest (frames map); got " +
         describe(doc),
     );
@@ -404,7 +404,7 @@ function buildFromGrid(rec: Record<string, unknown>, opts: NormalizeExportOption
 
   if (frameWidth === null || frameHeight === null || !grid) {
     throw new Error(
-      "export: no recognizable frame geometry — expected a sprite-tools metadata document " +
+      "export: no recognizable frame geometry — expected a Sprite Tools metadata document " +
         "(frameWidth/frameHeight/grid) or an atlas manifest (frames map); got neither. " +
         "Pipe in `sprite-tools meta ...`, a `jq -s add` merge of collision/pivot/tags, " +
         "or `sprite-tools atlas --json ...`.",
@@ -531,7 +531,7 @@ function resolveSheetSize(
   const hint = padded
     ? "Re-run the metadata command on this image."
     : "The document probably omits grid.margin/grid.spacing — re-run the metadata command " +
-      "on this image with a current sprite-tools, which records them.";
+      "on this image with a current Sprite Tools, which records them.";
   let cell: { cellW: number; cellH: number };
   try {
     cell = computeCellGeometry(width, height, cols, rows, padding);

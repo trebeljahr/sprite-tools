@@ -10,7 +10,7 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-border/40 bg-background/50">
       <div className="container mx-auto max-w-5xl px-4 py-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-3">
-          <span>sprite-tools v{VERSION}</span>
+          <span>Sprite Tools v{VERSION}</span>
           <span aria-hidden>·</span>
           <Link href="/docs" className="hover:text-foreground transition-colors">
             docs

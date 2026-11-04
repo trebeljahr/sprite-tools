@@ -465,7 +465,7 @@ export default function AnimatePage() {
           </p>
           <code className="block select-all text-sm">sprite-tools studio</code>
           <p className="text-xs text-muted-foreground">
-            Requires the installed sprite-tools package, ffmpeg and ffprobe.{" "}
+            Requires the installed Sprite Tools package, ffmpeg and ffprobe.{" "}
             <Link href="/docs/mcp/install" className="underline">
               Setup instructions
             </Link>

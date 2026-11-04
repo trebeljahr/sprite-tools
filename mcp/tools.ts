@@ -1078,7 +1078,7 @@ export function registerAllTools(server: McpServer) {
     "sprite_generate_tags",
     {
       description:
-        "Emit animation tag metadata — named, inclusive frame ranges with a direction and a frame rate — in sprite-tools' own JSON shape. Each tag plays at its own uniform fps; `frame_durations` optionally holds individual frames longer (key poses). This is not an Aseprite file: feed the result to sprite_export_engine to turn it into an actual Aseprite JSON sheet, a Godot SpriteFrames resource, a Unity .meta, or a Phaser/Pixi atlas.",
+        "Emit animation tag metadata — named, inclusive frame ranges with a direction and a frame rate — in Sprite Tools' own JSON shape. Each tag plays at its own uniform fps; `frame_durations` optionally holds individual frames longer (key poses). This is not an Aseprite file: feed the result to sprite_export_engine to turn it into an actual Aseprite JSON sheet, a Godot SpriteFrames resource, a Unity .meta, or a Phaser/Pixi atlas.",
       inputSchema: {
         input_path: z.string(),
         ...SHEET_GRID_ARGS,
@@ -2093,13 +2093,13 @@ export function registerAllTools(server: McpServer) {
     "sprite_export_engine",
     {
       description:
-        "Turn sprite-tools metadata into a file a game engine can import directly: a Godot SpriteFrames/AtlasTexture `.tres`, a Unity `<texture>.png.meta` with sliced sprite rects, an Aseprite-shaped JSON sheet, or a Phaser/PixiJS texture atlas. This closes the chain image -> sprite_generate_collision + sprite_generate_pivot + sprite_generate_tags (or sprite_generate_meta in one pass, or sprite_pack_atlas for packed rects) -> engine file. Reach for it whenever the goal is a sheet usable *in an engine* rather than raw JSON. Supply the metadata one of two ways: `input_path` (a JSON file on disk) or `metadata` (the same document inline) — exactly one, and inline is the fast path when you already hold the JSON from a previous call. The document may be a single command's output, several merged with `jq -s add`, a `meta` result, an atlas manifest, or a header+manifest hybrid; collision polygons, pivots and tags all attach by frame index and missing sections are simply skipped. With `output_path` the file is written and a summary returned; without it the exact generated text comes back inline.",
+        "Turn Sprite Tools metadata into a file a game engine can import directly: a Godot SpriteFrames/AtlasTexture `.tres`, a Unity `<texture>.png.meta` with sliced sprite rects, an Aseprite-shaped JSON sheet, or a Phaser/PixiJS texture atlas. This closes the chain image -> sprite_generate_collision + sprite_generate_pivot + sprite_generate_tags (or sprite_generate_meta in one pass, or sprite_pack_atlas for packed rects) -> engine file. Reach for it whenever the goal is a sheet usable *in an engine* rather than raw JSON. Supply the metadata one of two ways: `input_path` (a JSON file on disk) or `metadata` (the same document inline) — exactly one, and inline is the fast path when you already hold the JSON from a previous call. The document may be a single command's output, several merged with `jq -s add`, a `meta` result, an atlas manifest, or a header+manifest hybrid; collision polygons, pivots and tags all attach by frame index and missing sections are simply skipped. With `output_path` the file is written and a summary returned; without it the exact generated text comes back inline.",
       inputSchema: {
         input_path: z
           .string()
           .optional()
           .describe(
-            "Absolute path to a sprite-tools metadata JSON file. Mutually exclusive with `metadata`.",
+            "Absolute path to a Sprite Tools metadata JSON file. Mutually exclusive with `metadata`.",
           ),
         metadata: z
           .record(z.unknown())

@@ -16,7 +16,7 @@ export const DOCS_SECTIONS: DocSection[] = [
   {
     label: "Start here",
     items: [
-      { href: "/docs", label: "Introduction", blurb: "What sprite-tools is and why" },
+      { href: "/docs", label: "Introduction", blurb: "What Sprite Tools is and why" },
       { href: "/docs/install", label: "Install", blurb: "CLI, MCP server, web app" },
       { href: "/docs/quickstart", label: "Quickstart", blurb: "5 minutes end-to-end" },
     ],

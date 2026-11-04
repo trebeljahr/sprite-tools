@@ -142,7 +142,7 @@ export default function AccountPage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Payment runs through Stripe. The sprite-tools server never sees your card.
+                Payment runs through Stripe. The Sprite Tools server never sees your card.
               </p>
             </div>
           ) : (

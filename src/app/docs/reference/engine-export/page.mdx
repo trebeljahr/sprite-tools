@@ -8,7 +8,7 @@ export const metadata = pageMetadata("/docs/reference/engine-export", {
 
 # Engine export
 
-Every metadata command in sprite-tools emits JSON. `export` is the last hop: it reads that JSON and writes a file a game engine can import directly. It never touches pixels — no image is decoded, no PNG is written. It is a JSON-to-text transform, which is why the same code runs in the [CLI](/docs/cli/reference), the [MCP server](/docs/mcp/tools), and the browser at [/export](/export). The one read from disk: for a grid document, the CLI and the MCP tool read the width and height out of the header of the PNG that `source` names, when that file exists.
+Every metadata command in Sprite Tools emits JSON. `export` is the last hop: it reads that JSON and writes a file a game engine can import directly. It never touches pixels — no image is decoded, no PNG is written. It is a JSON-to-text transform, which is why the same code runs in the [CLI](/docs/cli/reference), the [MCP server](/docs/mcp/tools), and the browser at [/export](/export). The one read from disk: for a grid document, the CLI and the MCP tool read the width and height out of the header of the PNG that `source` names, when that file exists.
 
 Four targets:
 
@@ -44,7 +44,7 @@ sprite-tools meta hero.png --collision --pivot bottom-center --tag idle=0-4 \
 
 ## What the exporter accepts
 
-Any sprite-tools metadata document, in any of these shapes:
+Any Sprite Tools metadata document, in any of these shapes:
 
 - a single command's output — `collision`, `pivot`, `tags`, or `aseprite` (see [From an Aseprite file](#from-an-aseprite-file))
 - a `jq -s add` merge of several of them (they share a header and namespace their payloads, so they merge without collisions — see [JSON schemas](/docs/reference/json-schemas))
@@ -249,7 +249,7 @@ The file goes next to the PNG and must be named `<texture filename>.meta` — fo
 **Limitations, plainly:**
 
 - **A `.meta` carries no animation data.** Tags and frame durations are ignored; neither reaches the file. Unity animation clips are a separate asset the exporter does not produce.
-- **Overwriting an existing `.meta` changes the asset's guid and detaches every reference to it** in the project — prefabs, scenes, animations. Nothing in sprite-tools stops you. Before clobbering, read the incumbent `guid:` line out of the old file and pass it back with `--guid`.
+- **Overwriting an existing `.meta` changes the asset's guid and detaches every reference to it** in the project — prefabs, scenes, animations. Nothing in Sprite Tools stops you. Before clobbering, read the incumbent `guid:` line out of the old file and pass it back with `--guid`.
 - **Pass `--asset-path`.** The guid and every sprite id are hashed from it. Without it the seed is the document's `source` (else the texture name; for an atlas or a header+atlas merge always the texture name), which is usually a bare filename like `hero.png`. Two sheets both called `hero.png` in different folders then collide, and Unity resolves that by silently reassigning one of them a new guid.
 - **Pixels per unit defaults to the first frame's untrimmed height**, not Unity's own 100, so one sprite spans one world unit. Pass `--ppu` to match the rest of your project.
 - **Frames without a pivot get `alignment: 0` (Center).** Frames with one get `alignment: 9` (Custom) and a normalized `pivot`. A **trimmed** frame without a pivot also gets `alignment: 9`, with the centre of its untrimmed canvas as the pivot. Center would mean the centre of the trimmed pixels, which moves from frame to frame.
@@ -304,10 +304,10 @@ Excerpt from the `hero.json` above — frame `"0"` of 25, and the complete `meta
 - **Frames are named by bare index** (`"0"`, `"1"`, …), not Aseprite's own `hero 0.aseprite`. That is deliberate: Phaser's `createFromAseprite` looks up `frames[i.toString()]`, so any other naming makes it build **empty animations with no warning at all**. Aseprite's own naming is available through the MCP tool (`aseprite.frame_names: "aseprite"`) and the web page, but not on the CLI.
 - **`meta.app` is this tool's URL, not Aseprite's.** The file is Aseprite-*shaped*; claiming to be Aseprite would be a lie. Both `app` and `version` are overridable through the MCP tool.
 - **The format has no per-frame pivot.** `--pivots slices` carries them as a `meta.slices` entry — one slice, one key per pivoted frame, `bounds` at the untrimmed canvas so the pivot passes through in unchanged pixels. That is the only pivot slot the format has ever had, and no consumer is known to read it back; the default is `omit`.
-- **Collision polygons are dropped.** There is no slot for them, and inventing one would produce a file only sprite-tools can read.
+- **Collision polygons are dropped.** There is no slot for them, and inventing one would produce a file only Sprite Tools can read.
 - `direction` is carried from the tag (`forward`/`reverse`/`pingpong`/`pingpong_reverse`, Aseprite's spelling); nothing is baked, since the format expresses direction natively. Phaser's `createFromAseprite` reads only `reverse` and `pingpong`, so it plays a `pingpong_reverse` tag forward.
 - A tag with a positive repeat count gets `"repeat": "N"`, a string, as Aseprite writes it. A tag without one has no `repeat` key.
-- `layers` and tag `color`/`data` are never emitted — sprite-tools has no source for them.
+- `layers` and tag `color`/`data` are never emitted — Sprite Tools has no source for them.
 - `scale` is the **string** `"1"`, which is what Aseprite hardcodes.
 - `meta.image` is always reduced to a bare basename. Pixi and Phaser's multiatlas both resolve it by concatenating the JSON's own directory, so a path there breaks loading.
 
@@ -361,7 +361,7 @@ Load it as `this.load.atlas("hero", "hero.png", "hero-atlas.json")` in Phaser, o
 
 ## Coordinate systems — the part that bites
 
-sprite-tools' own JSON is uniformly **top-left origin, +Y down, in pixels, relative to the frame's untrimmed canvas**. That is true of `pivots[].pivot` and of every point in `collision[].polygon`. Three of the four formats agree with that; Unity does not.
+Sprite Tools' own JSON is uniformly **top-left origin, +Y down, in pixels, relative to the frame's untrimmed canvas**. That is true of `pivots[].pivot` and of every point in `collision[].polygon`. Three of the four formats agree with that; Unity does not.
 
 **Godot, Aseprite, Phaser** keep pixel rects with a top-left origin. Nothing is flipped.
 
@@ -411,7 +411,7 @@ For **trimmed** frames (anything out of `sprite-tools atlas` with trimming on), 
 - It never decodes or writes an image. It reads only the size from the header of the PNG a grid document names. The PNG has to be put where the engine expects it, by you.
 - It does not produce Godot scenes (`.tscn`), Godot `.import` sidecars, Unity animation clips, Unity prefabs, or Aseprite `.aseprite` documents.
 - It does not read an engine project back. Nothing is merged with an existing file — every write is a full overwrite.
-- It carries no layer, blend-mode, palette or pixel-format information, because no sprite-tools document records any of it.
+- It carries no layer, blend-mode, palette or pixel-format information, because no Sprite Tools document records any of it.
 
 ## Honest state of verification
 

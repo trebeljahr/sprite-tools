@@ -3,7 +3,7 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = {
   ...pageMetadata("/usage", {
     title: "Generation usage",
-    description: "View your sprite-tools image generation usage and AI credit history.",
+    description: "View your Sprite Tools image generation usage and AI credit history.",
   }),
   robots: { index: false, follow: false },
 };

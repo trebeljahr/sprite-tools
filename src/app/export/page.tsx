@@ -372,7 +372,7 @@ export default function ExportPage() {
 
   const loadJsonFile = async (file: File) => {
     if (!/\.json$/i.test(file.name) && file.type !== "application/json") {
-      toast.error("Pick a .json file — the metadata a sprite-tools command wrote.");
+      toast.error("Pick a .json file — the metadata a Sprite Tools command wrote.");
       return;
     }
     try {
@@ -427,7 +427,7 @@ export default function ExportPage() {
   const tutorialSteps: TutorialStep[] = [
     {
       label: "Load metadata",
-      hint: "Paste sprite-tools JSON, drop a .json, or derive a grid from the current sheet.",
+      hint: "Paste Sprite Tools JSON, drop a .json, or derive a grid from the current sheet.",
       done: trimmedRaw.length > 0,
     },
     {
@@ -447,7 +447,7 @@ export default function ExportPage() {
     <main className="container mx-auto py-8 px-4">
       <ToolHeader
         title="Export"
-        description="Turn sprite-tools metadata into engine-native files — Godot, Unity, Aseprite, Phaser."
+        description="Turn Sprite Tools metadata into engine-native files — Godot, Unity, Aseprite, Phaser."
         icon={FileCode2}
         category="export"
         docs="export"
@@ -545,7 +545,7 @@ export default function ExportPage() {
                   onChange={(e) => setSource(e.target.value, inputName)}
                   spellCheck={false}
                   placeholder={
-                    'Paste or drop sprite-tools JSON here…\n\n{ "frameWidth": 32, "frameHeight": 32, "grid": { "cols": 4, "rows": 3 } }'
+                    'Paste or drop Sprite Tools JSON here…\n\n{ "frameWidth": 32, "frameHeight": 32, "grid": { "cols": 4, "rows": 3 } }'
                   }
                   className="font-mono text-[11px] leading-snug h-56 max-h-56 overflow-y-auto resize-none"
                 />

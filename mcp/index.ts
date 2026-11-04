@@ -19,7 +19,7 @@ function printHelp() {
     [
       "sprite-tools-mcp",
       "",
-      "MCP server for sprite-tools. MCP clients start this binary over stdio.",
+      "MCP server for Sprite Tools. MCP clients start this binary over stdio.",
       "",
       "Usage:",
       "  sprite-tools-mcp          start the MCP stdio server",

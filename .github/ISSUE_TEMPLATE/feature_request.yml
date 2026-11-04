@@ -8,7 +8,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What are you trying to do that sprite-tools cannot do yet?
+      description: What are you trying to do that Sprite Tools cannot do yet?
     validations:
       required: true
   - type: textarea

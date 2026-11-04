@@ -11,19 +11,19 @@ export function pageMetadata(
     alternates: { canonical: path },
     openGraph: {
       type: "website",
-      siteName: "sprite-tools",
+      siteName: "Sprite Tools",
       url: path,
       title: metadata.title,
       description: metadata.description,
       images: [
-        { url: "/opengraph-image", width: 1200, height: 630, alt: "sprite-tools social preview" },
+        { url: "/opengraph-image", width: 1200, height: 630, alt: "Sprite Tools social preview" },
       ],
     },
     twitter: {
       card: "summary_large_image",
       title: metadata.title,
       description: metadata.description,
-      images: [{ url: "/twitter-image", alt: "sprite-tools social preview" }],
+      images: [{ url: "/twitter-image", alt: "Sprite Tools social preview" }],
     },
   };
 }

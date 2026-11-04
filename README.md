@@ -1,4 +1,4 @@
-# sprite-tools
+# Sprite Tools
 
 [![npm](https://img.shields.io/npm/v/@trebeljahr/sprite-tools.svg)](https://www.npmjs.com/package/@trebeljahr/sprite-tools)
 [![CI](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml)
@@ -36,7 +36,7 @@ Good starting points:
 
 ## Project status
 
-sprite-tools is actively maintained. The npm package ships the CLI and MCP server; the deployed web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and focused pull requests are welcome.
+Sprite Tools is actively maintained. The npm package ships the CLI and MCP server; the deployed web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and focused pull requests are welcome.
 
 ## Quick taste
 

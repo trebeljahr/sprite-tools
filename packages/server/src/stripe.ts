@@ -47,7 +47,7 @@ export async function createCheckoutSession(
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(input.amountUsd * 100),
-    "line_items[0][price_data][product_data][name]": `sprite-tools AI credit, $${input.amountUsd}`,
+    "line_items[0][price_data][product_data][name]": `Sprite Tools AI credit, $${input.amountUsd}`,
     // Ricos Labs tags every Stripe object with its project.
     "metadata[project]": "sprite-tools",
     "payment_intent_data[metadata][project]": "sprite-tools",

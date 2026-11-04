@@ -43,7 +43,7 @@ export default function GlobalError({
         >
           <h1 style={{ fontSize: 24, marginBottom: 12 }}>Something went very wrong</h1>
           <p style={{ color: "#a1a1aa", marginBottom: 20, lineHeight: 1.5 }}>
-            sprite-tools failed to render. The error has been reported. You can try reloading; if it
+            Sprite Tools failed to render. The error has been reported. You can try reloading; if it
             keeps happening, please file an issue.
           </p>
           <pre

@@ -226,7 +226,7 @@ function GeneratePageContent() {
                   />
                   <p>
                     Your browser sends the prompt and the key straight to xAI. The key stays in this
-                    tab&rsquo;s memory. It never reaches the sprite-tools server, and it is gone
+                    tab&rsquo;s memory. It never reaches the Sprite Tools server, and it is gone
                     when you close the tab.
                   </p>
                   <p>
@@ -251,7 +251,7 @@ function GeneratePageContent() {
               ) : (
                 <div className="space-y-2 text-xs text-muted-foreground">
                   <p>
-                    The sprite-tools server makes the image with its own xAI key and takes the price
+                    The Sprite Tools server makes the image with its own xAI key and takes the price
                     from your prepaid credit. The price is xAI&rsquo;s list price plus a{" "}
                     {creditsInfo.marginPercent}% margin:{" "}
                     {creditsInfo.models

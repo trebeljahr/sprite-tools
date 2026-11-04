@@ -3,7 +3,7 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = {
   ...pageMetadata("/account", {
     title: "Your account",
-    description: "Sign in to manage your sprite-tools account and AI credit.",
+    description: "Sign in to manage your Sprite Tools account and AI credit.",
   }),
   robots: { index: false, follow: true },
 };

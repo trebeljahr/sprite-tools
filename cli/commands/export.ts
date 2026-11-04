@@ -116,7 +116,7 @@ export function registerExportCommand(program: Command) {
       "aseprite JSON        — { frames, meta: { size, frameTags, slices? } }",
       "phaser   JSON        — { frames, animations, meta } (Phaser 3 / Pixi atlas)",
       "",
-      "Input is any sprite-tools metadata document: `meta`, a `jq -s add` merge of",
+      "Input is any Sprite Tools metadata document: `meta`, a `jq -s add` merge of",
       "`collision`/`pivot`/`tags`, an `atlas --json` manifest, or a merge of those.",
     ],
   });

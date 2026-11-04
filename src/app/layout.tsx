@@ -35,11 +35,11 @@ export const metadata: Metadata = {
     : {},
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: "sprite-tools — game-ready 2D sprite toolkit",
-    template: "%s · sprite-tools",
+    default: "Sprite Tools — game-ready 2D sprite toolkit",
+    template: "%s · Sprite Tools",
   },
   description: siteDescription,
-  applicationName: "sprite-tools",
+  applicationName: "Sprite Tools",
   keywords: [
     "sprite",
     "sprite sheet",
@@ -52,33 +52,33 @@ export const metadata: Metadata = {
     "2D game",
     "mcp",
   ],
-  authors: [{ name: "sprite-tools contributors" }],
+  authors: [{ name: "Sprite Tools contributors" }],
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
-    siteName: "sprite-tools",
+    siteName: "Sprite Tools",
     url: "/",
-    title: "sprite-tools — game-ready 2D sprite toolkit",
+    title: "Sprite Tools — game-ready 2D sprite toolkit",
     description: siteDescription,
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "sprite-tools social preview",
+        alt: "Sprite Tools social preview",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "sprite-tools",
+    title: "Sprite Tools",
     description: siteDescription,
     images: [
       {
         url: "/twitter-image",
-        alt: "sprite-tools social preview",
+        alt: "Sprite Tools social preview",
       },
     ],
   },

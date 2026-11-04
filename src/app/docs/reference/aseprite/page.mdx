@@ -3,12 +3,12 @@ import { pageMetadata } from "@/lib/page-metadata";
 export const metadata = pageMetadata("/docs/reference/aseprite", {
   title: "Aseprite files",
   description:
-    "What the sprite-tools .ase/.aseprite reader supports, what it skips, and the warnings it reports when a file decodes only in part.",
+    "What the Sprite Tools .ase/.aseprite reader supports, what it skips, and the warnings it reports when a file decodes only in part.",
 });
 
 # Aseprite files
 
-sprite-tools reads Aseprite working files (`.ase` and `.aseprite`) without an export step. The same reader runs in three places:
+Sprite Tools reads Aseprite working files (`.ase` and `.aseprite`) without an export step. The same reader runs in three places:
 
 - The **Aseprite** source tab in the [Sheet Builder](/docs/web/spritesheet) and [Background Removal](/docs/web/background-removal). The file is read in the browser and is not uploaded.
 - The [`aseprite` CLI command](/docs/cli/reference#aseprite) (alias `ase`).
@@ -39,7 +39,7 @@ The reader follows the official [Aseprite file format spec](https://github.com/a
 
 **Tags.** Name, frame range, and colour. Loop direction: `forward`, `reverse`, `pingpong`, and `pingpong-reverse`. The repeat count, where `0` means the file does not set one. The reader reports tags; it does not play them.
 
-**Frame durations.** Per-frame durations in milliseconds. A frame with a duration of 0 uses the header's frame speed, as the spec describes. The CLI and MCP output carry them twice: as `frames[].durationMs`, and as the top-level `frameDurations` array that the rest of sprite-tools reads. See [Output fields](#output-fields).
+**Frame durations.** Per-frame durations in milliseconds. A frame with a duration of 0 uses the header's frame speed, as the spec describes. The CLI and MCP output carry them twice: as `frames[].durationMs`, and as the top-level `frameDurations` array that the rest of Sprite Tools reads. See [Output fields](#output-fields).
 
 **Palette.** The palette, as `#rrggbb` hex strings, or `#rrggbbaa` for entries that are not fully opaque.
 

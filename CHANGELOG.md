@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to sprite-tools will be documented here.
+All notable changes to Sprite Tools will be documented here.
 
 This project follows semantic versioning for the npm package.
 
