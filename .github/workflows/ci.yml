@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      # tests/video-resolution.test.ts encodes its fixture videos with ffmpeg.
+      - if: matrix.task == 'test'
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
       - run: pnpm install --frozen-lockfile
       - run: pnpm ${{ matrix.task }}
 
