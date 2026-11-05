@@ -76,8 +76,17 @@ keeps the Stripe checkout ID, the amount and the time of each purchase.
 A self-hosted [GlitchTip](https://glitchtip.com) instance receives
 anonymous crash reports, so we can fix bugs we could not reproduce
 locally. A report holds the stack trace and the URL of the page that
-crashed. It holds no sprite data, and we log no IP address beyond what
-the origin server naturally sees.
+crashed. It holds no sprite data. Like every request, a report reaches the
+server with your IP address; the server log below covers that.
+
+## Server logs
+
+The web server in front of Sprite Tools writes an access log for each
+request: the time, the address requested (including any query string), the
+response code and size, your IP address, your country, your browser's user
+agent and the referring page. Prompts and images travel in request bodies,
+which the log does not record. The log is used only to find attacks and
+faults, and it is deleted after 14 days.
 
 ## What the tools keep in your browser
 
