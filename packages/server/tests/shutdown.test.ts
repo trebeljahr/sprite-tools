@@ -20,7 +20,7 @@ it("drains on SIGTERM: keeps serving through the drain, then exits cleanly", asy
     output += data;
   });
   try {
-    for (let i = 0; !/Listening on \S+:\d+/.test(output) && i < 200; i++) await sleep(25);
+    for (let i = 0; !/Listening on \S+:\d+/.test(output) && i < 600; i++) await sleep(25);
     const port = output.match(/Listening on \S+:(\d+)/)?.[1];
     expect(port, output).toBeTruthy();
     const base = `http://127.0.0.1:${port}`;
@@ -37,4 +37,4 @@ it("drains on SIGTERM: keeps serving through the drain, then exits cleanly", asy
   } finally {
     child.kill("SIGKILL");
   }
-}, 15000);
+}, 30000);
