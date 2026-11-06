@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { getMigrations } from "better-auth/db/migration";
 import { Pool } from "pg";
+import { logIdleClientErrors } from "./db.js";
 
 const LOCK = 71324001;
 export const MIGRATIONS = [
@@ -23,7 +24,10 @@ export async function migrate() {
     )
   )
     throw new Error("POSTGRES_URL is required");
-  const pool = new Pool({ connectionString: process.env.POSTGRES_URL, max: 2 });
+  const pool = logIdleClientErrors(
+    new Pool({ connectionString: process.env.POSTGRES_URL, max: 2 }),
+    "migrate",
+  );
   const lock = await pool.connect();
   try {
     await lock.query("SELECT pg_advisory_lock($1)", [LOCK]);

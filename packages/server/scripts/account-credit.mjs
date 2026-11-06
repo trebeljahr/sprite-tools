@@ -18,6 +18,7 @@ if (
   );
 }
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL, max: 1 });
+pool.on("error", (error) => console.error(`Idle database client failed: ${error.message}`));
 const db = await pool.connect();
 try {
   await db.query("BEGIN");
