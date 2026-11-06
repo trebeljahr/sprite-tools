@@ -29,9 +29,15 @@ WORKDIR /app
 
 # curl for Coolify's health check, which runs `curl … || wget …` inside the
 # container in place of the HEALTHCHECK below; bookworm-slim ships neither.
+# apt-get upgrade picks up Debian security fixes on every rebuild, before the
+# node base image is republished. The server never calls npm or npx, and the
+# npm bundled in the base image carries its own vulnerable dependencies, so it
+# is removed.
 RUN apt-get update \
+  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends curl \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 ENV NODE_ENV=production
 ENV PORT=8080
