@@ -174,10 +174,14 @@ jobs:
 
   deploy:
     needs: [build, client]
+    # dependency-updates.yml dispatches `build` after merging a Dependabot PR
+    # (a merge made with GITHUB_TOKEN triggers no push); it releases like one.
     if: >-
       always() && !cancelled() &&
       github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'push' && vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success' && needs.client.result == 'success') ||
+      ((
+        (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build')) &&
+        vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success' && needs.client.result == 'success') ||
        (github.event_name == 'workflow_dispatch' && inputs.operation == 'deploy'))
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -185,7 +189,8 @@ jobs:
       contents: read
       packages: write
     env:
-      TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+      TARGET_SHA: ${{ (github.event_name == 'push' || inputs.operation == 'build') && github.sha || inputs.target_sha }}
+      RELEASE_OPERATION: ${{ inputs.operation }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -194,7 +199,7 @@ jobs:
       - name: Promote, queue the server app, and verify it
         env:
           ROLLOUT_MODE: ${{ vars.SPRITE_TOOLS_ROLLOUT_MODE }}
-          TARGET_DIGEST: ${{ github.event_name == 'push' && needs.build.outputs.digest || inputs.image_digest }}
+          TARGET_DIGEST: ${{ (github.event_name == 'push' || inputs.operation == 'build') && needs.build.outputs.digest || inputs.image_digest }}
           EXPECTED_CURRENT_DIGEST: ${{ inputs.expected_current_digest }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
