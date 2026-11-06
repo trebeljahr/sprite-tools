@@ -6,15 +6,22 @@
 //
 // Serves out/ on a random free port in 49152-65535, drives headless
 // Chromium (scripts/marketing/load-playwright.mjs explains where it comes
-// from) and writes docs/marketing/screenshots/*.png (2x device pixels) plus
-// docs/marketing/screenshots/cli-session.json, the real CLI output that
-// render-social-preview.mjs typesets as a terminal.
+// from) and writes docs/marketing/screenshots/*.png (2x device pixels),
+// collision-mouse.json (the Collision tool's own Download JSON output) and
+// cli-session.json (the real CLI output). render-social-preview.mjs draws the
+// first and typesets the second.
 //
-// Demo input: the beetle from tests/fixtures/aseprite/excalibur/ (real
-// Aseprite art from the Excalibur.js test suite, BSD-2-Clause, vendored in
-// this repo). The CLI turns it into a 3-frame PNG sheet first, so the
-// screenshots show the same file in every tool. No account, no API key,
-// no network: /api calls fail quietly in the static export.
+// Demo inputs:
+// - The mouse, docs/marketing/source/quiet-brass-mouse.png: Rico's Quiet Brass
+//   character, the same art as the October 2026 LinkedIn card. It is the
+//   input for the Collision captures and the social preview cards. Provenance
+//   is in docs/marketing/README.md.
+// - The beetle from tests/fixtures/aseprite/excalibur/ (real Aseprite art
+//   from the Excalibur.js test suite, BSD-2-Clause, vendored in this repo).
+//   The CLI turns it into a 3-frame PNG sheet first, so the Lint, Aseprite
+//   import, Export and CLI captures show the same file.
+// No account, no API key, no network: /api calls fail quietly in the static
+// export.
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -30,6 +37,11 @@ const BEETLE_FIXTURE = join(
   ROOT,
   "tests/fixtures/aseprite/excalibur/beetle-rgba-multi-animation.aseprite",
 );
+
+// 720x476, alpha-clean. Alpha threshold 128 skips the faint whisker tips;
+// tolerance 6 gives a 76-point polygon, close to the 72 points of the card.
+const MOUSE = join(ROOT, "docs", "marketing", "source", "quiet-brass-mouse.png");
+const MOUSE_SETTINGS = { alphaThreshold: 128, simplifyTolerance: 6 };
 
 const DESKTOP = { width: 1600, height: 1000 };
 const MOBILE = { width: 390, height: 844 };
@@ -98,22 +110,37 @@ async function setNumber(page, label, value, scope) {
 
 // --- Scenes -------------------------------------------------------------------
 const scenes = {
-  // README hero: one sheet, three traced polygons, export panel in reach.
+  // README hero and card source: the mouse with its traced polygon. The dark
+  // run also saves the JSON the Download button writes; the cards draw it.
   async "collision-desktop"({ browser, url, colorScheme = "dark", suffix = "" }) {
-    const ctx = await browser.newContext({ viewport: DESKTOP, deviceScaleFactor: 2, colorScheme });
+    const ctx = await browser.newContext({
+      viewport: DESKTOP,
+      deviceScaleFactor: 2,
+      colorScheme,
+      acceptDownloads: true,
+    });
     const page = await ctx.newPage();
-    await loadSharedSource(page, url, BEETLE_SHEET);
+    await loadSharedSource(page, url, MOUSE);
     // A full load, so the page reads the settings hash on mount.
     await page.goto(`${url}/`, { waitUntil: "networkidle" });
-    await page.goto(`${url}/collision${settingsHash({ simplifyTolerance: 2 })}`, {
+    await page.goto(`${url}/collision${settingsHash(MOUSE_SETTINGS)}`, {
       waitUntil: "networkidle",
     });
     await dismissQuickstart(page);
-    await page.getByRole("button", { name: "Sheet", exact: true }).click();
-    await setNumber(page, "Columns", 3);
-    await setNumber(page, "Rows", 1);
+    // Match the preview's checkerboard to the page theme.
+    if (colorScheme === "dark") await page.getByTitle("Toggle background grid").click();
     await settle(page);
     await page.screenshot({ path: join(OUT, `collision-desktop${suffix}.png`) });
+    if (colorScheme === "dark") {
+      const [download] = await Promise.all([
+        page.waitForEvent("download"),
+        page.getByRole("button", { name: "Download JSON" }).click(),
+      ]);
+      const saved = join(OUT, "collision-mouse.json");
+      await download.saveAs(saved);
+      // Same data, laid out the way `pnpm lint` (Biome) expects.
+      execFileSync(join(ROOT, "node_modules", ".bin", "biome"), ["format", "--write", saved]);
+    }
     await ctx.close();
   },
 

@@ -1,23 +1,54 @@
 {
   "generated": "2026-11-06",
-  "source": "Real Sprite Tools web app (static export served locally) and CLI. No mock UI, no generated imagery.",
-  "demoInput": "tests/fixtures/aseprite/excalibur/beetle-rgba-multi-animation.aseprite (excalibur-aseprite, BSD-2-Clause, see NOTICE there)",
+  "source": "Real Sprite Tools web app (static export served locally) and CLI. No mock UI. Cards A and B draw the Collision tool's exported polygon, unedited, over the demo sprite.",
+  "demoInputs": [
+    {
+      "path": "source/quiet-brass-mouse.png",
+      "what": "Quiet Brass mouse, the character on the October 2026 LinkedIn card",
+      "provenance": "Generated image: concept sheets and the side-on pose made 2026-10-21 with the coding agent's built-in image_gen tool to Rico's brief (he chose Quiet Brass); background cut out with Sprite Tools; green spill clamped 2026-10-23; scaled to 720 px 2026-11-07.",
+      "master": "design-history archive sprite-tools/2026-10-23/linkedin-featured/quiet-brass-clean-edge.png, 1294x855, sha256 0a0cc9eebc465010054816f7f8ad9b7b95f89be6acf3beafaf397af456c94f74",
+      "captureSettings": {
+        "alphaThreshold": 128,
+        "simplifyTolerance": 6
+      }
+    },
+    {
+      "path": "tests/fixtures/aseprite/excalibur/beetle-rgba-multi-animation.aseprite",
+      "what": "Beetle, used for Sheet Lint, Aseprite import, Export and the CLI capture",
+      "provenance": "excalibur-aseprite test fixture, BSD-2-Clause, see NOTICE there"
+    }
+  ],
   "fonts": "Geist and Geist Mono (OFL-1.1), as shipped in the next package",
   "files": [
     {
+      "path": "source/quiet-brass-mouse.png",
+      "purpose": "Demo input: the Quiet Brass mouse, 720x476 RGBA.",
+      "pixels": "720x476",
+      "bytes": 273832,
+      "sha256": "7f315a0415aba73a594ce898b427cb023a88c12f762cb15bfb78d466bf284616",
+      "madeBy": "ImageMagick 7 (Lanczos, -strip) from the 1294x855 master; see README.md, Demo inputs"
+    },
+    {
       "path": "screenshots/collision-desktop.png",
-      "purpose": "README hero: Collision tool, beetle sheet as a 3×1 grid, first frame with its 28-point polygon (dark).",
+      "purpose": "README hero: Collision tool, the mouse with its 76-point polygon (dark theme, dark preview grid).",
       "pixels": "3200x2000",
-      "bytes": 197977,
-      "sha256": "6c3d8e954f5cd54c66df18c0d212c32b45b3d2d21db0dcbedabdcb8c23e8e10c",
+      "bytes": 703033,
+      "sha256": "8368cfe3357f7d83ec44a40484ff81765c3aec7eb79f4a41ebd03d15d63733e6",
       "madeBy": "scripts/marketing/capture-screenshots.mjs"
     },
     {
       "path": "screenshots/collision-desktop-light.png",
       "purpose": "Same Collision view in the light theme.",
       "pixels": "3200x2000",
-      "bytes": 197245,
-      "sha256": "ac9c9d41deed79fe0591e0cc7d83f73b97570c6a0a8bcd8a8b0ca709286d5c21",
+      "bytes": 733472,
+      "sha256": "60541d0f58c7e5c2c79d1fd08dd6af22456ffa12bdc31e3231e43d2cf3dbcfbb",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/collision-mouse.json",
+      "purpose": "The Collision tool's Download JSON output for the mouse (alpha 128, tolerance 6, 76 points).",
+      "bytes": 2033,
+      "sha256": "7b0841d2e4f3aae901e7f032ca781d73d06e4fa09a99671b9ae386606b1592ad",
       "madeBy": "scripts/marketing/capture-screenshots.mjs"
     },
     {
@@ -69,34 +100,42 @@
     },
     {
       "path": "social-preview/social-preview-a.png",
-      "purpose": "GitHub social preview A: screenshot-led (Collision crop).",
+      "purpose": "GitHub social preview A (dark): the mouse with the exported polygon in blue, LinkedIn card layout.",
       "pixels": "1280x640",
-      "bytes": 82511,
-      "sha256": "44e9c42c5ffa535b53ebe40fc257647025ece064ca86b9b539070b3dff361cf1",
+      "bytes": 275105,
+      "sha256": "bd9fab8b3d178412ed7abace7992924735b6e184ffe46bc2dc3b838011a86c16",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     },
     {
       "path": "social-preview/social-preview-b.png",
-      "purpose": "GitHub social preview B: typographic, brand-led.",
+      "purpose": "GitHub social preview B (light): the same on a paper background.",
       "pixels": "1280x640",
-      "bytes": 54634,
-      "sha256": "46132d39fcd9656a821f8c25b3963b5a5b4c4e0905814c5b0c4abff98070bb74",
+      "bytes": 278208,
+      "sha256": "b8d1dca1b53202431f6088dc5ee3186794abf2ccb92689130a4a3a917f93e817",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     },
     {
       "path": "social-preview/social-preview-c.png",
-      "purpose": "GitHub social preview C: terminal lint output over the Sheet Lint view.",
+      "purpose": "GitHub social preview C (dark): the Collision tool's Preview card beside name, line and URL.",
       "pixels": "1280x640",
-      "bytes": 122134,
-      "sha256": "5a83cae0b0c9c0775208a525597abd79d1979475be53813cf947c70760d48250",
+      "bytes": 190997,
+      "sha256": "5255aea76094165a235ef50b9098f74ad199bb8ca887b6c239216954e07f59f4",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/social-preview-d.png",
+      "purpose": "GitHub social preview D (light): the Collision page, Source and Preview cards, under a name row.",
+      "pixels": "1280x640",
+      "bytes": 237890,
+      "sha256": "0b10d8d2f81ebcc367073500ed9f095031c15fa2d73e78527e7f74290a59d0b9",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     },
     {
       "path": "social-preview/review-sheet.jpg",
-      "purpose": "A, B and C side by side, labelled, for picking one.",
-      "pixels": "2100x428",
-      "bytes": 106765,
-      "sha256": "9ea36cfdfd09cecbfd341d5d137c4a20ee511b3de41318e289dd4db77ba89dd6",
+      "purpose": "A to D in a 2x2 grid, labelled, for picking one.",
+      "pixels": "1410x826",
+      "bytes": 171926,
+      "sha256": "362b24b4f655718156e495982aae9245a973878500b457a85d2f1df0012f1a9e",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     }
   ]

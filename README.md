@@ -10,7 +10,7 @@ It also checks and cleans the sheet itself. Sheet Lint finds frame bleed, alpha 
 
 Open **[sprites.trebeljahr.com](https://sprites.trebeljahr.com)** to use the tools in the browser, without an account. Images stay in the page unless you start one of the optional AI flows. The same code runs as the `sprite-tools` CLI and as an [MCP](https://modelcontextprotocol.io) server. A build script or an AI agent gets the same JSON as the web app.
 
-![The Collision tool in the Sprite Tools web app. A three-frame beetle sprite sheet is loaded as a 3×1 grid, and the first frame is shown with its traced 28-point collision polygon in green.](docs/marketing/screenshots/collision-desktop.png)
+![The Collision tool in the Sprite Tools web app. A mouse sprite with a coat and a rapier is loaded, and the preview shows its traced 76-point collision polygon in green.](docs/marketing/screenshots/collision-desktop.png)
 
 ## Try it online
 
@@ -224,6 +224,8 @@ The web app, the CLI, the MCP server and the algorithm modules are MIT. See [LIC
 The accounts server in `packages/server` is AGPL-3.0-or-later. See [packages/server/LICENSE](./packages/server/LICENSE). If you run a changed copy of it as a network service, you must offer its source code, with your changes, to the people who use it.
 
 The `.aseprite` test files in `tests/fixtures/aseprite/excalibur/` come from [excalibur-aseprite](https://github.com/excaliburjs/excalibur-aseprite) and stay under its BSD-2-Clause license. See the [NOTICE](tests/fixtures/aseprite/excalibur/NOTICE) file there. The beetle in the screenshots above is one of them.
+
+The mouse in the Collision screenshot is demo art made with an image model ([docs/marketing](docs/marketing/README.md#demo-inputs) records how). It is not in the npm package.
 
 ## Support
 
