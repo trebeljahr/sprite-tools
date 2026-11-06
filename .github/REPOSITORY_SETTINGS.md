@@ -6,7 +6,7 @@ These settings live in GitHub, not in git. Use this as the source text for the r
 
 **Description**
 
-Game-ready 2D sprite toolkit: web app, CLI, and MCP server for collision polygons, pivots, tags, pixel art, normal maps, palettes, atlases, and GIF export.
+Turn sprite sheets into collision polygons, pivots, tags and Godot or Unity files, in the browser, a CLI or over MCP.
 
 **Website**
 
@@ -31,6 +31,7 @@ cli
 mcp
 nextjs
 typescript
+aseprite
 ```
 
 ## Features

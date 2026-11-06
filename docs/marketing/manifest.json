@@ -1,0 +1,103 @@
+{
+  "generated": "2026-11-06",
+  "source": "Real Sprite Tools web app (static export served locally) and CLI. No mock UI, no generated imagery.",
+  "demoInput": "tests/fixtures/aseprite/excalibur/beetle-rgba-multi-animation.aseprite (excalibur-aseprite, BSD-2-Clause, see NOTICE there)",
+  "fonts": "Geist and Geist Mono (OFL-1.1), as shipped in the next package",
+  "files": [
+    {
+      "path": "screenshots/collision-desktop.png",
+      "purpose": "README hero: Collision tool, beetle sheet as a 3×1 grid, first frame with its 28-point polygon (dark).",
+      "pixels": "3200x2000",
+      "bytes": 197977,
+      "sha256": "6c3d8e954f5cd54c66df18c0d212c32b45b3d2d21db0dcbedabdcb8c23e8e10c",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/collision-desktop-light.png",
+      "purpose": "Same Collision view in the light theme.",
+      "pixels": "3200x2000",
+      "bytes": 197245,
+      "sha256": "ac9c9d41deed79fe0591e0cc7d83f73b97570c6a0a8bcd8a8b0ca709286d5c21",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/lint-desktop.png",
+      "purpose": "Sheet Lint: frame-bleed error drawn onto the beetle sheet, findings panel.",
+      "pixels": "3200x2000",
+      "bytes": 297383,
+      "sha256": "6c5d59755edaf2145397ce29dd6e41e309d293573d96b4bdf52e19b599ab19ab",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/lint-mobile.png",
+      "purpose": "Sheet Lint at 390×844 (phone), sheet and findings.",
+      "pixels": "1170x2532",
+      "bytes": 197439,
+      "sha256": "1f7d48bb86fed3f79fca24de8f50bd6cf3fec8632c87ca0a77d53aad63214e5c",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/aseprite-import-desktop.png",
+      "purpose": "Sheet Builder reading beetle.aseprite: canvas, layers, frames, stitched sheet.",
+      "pixels": "3200x2000",
+      "bytes": 417325,
+      "sha256": "1804f842767ea10291b6b5b396642be30dcfaec53dcfe98d84399180c74ec6c7",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/export-desktop.png",
+      "purpose": "Export: the CLI's beetle.json turned into a Godot SpriteFrames .tres.",
+      "pixels": "3200x2000",
+      "bytes": 416028,
+      "sha256": "71afb515cc871300bde588ab939684fea1cac0b89555e725ef5756090164c38d",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/cli-session.json",
+      "purpose": "Real stdout of the two CLI commands shown in the terminal capture.",
+      "bytes": 974,
+      "sha256": "c43b8f2e1e1ef41dd3645d5f5e097ec3c23dad49bb9630650b60b2022afedc51",
+      "madeBy": "scripts/marketing/capture-screenshots.mjs"
+    },
+    {
+      "path": "screenshots/cli-lint-terminal.png",
+      "purpose": "Terminal capture: sprite-tools ase, then sprite-tools lint, typeset from cli-session.json.",
+      "pixels": "2400x1058",
+      "bytes": 171592,
+      "sha256": "7ece1363d5456d2766eabd5a4e071d027fcced170e574174e5bb9bb264e9df69",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/social-preview-a.png",
+      "purpose": "GitHub social preview A: screenshot-led (Collision crop).",
+      "pixels": "1280x640",
+      "bytes": 82511,
+      "sha256": "44e9c42c5ffa535b53ebe40fc257647025ece064ca86b9b539070b3dff361cf1",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/social-preview-b.png",
+      "purpose": "GitHub social preview B: typographic, brand-led.",
+      "pixels": "1280x640",
+      "bytes": 54634,
+      "sha256": "46132d39fcd9656a821f8c25b3963b5a5b4c4e0905814c5b0c4abff98070bb74",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/social-preview-c.png",
+      "purpose": "GitHub social preview C: terminal lint output over the Sheet Lint view.",
+      "pixels": "1280x640",
+      "bytes": 122134,
+      "sha256": "5a83cae0b0c9c0775208a525597abd79d1979475be53813cf947c70760d48250",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/review-sheet.jpg",
+      "purpose": "A, B and C side by side, labelled, for picking one.",
+      "pixels": "2100x428",
+      "bytes": 106765,
+      "sha256": "9ea36cfdfd09cecbfd341d5d137c4a20ee511b3de41318e289dd4db77ba89dd6",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    }
+  ]
+}

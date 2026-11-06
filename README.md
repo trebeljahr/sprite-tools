@@ -1,28 +1,20 @@
 # Sprite Tools
 
-[![npm](https://img.shields.io/npm/v/@trebeljahr/sprite-tools.svg)](https://www.npmjs.com/package/@trebeljahr/sprite-tools)
 [![CI](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/trebeljahr/sprite-tools/actions/workflows/ci.yml)
-[![Web app](https://img.shields.io/badge/web-sprites.trebeljahr.com-0f766e.svg)](https://sprites.trebeljahr.com)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20AGPL--3.0-blue.svg)](#license)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](#install-the-cli-and-mcp-server)
 
-A batteries-included toolkit for turning AI-generated or hand-drawn sprites into **game-ready 2D assets**: background removal, duplicate-frame removal, collision polygons, pivot anchors, animation tags with per-frame timings, nine-slice borders, pixel-art conversion and upscaling, normal maps, outlines and drop shadows, palette and shading-ramp recoloring, atlas packing, GIF export, `.aseprite` file import, and engine-native export for Godot, Unity, Aseprite, and Phaser.
+Your sprite is drawn, but your engine still needs collision polygons, pivots, animation tags and an import file. Sprite Tools makes that data from the PNG, GIF, video or `.aseprite` file you already have. It writes JSON, or files that Godot, Unity, Aseprite and Phaser import directly.
 
-Three surfaces, one shared pipeline:
+It also checks and cleans the sheet itself. Sheet Lint finds frame bleed, alpha fringe and pivot jumps, and draws each finding onto the sheet. Other tools remove flat backgrounds, drop duplicate frames, pack atlases, add outlines, derive normal maps for 2D lighting and convert art to limited-palette pixel art.
 
-- **Web app** — interactive browser-based tools at [sprites.trebeljahr.com](https://sprites.trebeljahr.com) for local sprite editing. Video generation uses the local companion and your provider key.
-- **CLI (`sprite-tools`)** — Composable subcommands. Pipe-friendly, JSON on stdout, `stdin` on `-`.
-- **MCP server (`sprite-tools-mcp`)** — exposes every tool over [Model Context Protocol](https://modelcontextprotocol.io) so Claude Desktop (and any MCP client) can drive the pipeline directly.
+Open **[sprites.trebeljahr.com](https://sprites.trebeljahr.com)** to use the tools in the browser, without an account. Images stay in the page unless you start one of the optional AI flows. The same code runs as the `sprite-tools` CLI and as an [MCP](https://modelcontextprotocol.io) server. A build script or an AI agent gets the same JSON as the web app.
 
-All three surfaces call the same algorithm modules and emit the same JSON shapes. Mix them freely.
+![The Collision tool in the Sprite Tools web app. A three-frame beetle sprite sheet is loaded as a 3×1 grid, and the first frame is shown with its traced 28-point collision polygon in green.](docs/marketing/screenshots/collision-desktop.png)
 
 ## Try it online
 
-Open [sprites.trebeljahr.com](https://sprites.trebeljahr.com) to use the tools in your browser. Images stay local to the page unless you opt into an AI-powered flow that explicitly calls an external service.
-
-Every tool is free and works without an account. AI Character makes images with your own xAI key (no account) or with prepaid AI credit, priced at xAI's list price plus a stated margin. An account is only for that credit.
-
-Good starting points:
+Good starting points at [sprites.trebeljahr.com](https://sprites.trebeljahr.com):
 
 - [Sheet Lint](https://sprites.trebeljahr.com/lint) — the one to open first: what a sheet is, and what is wrong with it, drawn onto the sheet.
 - [Sheet Builder](https://sprites.trebeljahr.com/spritesheet) — turn video, GIF, loose frames, or an `.aseprite` file into a clean sheet.
@@ -34,11 +26,19 @@ Good starting points:
 - [Export](https://sprites.trebeljahr.com/export) — turn that metadata into a Godot, Unity, Aseprite, or Phaser file.
 - [Docs](https://sprites.trebeljahr.com/docs) — quickstart, CLI reference, MCP setup, schemas, and algorithm notes.
 
+Every tool is free and works without an account. AI Character makes images with your own xAI key (no account) or with prepaid AI credit, priced at xAI's list price plus a stated margin. An account is only for that credit.
+
+| Sheet Lint | Aseprite import | Engine export |
+| --- | --- | --- |
+| [![Sheet Lint marks where frame 0 of the beetle sheet bleeds into frame 1 and lists one error and one info finding.](docs/marketing/screenshots/lint-desktop.png)](docs/marketing/screenshots/lint-desktop.png) | [![The Sheet Builder reads beetle.aseprite: 64×64 canvas, 3 frames, one layer, and the stitched sheet beside the frame preview.](docs/marketing/screenshots/aseprite-import-desktop.png)](docs/marketing/screenshots/aseprite-import-desktop.png) | [![The Export tool turns the beetle metadata JSON into a Godot SpriteFrames .tres file with two animations.](docs/marketing/screenshots/export-desktop.png)](docs/marketing/screenshots/export-desktop.png) |
+
 ## Project status
 
-Sprite Tools is actively maintained. The npm package ships the CLI and MCP server; the deployed web app is the interactive reference implementation for the same algorithms. Issues, bug reports, and focused pull requests are welcome.
+Sprite Tools is actively maintained. The deployed web app is the interactive reference implementation for the same algorithms the CLI and MCP server run. The npm package `@trebeljahr/sprite-tools` is not published yet, so the CLI and MCP server install from a source checkout for now. Issues, bug reports, and focused pull requests are welcome.
 
 ## Quick taste
+
+![Terminal: sprite-tools ase reads beetle.aseprite into a PNG sheet and JSON, then sprite-tools lint reports one frame-bleed error and one non-power-of-two info finding.](docs/marketing/screenshots/cli-lint-terminal.png)
 
 ```bash
 # Start here on a sheet you know nothing about: detected grid, frame count, findings
@@ -102,19 +102,23 @@ sprite-tools atlas sprites/*.png -o atlas.png --json atlas.json
 cat hero.png | sprite-tools trim - -o - | sprite-tools collision -
 ```
 
-## Install
+## Install the CLI and MCP server
 
-Published on npm as **[`@trebeljahr/sprite-tools`](https://www.npmjs.com/package/@trebeljahr/sprite-tools)**. One install ships both the `sprite-tools` CLI and the `sprite-tools-mcp` server.
+The package name is `@trebeljahr/sprite-tools`. One install ships both the `sprite-tools` CLI and the `sprite-tools-mcp` server. It is not on npm yet, so build it from a checkout:
 
 ```bash
-# Global install — both binaries on your PATH
-npm install -g @trebeljahr/sprite-tools
+git clone https://github.com/trebeljahr/sprite-tools.git
+cd sprite-tools
+pnpm install
 
-# Or run any command one-off without installing
-npx @trebeljahr/sprite-tools meta hero.png --collision -o hero.json
+# Build the web app, CLI and MCP server, then link both binaries onto your PATH
+pnpm install-local
+
+# …or run a command uncompiled, against the TypeScript source
+pnpm cli:dev -- lint my-sheet.png --format text
 ```
 
-Requires **Node 20+**. PNG I/O is pure JS. Video Studio additionally requires `ffmpeg` and `ffprobe` on your PATH. Full install options (pnpm, MCP client config, building from source) live in the [install docs](https://sprites.trebeljahr.com/docs/install).
+Requires **Node 20+** and pnpm. PNG I/O is pure JS. Video Studio additionally requires `ffmpeg` and `ffprobe` on your PATH. More install options (MCP client config, building from source) live in the [install docs](https://sprites.trebeljahr.com/docs/install).
 
 ## Local Video Studio
 
@@ -122,7 +126,7 @@ Run `sprite-tools studio`, open its private setup link, and add a Google or xAI 
 
 The local Web UI accepts prompts, concept art, and supported first/end frame controls. One job generates video, removes the background, and exports a sprite sheet with timing, pivots, collision polygons, and bounding hitboxes. Existing video can be imported or reprocessed without generation charges.
 
-Local MCP clients use the same running companion through five `sprite_video_*` tools. Keys stay out of chat and tool arguments. See [the runtime and security contract](docs/video-studio.md).
+Local MCP clients use the same running companion through six `sprite_video_*` tools. Keys stay out of chat and tool arguments. See [the runtime and security contract](docs/video-studio.md).
 
 ## MCP in Claude Desktop
 
@@ -142,11 +146,11 @@ Restart Claude Desktop — the sprite tools appear under the MCP menu. If `sprit
 
 **Character layers**: [prepare and review articulated artwork](https://sprites.trebeljahr.com/docs/character-layers) through `/character-layers`, `sprite-tools character`, or `sprite_prepare_character_layers`. Local plans preserve source pixels; optional xAI drafts and hidden-area completion require explicit paid actions.
 
-**Web app**: `/character-layers`, `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/generate` (AI Character), and `/animate` (AI Animation).
+**Web app**: `/character-layers`, `/spritesheet`, `/background-removal`, `/lasso`, `/lint`, `/collision`, `/pivot`, `/tags`, `/nine-slice`, `/pixelate`, `/normal-map`, `/outline`, `/palette`, `/atlas`, `/gif`, `/export`, `/motion-workbench`, `/generate` (AI Character), and `/animate` (AI Animation).
 
-**CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `aseprite` (alias `ase`), `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`.
+**CLI**: `lint`, `info`, `detect`, `slice`, `trim`, `aseprite` (alias `ase`), `dedupe`, `chroma` (alias `remove-bg`), `collision`, `pivot`, `tags`, `nine-slice`, `meta`, `palette`, `pixelate`, `normal-map`, `outline`, `atlas`, `gif`, `export`, `character`, `motion`, `inbetween`, and `studio`.
 
-**MCP**: Tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`; `aseprite` is `sprite_read_aseprite`).
+**MCP**: 31 tools with typed Zod input schemas (`outline` splits into `sprite_add_outline` and `sprite_add_shadow`; palette adds `sprite_detect_ramps` and `sprite_palette_variants`; `aseprite` is `sprite_read_aseprite`; Video Studio adds six `sprite_video_*` tools).
 
 ## Docs
 
@@ -186,6 +190,8 @@ tests/**.test.ts       # vitest on every algorithm
 
 Every tool has the same **shape**: a pure function, a CLI wrapper, an MCP tool, a React page. Adding new functionality means mirroring that pattern once.
 
+Built with Next.js 16, React 19, TypeScript, Commander, the MCP TypeScript SDK with Zod, and Vitest. The accounts server uses Express, Better Auth and PostgreSQL.
+
 ## Development
 
 ```bash
@@ -201,7 +207,7 @@ pnpm cli:dev -- detect my-sheet.png
 pnpm mcp:dev
 
 # CLI / MCP — build, then symlink as global commands
-pnpm install-local      # cli:build + mcp:build + npm install -g .
+pnpm install-local      # build + cli:build + mcp:build + npm install -g .
 
 # Tests / typecheck / lint
 pnpm test
@@ -209,26 +215,16 @@ pnpm typecheck
 pnpm lint
 ```
 
-## Releasing
-
-`@trebeljahr/sprite-tools` ships from the repo root. The published tarball is scoped via the `files` field in `package.json` and contains `dist/cli/`, `dist/mcp/`, the compiled `dist/src/lib/` algorithm modules, the README, and the LICENSE — none of the Next.js app code or its dependencies.
-
-```bash
-pnpm release           # patch bump (default)
-pnpm release:minor
-pnpm release:major
-```
-
-Each command runs in this order:
-
-1. **`release-prep`** — refuses to release if the working tree is dirty or if the local version is behind what's already on npm.
-2. **`release-bump`** — bumps `package.json`, commits, and tags atomically.
-3. **`_release:finish`** — builds the CLI + MCP, typechecks, `npm publish`es, and pushes the tag.
-
-`prepublishOnly` re-runs the CLI + MCP builds as a final safety net before npm uploads the tarball.
+Maintainers: the npm release steps live in [docs/releasing.md](docs/releasing.md). The screenshots and social preview cards in this README are rebuilt by the scripts described in [docs/marketing/README.md](docs/marketing/README.md).
 
 ## License
 
-The web app, the CLI, the MCP server and the algorithm modules are MIT. See [LICENSE](./LICENSE). The npm package `@trebeljahr/sprite-tools` contains only MIT code.
+The web app, the CLI, the MCP server and the algorithm modules are MIT. See [LICENSE](./LICENSE). The `files` list in `package.json` limits the npm package to that MIT code.
 
 The accounts server in `packages/server` is AGPL-3.0-or-later. See [packages/server/LICENSE](./packages/server/LICENSE). If you run a changed copy of it as a network service, you must offer its source code, with your changes, to the people who use it.
+
+The `.aseprite` test files in `tests/fixtures/aseprite/excalibur/` come from [excalibur-aseprite](https://github.com/excaliburjs/excalibur-aseprite) and stay under its BSD-2-Clause license. See the [NOTICE](tests/fixtures/aseprite/excalibur/NOTICE) file there. The beetle in the screenshots above is one of them.
+
+## Support
+
+Sprite Tools is free. If you want to support the work, you can donate at [ricos.site/donate](https://ricos.site/donate).

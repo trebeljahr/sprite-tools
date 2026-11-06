@@ -1,0 +1,279 @@
+<!doctype html>
+<!--
+  Social preview cards for the GitHub repository (1280x640) and the
+  terminal capture. Rendered by scripts/marketing/render-social-preview.mjs:
+    template.html?v=a         screenshot-led
+    template.html?v=b         typographic, brand-led
+    template.html?v=c         terminal + Sheet Lint
+    template.html?v=terminal  terminal alone (README / press)
+  Screenshots come from ../screenshots/ (capture-screenshots.mjs). The render
+  script injects the Geist @font-face rules and the real CLI transcript.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sprite Tools social preview</title>
+<style id="fonts"></style>
+<style>
+  :root {
+    --bg: #09090b;
+    --panel: #18181b;
+    --line: rgba(255, 255, 255, 0.12);
+    --fg: #fafafa;
+    --muted: #a1a1aa;
+    --soft: #d4d4d8;
+    --green: #22c55e;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --margin: 64px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body {
+    font-family: "Geist", system-ui, sans-serif;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    position: relative;
+    width: 1280px;
+    height: 640px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .mark { display: block; }
+  .name {
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .line {
+    color: var(--muted);
+    line-height: 1.3;
+  }
+  .chips { display: flex; gap: 12px; }
+  .chip {
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--soft);
+    font-size: 22px;
+  }
+  .url {
+    font-family: "Geist Mono", ui-monospace, monospace;
+    color: var(--soft);
+    font-size: 22px;
+  }
+  .shot {
+    position: absolute;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background-repeat: no-repeat;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+
+  /* ---------- A: screenshot-led ---------- */
+  .a .copy {
+    position: absolute;
+    left: var(--margin);
+    top: var(--margin);
+    bottom: var(--margin);
+    width: 500px;
+    display: flex;
+    flex-direction: column;
+  }
+  .a .name { font-size: 76px; margin-top: 28px; }
+  .a .line { font-size: 30px; margin-top: 24px; }
+  .a .spacer { flex: 1; }
+  .a .url { margin-top: 20px; }
+  .a .shot {
+    /* The Preview card of collision-desktop.png (3200x2000): beetle frame 1
+       with its 28-point polygon. */
+    left: 620px;
+    top: 82px;
+    width: 596px;
+    height: 476px;
+    background-image: url("../screenshots/collision-desktop.png");
+    background-size: 1536px 960px;
+    background-position: -717px -340px;
+  }
+
+  /* ---------- B: typographic ---------- */
+  .b .center {
+    position: absolute;
+    inset: 40px var(--margin) 112px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .b .name { font-size: 120px; margin-top: 28px; }
+  .b .line { font-size: 34px; margin-top: 24px; max-width: 980px; }
+  .b .chips { margin-top: 32px; }
+  .b .foot {
+    position: absolute;
+    left: var(--margin);
+    right: var(--margin);
+    bottom: var(--margin);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ---------- C: terminal + Sheet Lint ---------- */
+  .c .head {
+    position: absolute;
+    left: var(--margin);
+    top: var(--margin);
+    right: var(--margin);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .c .name { font-size: 56px; }
+  .c .line { font-size: 30px; margin-left: 12px; padding-left: 28px; border-left: 1px solid var(--line); }
+  .c .shot {
+    /* Sheet card of lint-desktop.png (3200x2000): the frame-bleed marker. */
+    right: var(--margin);
+    top: 178px;
+    width: 660px;
+    height: 398px;
+    background-image: url("../screenshots/lint-desktop.png");
+    background-size: 1491px 932px;
+    background-position: -416px -442px;
+  }
+  .c .term {
+    position: absolute;
+    left: var(--margin);
+    top: 206px;
+    width: 600px;
+    height: 370px;
+  }
+  .c .term pre { font-size: 17px; }
+
+  /* ---------- terminal ---------- */
+  .term {
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #0c0c0e;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    z-index: 2;
+  }
+  .term .bar {
+    display: flex;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    background: #141417;
+  }
+  .term .bar i {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #3f3f46;
+  }
+  .term pre {
+    font-family: "Geist Mono", ui-monospace, monospace;
+    font-size: 20px;
+    line-height: 1.5;
+    padding: 18px 22px;
+    color: var(--soft);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .term .prompt { color: var(--green); }
+  .term .cmd { color: var(--fg); }
+  .term .err { color: var(--red); font-weight: 600; }
+  .term .info { color: var(--blue); font-weight: 600; }
+  .term .dim { color: #71717a; }
+  .terminal-only { width: 1200px; padding: 0; }
+  .terminal-only .term { position: relative; width: 1200px; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <!-- The 3x3 sheet-grid mark from src/app/icon.tsx. -->
+  <symbol id="grid" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M3 9 H21 M3 15 H21 M9 3 V21 M15 3 V21" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<section class="card a hidden" id="a">
+  <div class="dots"></div>
+  <div class="copy">
+    <svg class="mark" width="64" height="64"><use href="#grid"/></svg>
+    <div class="name">Sprite Tools</div>
+    <div class="line">Turn sprite sheets into collision polygons, pivots, tags and Godot or Unity files.</div>
+    <div class="spacer"></div>
+    <div class="chips"><span class="chip">Web app</span><span class="chip">CLI</span><span class="chip">MCP server</span></div>
+    <div class="url">sprites.trebeljahr.com</div>
+  </div>
+  <div class="shot" role="img" aria-label="Collision tool tracing a 28-point polygon around a beetle sprite"></div>
+</section>
+
+<section class="card b hidden" id="b">
+  <div class="dots"></div>
+  <div class="center">
+    <svg class="mark" width="96" height="96"><use href="#grid"/></svg>
+    <div class="name">Sprite Tools</div>
+    <div class="line">Turn sprite sheets into collision polygons, pivots, tags and Godot or Unity files.</div>
+    <div class="chips"><span class="chip">Web app</span><span class="chip">CLI</span><span class="chip">MCP server</span></div>
+  </div>
+  <div class="foot">
+    <span class="url">sprites.trebeljahr.com</span>
+    <span class="url">github.com/trebeljahr/sprite-tools</span>
+  </div>
+</section>
+
+<section class="card c hidden" id="c">
+  <div class="dots"></div>
+  <div class="head">
+    <svg class="mark" width="52" height="52"><use href="#grid"/></svg>
+    <div class="name">Sprite Tools</div>
+    <div class="line">Lint a sprite sheet in the browser or in CI.</div>
+  </div>
+  <div class="shot" role="img" aria-label="Sheet Lint marking where frame 0 bleeds into frame 1"></div>
+  <div class="term" data-session="lint"><div class="bar"><i></i><i></i><i></i></div><pre></pre></div>
+</section>
+
+<section class="terminal-only hidden" id="terminal">
+  <div class="term" data-session="all"><div class="bar"><i></i><i></i><i></i></div><pre></pre></div>
+</section>
+
+<script>
+  const v = new URLSearchParams(location.search).get("v") || "a";
+  document.getElementById(v).classList.remove("hidden");
+
+  // Real CLI output, injected by the render script as window.__CLI__.
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  function colour(line) {
+    const e = esc(line);
+    if (/^error\s/.test(line)) return e.replace(/^error/, '<span class="err">error</span>');
+    if (/^info\s/.test(line)) return e.replace(/^info/, '<span class="info">info</span>');
+    if (/^skipped\s/.test(line)) return `<span class="dim">${e}</span>`;
+    return e;
+  }
+  for (const term of document.querySelectorAll(".term")) {
+    const session = window.__CLI__ || [];
+    const runs = term.dataset.session === "lint" ? session.filter((r) => / lint /.test(r.command)) : session;
+    term.querySelector("pre").innerHTML = runs
+      .map((r) => {
+        const out = r.output ? r.output.split("\n").map(colour).join("\n") : "";
+        return `<span class="prompt">$</span> <span class="cmd">${esc(r.command)}</span>${out ? `\n${out}` : ""}`;
+      })
+      .join("\n");
+  }
+</script>
+</body>
+</html>
