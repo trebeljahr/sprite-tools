@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 
 export type ProviderId = "google" | "xai";
 export type VideoResolution = "480p" | "720p" | "1080p";

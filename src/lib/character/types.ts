@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 
 export const MAX_CHARACTER_PIXELS = 4_194_304;
 const point = z.object({ x: z.number().finite().min(0), y: z.number().finite().min(0) });

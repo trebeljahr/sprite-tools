@@ -70,6 +70,7 @@ pnpm install-local             # build + symlink as a global `sprite-tools` / `s
 - Pure algorithm functions never reach for browser or Node globals — they take `ImageData` in and return data out.
 - Commander CLI: use `parseIntArg` / `parseFloatArg` helpers for numeric options. Every new command should call `addHelpExtras` with both **Examples** and **Output shape** blocks.
 - MCP tool: use Zod schemas for inputs; let MCP derive the JSON schema. Validate inside the handler only for things Zod can't express.
+- Import `z` from `src/lib/zod`, never from `zod`. That module keeps zod 3's error wording, which MCP clients and the character and motion pages show. Lint enforces it.
 - Web pages: the shared `useSharedProjectSource()` hook is the only way to access the upload — don't add new `useState<File>` for source files.
 
 ## Tests

@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { access, lstat, open, readFile, unlink, type FileHandle } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { z } from "zod";
+import { z } from "../zod";
 import { processVideo, VideoProcessingError } from "./process.js";
 import { resolveVideoTrim } from "./loop.js";
 import {
@@ -80,7 +80,7 @@ export interface ImportVideoInput {
   videoBase64: string;
   processing?: ProcessingInput;
 }
-const uuid = z.string().uuid();
+const uuid = z.guid();
 const ACTIVE = new Set(["queued", "generating", "processing", "uncertain"]);
 function dollars(micros: number): number {
   return micros / 1_000_000;

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 import { validatePlan, type CharacterPlan } from "../character/types";
 import { poseTransforms } from "../character/core";
 import { autoBind, clipSchema, retargetPose, sampleClip, transformPoint } from "./core";
@@ -7,7 +7,7 @@ export const studySchema = z
   .object({
     template: z.enum(["idle", "walk", "run", "jump", "stab", "sweep"]).default("walk"),
     clip: clipSchema.optional(),
-    character_plan: z.record(z.unknown()).optional(),
+    character_plan: z.record(z.string(), z.unknown()).optional(),
     samples: z.number().int().min(2).max(64).default(12),
   })
   .strict();

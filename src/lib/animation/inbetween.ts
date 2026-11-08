@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 
 const point = z.tuple([z.number().finite(), z.number().finite()]);
 const line = z.tuple([point, point]);

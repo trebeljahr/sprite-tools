@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
-import { z } from "zod";
+import { z } from "../lib/zod";
 import { PlaybackTiming } from "@/components/playback-timing";
 import { frameAtTime } from "@/lib/animation/playback";
 import { Button } from "@/components/ui/button";

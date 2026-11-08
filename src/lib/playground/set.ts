@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 
 export const roles = [
   "idle",
@@ -75,7 +75,7 @@ const schema = z
     clips: z.record(z.string().regex(/^[a-z][a-z0-9-]{0,63}$/), clip),
     controller: z
       .object({
-        bindings: z.record(z.enum(roles), z.string().nullable()).optional(),
+        bindings: z.partialRecord(z.enum(roles), z.string().nullable()).optional(),
         layerProject: z.string().max(2048).optional(),
         restPose: z.enum(["idle", "hold"]).optional(),
         runSpeed: z.number().min(400).max(2400).optional(),
@@ -96,7 +96,7 @@ const schema = z
           )
           .max(32)
           .optional(),
-        labels: z.record(z.enum(roles), z.string().max(100)).optional(),
+        labels: z.partialRecord(z.enum(roles), z.string().max(100)).optional(),
       })
       .optional(),
   })

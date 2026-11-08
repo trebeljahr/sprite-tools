@@ -53,6 +53,14 @@
         "noImplicitAnyLet": "warn"
       },
       "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "zod": "Import z from src/lib/zod instead, so error messages keep their zod 3 wording."
+            }
+          }
+        },
         "noNonNullAssertion": "off",
         "useImportType": "error",
         "noDescendingSpecificity": "off",
@@ -98,6 +106,12 @@
       "security": {}
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/lib/zod.ts"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ],
   "assist": {
     "enabled": false
   }

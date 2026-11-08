@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "../zod";
 import { poseTransforms, type Matrix } from "../character/core";
 import type { CharacterPlan, Point } from "../character/types";
 
@@ -61,7 +61,7 @@ const AXIS: Record<JointRole, number> = {
 };
 const num = z.number().finite();
 const xy = z.object({ x: num.min(-4).max(4), y: num.min(-4).max(4) }).strict();
-const rotations = z.record(z.enum(ROLES), num.min(-180).max(180));
+const rotations = z.partialRecord(z.enum(ROLES), num.min(-180).max(180));
 const frameSchema = z
   .object({
     t: num.min(0).max(1),
@@ -104,7 +104,7 @@ export const projectSchema = z
     format: z.literal("sprite-tools-motion"),
     version: z.literal(1),
     clips: z.array(clipSchema).min(1).max(24),
-    binding: z.record(
+    binding: z.partialRecord(
       z.enum(ROLES),
       z
         .object({

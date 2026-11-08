@@ -9,7 +9,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerMotionTools } from "./motion-tools";
 import { registerCharacterTools } from "./character-tools";
 import { registerVideoTools } from "./video-tools";
-import { z } from "zod";
+import { z } from "../src/lib/zod";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, basename, resolve } from "node:path";
 
@@ -2102,7 +2102,7 @@ export function registerAllTools(server: McpServer) {
             "Absolute path to a Sprite Tools metadata JSON file. Mutually exclusive with `metadata`.",
           ),
         metadata: z
-          .record(z.unknown())
+          .record(z.string(), z.unknown())
           .optional()
           .describe(
             "The metadata document passed inline, so JSON already in hand needs no temp file. Mutually exclusive with `input_path`.",

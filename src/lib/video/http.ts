@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { z } from "zod";
+import { z } from "../zod";
 import { createVideoService, type VideoServiceOptions } from "./service.js";
 import { MAX_VIDEO_BYTES, type GenerationInput, type ProcessingInput } from "./schema.js";
 import { setupHtml } from "./setup.js";

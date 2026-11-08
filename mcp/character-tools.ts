@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFileSync } from "node:fs";
-import { z } from "zod";
+import { z } from "../src/lib/zod";
 import { runCharacter } from "../src/lib/character/node";
 export function registerCharacterTools(server: McpServer) {
   server.registerTool(
@@ -11,13 +11,13 @@ export function registerCharacterTools(server: McpServer) {
       inputSchema: {
         input_path: z.string(),
         output_dir: z.string(),
-        plan: z.record(z.unknown()).optional(),
+        plan: z.record(z.string(), z.unknown()).optional(),
         plan_path: z.string().optional(),
         ai_draft: z.boolean().default(false),
         description: z.string().max(1000).optional(),
         bend_test_parts: z.array(z.string()).max(32).default([]),
         complete_parts: z.array(z.string()).max(32).default([]),
-        completion_paths: z.record(z.string()).optional(),
+        completion_paths: z.record(z.string(), z.string()).optional(),
         allow_paid: z.boolean().default(false),
         max_cost_usd: z.number().finite().min(0).max(10).default(0),
         retry_uncertain: z.boolean().default(false),

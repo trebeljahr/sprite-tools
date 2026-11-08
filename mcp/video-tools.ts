@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join } from "node:path";
-import { z } from "zod";
+import { z } from "../src/lib/zod";
 import {
   VIDEO_MODELS,
   VIDEO_PROVIDERS,
@@ -109,8 +109,7 @@ const waitSchema = z
     "Wait up to this many seconds, then return the resumable job. Default 0; maximum 30. Poll sprite_video_status afterwards.",
   );
 const requestSchema = z
-  .string()
-  .uuid()
+  .guid()
   .describe("Stable UUID for this request. Reuse on retries to avoid another paid generation.");
 
 export function registerVideoTools(server: McpServer) {
@@ -264,8 +263,7 @@ export function registerVideoTools(server: McpServer) {
         "Resume a Video Studio job without starting a new generation. Returns status, safe errors, reserved cost and absolute video/sheet/metadata paths when ready.",
       inputSchema: {
         job_id: z
-          .string()
-          .uuid()
+          .guid()
           .describe("Job UUID returned by sprite_video_generate or sprite_video_import."),
         wait_seconds: waitSchema,
       },
@@ -336,7 +334,7 @@ export function registerVideoTools(server: McpServer) {
       description:
         "Retry sprite extraction from an already downloaded job video, using new processing settings. Never starts or charges for another provider generation.",
       inputSchema: {
-        job_id: z.string().uuid().describe("Existing job UUID with a downloaded video."),
+        job_id: z.guid().describe("Existing job UUID with a downloaded video."),
         processing: processingOptionsSchema
           .partial()
           .describe(
