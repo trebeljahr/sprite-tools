@@ -107,7 +107,7 @@ jobs:
           writeFileSync('release.json', JSON.stringify({ commit, image, digest, reference: `${image}@${digest}` }, null, 2) + '\n');
           NODE
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: release.json
@@ -208,7 +208,7 @@ jobs:
           COOLIFY_DEPLOY_REPOSITORY: ${{ secrets.COOLIFY_DEPLOY_REPOSITORY }}
           COOLIFY_DEPLOY_BRANCH: ${{ secrets.COOLIFY_DEPLOY_BRANCH }}
         run: node scripts/rolling-release.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: rollout-${{ github.run_id }}-${{ github.run_attempt }}
