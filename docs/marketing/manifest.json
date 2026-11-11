@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-06",
+  "generated": "2026-11-11",
   "source": "Real Sprite Tools web app (static export served locally) and CLI. No mock UI. Cards A and B draw the Collision tool's exported polygon, unedited, over the demo sprite.",
   "demoInputs": [
     {
@@ -136,6 +136,22 @@
       "pixels": "1410x826",
       "bytes": 171926,
       "sha256": "362b24b4f655718156e495982aae9245a973878500b457a85d2f1df0012f1a9e",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/og-wordmark.png",
+      "purpose": "og:image (1200x630): card A with mark, name, line and URL, laid out at 1.91:1.",
+      "pixels": "1200x630",
+      "bytes": 291195,
+      "sha256": "b77711ec6f3770b41ff90eebc4dfefaac227c2947d4e2bcd76f420625633584a",
+      "madeBy": "scripts/marketing/render-social-preview.mjs"
+    },
+    {
+      "path": "social-preview/og-clean.png",
+      "purpose": "og:image (1200x630) without text: the mouse and its polygon, enlarged and centred on the dark grid.",
+      "pixels": "1200x630",
+      "bytes": 301052,
+      "sha256": "9ee4cf3ff9755639a83891701e99653a92e78bc6987e96b7d345114387f437f4",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     }
   ]

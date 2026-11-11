@@ -14,7 +14,7 @@ pnpm marketing:assets       # screenshots, CLI transcript, cards, manifest
 `marketing:assets` runs three scripts in `scripts/marketing/`:
 
 - `capture-screenshots.mjs [scene ...]` serves `out/` on a random free port in 49152–65535 and drives headless Chromium. Pass scene names to redo only some: `collision-desktop`, `collision-desktop-light`, `lint-desktop`, `aseprite-import-desktop`, `export-desktop`, `lint-mobile`, `cli`.
-- `render-social-preview.mjs` renders [social-preview/template.html](social-preview/template.html) into the cards, the review sheet and the terminal capture. Cards A and B draw `screenshots/collision-mouse.json` over the sprite; C and D crop the Collision screenshots.
+- `render-social-preview.mjs` renders [social-preview/template.html](social-preview/template.html) into the cards, the og:image cards, the review sheet and the terminal capture. Cards A and B draw `screenshots/collision-mouse.json` over the sprite; C and D crop the Collision screenshots. Run it on its own (`node scripts/marketing/render-social-preview.mjs`) to redo only the cards; the og:image cards also need ImageMagick (`magick`).
 - `write-manifest.mjs` rewrites `manifest.json`.
 
 Playwright is not a project dependency. `load-playwright.mjs` uses a global install and the newest headless Chromium in the Playwright cache. Set `PLAYWRIGHT_MODULE` or `CHROMIUM_PATH` to override.
@@ -52,8 +52,10 @@ No account, API key or network call is involved.
 | `social-preview/social-preview-c.png` | 1280×640 | Card C, dark: the Collision tool's Preview card, with name, one line and URL beside it. |
 | `social-preview/social-preview-d.png` | 1280×640 | Card D, light: the Collision page with the Source and Preview cards, under a name row. |
 | `social-preview/review-sheet.jpg` | 1410×826 | A to D in a 2×2 grid, labelled. |
+| `social-preview/og-wordmark.png` | 1200×630 | og:image: card A with mark, name, line and URL, laid out at 1.91:1. |
+| `social-preview/og-clean.png` | 1200×630 | og:image without text: the mouse and its polygon, enlarged and centred on the dark grid. |
 
-Desktop shots use a 1600×1000 viewport at device scale 2. The phone shot uses device scale 3. Cards are 1280×640 at scale 1, with key content inside a 64 px margin, and each is under 1 MB as GitHub requires.
+Desktop shots use a 1600×1000 viewport at device scale 2. The phone shot uses device scale 3. Cards are 1280×640 at scale 1, with key content inside a 64 px margin, and each is under 1 MB as GitHub requires. The og:image cards are card A laid out at 1280×672 (the 1200×630 shape), rendered at scale 2 and downscaled to exactly 1200×630.
 
 ## Known gaps
 

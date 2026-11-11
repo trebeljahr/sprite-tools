@@ -77,6 +77,16 @@ const ASSETS = [
     "GitHub social preview D (light): the Collision page, Source and Preview cards, under a name row.",
   ],
   ["social-preview/review-sheet.jpg", RENDER, "A to D in a 2x2 grid, labelled, for picking one."],
+  [
+    "social-preview/og-wordmark.png",
+    RENDER,
+    "og:image (1200x630): card A with mark, name, line and URL, laid out at 1.91:1.",
+  ],
+  [
+    "social-preview/og-clean.png",
+    RENDER,
+    "og:image (1200x630) without text: the mouse and its polygon, enlarged and centred on the dark grid.",
+  ],
 ];
 
 function pngSize(buf) {
