@@ -21,12 +21,6 @@
   Cache-Control: no-store, max-age=0
 
 # Metadata images Next exports without a file extension.
-/opengraph-image
-  Content-Type: image/png
-
-/twitter-image
-  Content-Type: image/png
-
 /icon
   Content-Type: image/png
 

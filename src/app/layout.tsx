@@ -62,25 +62,14 @@ export const metadata: Metadata = {
     url: "/",
     title: "Sprite Tools — game-ready 2D sprite toolkit",
     description: siteDescription,
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: "Sprite Tools social preview",
-      },
-    ],
+    // og:image comes from src/app/opengraph-image.jpg (+ .alt.txt), Next's
+    // file convention: the og-wordmark card in docs/marketing/social-preview.
   },
   twitter: {
     card: "summary_large_image",
     title: "Sprite Tools",
     description: siteDescription,
-    images: [
-      {
-        url: "/twitter-image",
-        alt: "Sprite Tools social preview",
-      },
-    ],
+    // twitter:image comes from src/app/twitter-image.jpg (+ .alt.txt).
   },
 };
 

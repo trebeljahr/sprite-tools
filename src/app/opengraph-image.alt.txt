@@ -1,0 +1,1 @@
+Sprite Tools: a sprite of a mouse in a coat with its traced collision polygon, beside the line Collision polygons, plus pivots, tags and Godot or Unity files
