@@ -80,7 +80,7 @@ const ASSETS = [
   [
     "social-preview/og-wordmark.png",
     RENDER,
-    "og:image (1200x630): card A with mark, name, line and URL, laid out at 1.91:1.",
+    "og:image (1200x630): card A with mark, name and line (no URL), laid out at 1.91:1.",
   ],
   [
     "social-preview/og-clean.png",

@@ -57,14 +57,15 @@ const OG_TALL =
 const OG_SW = 878;
 const OG_SH = Math.round((476 * OG_SW) / 720);
 const OG = [
-  // Card A as it is: the middle block, grid and sprite move down 16 px, so the
-  // 58/64 px top and bottom margins stay as they are.
+  // Card A without its URL line: the middle block, grid and sprite move down
+  // 16 px, so the 58/64 px top and bottom margins stay as they are.
   [
     "og-wordmark",
     `${OG_TALL}
     .poly .gridbg { top: 56px; }
     .poly .what { top: 252px; }
-    .poly svg.sprite { top: 122px; }`,
+    .poly svg.sprite { top: 122px; }
+    .poly .foot .mono { display: none !important; }`,
   ],
   // No mark, name or copy: the mouse and its polygon, enlarged and centred on
   // the same dark grid.

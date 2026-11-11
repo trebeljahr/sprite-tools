@@ -140,10 +140,10 @@
     },
     {
       "path": "social-preview/og-wordmark.png",
-      "purpose": "og:image (1200x630): card A with mark, name, line and URL, laid out at 1.91:1.",
+      "purpose": "og:image (1200x630): card A with mark, name and line (no URL), laid out at 1.91:1.",
       "pixels": "1200x630",
-      "bytes": 291195,
-      "sha256": "b77711ec6f3770b41ff90eebc4dfefaac227c2947d4e2bcd76f420625633584a",
+      "bytes": 282406,
+      "sha256": "e582504decc7a7b63bf8b7b254980f21d3d14d5d78a47a85b06aae7280870abd",
       "madeBy": "scripts/marketing/render-social-preview.mjs"
     },
     {
