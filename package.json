@@ -100,7 +100,7 @@
     "@biomejs/biome": "^2.5.15",
     "@mdx-js/loader": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
-    "@sentry/browser": "^10.78.0",
+    "@sentry/browser": "^11.11.0",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/mdx": "^2.0.13",

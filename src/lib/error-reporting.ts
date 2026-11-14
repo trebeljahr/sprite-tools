@@ -44,6 +44,16 @@ async function ensureInit(): Promise<SentryModule | null> {
       // reason and a budget for the extra network traffic.
       sampleRate: 1.0,
       tracesSampleRate: 0,
+      // Sentry 11 collects user info, cookies, headers and bodies unless
+      // told otherwise. Keep what SDK 10 sent without sendDefaultPii: no
+      // user, no cookies or bodies, and only the browser's user-agent
+      // and referer headers.
+      dataCollection: {
+        userInfo: false,
+        cookies: false,
+        httpHeaders: { request: { allow: ["user-agent", "referer"] }, response: false },
+        httpBodies: [],
+      },
     });
   }
   return mod;
