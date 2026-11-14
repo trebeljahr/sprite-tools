@@ -104,7 +104,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/mdx": "^2.0.13",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
