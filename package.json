@@ -44,7 +44,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -85,8 +85,8 @@
   "dependencies": {
     "@dotenvx/dotenvx": "^1.75.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@next/mdx": "16.4.6",
-    "commander": "^14.0.3",
+    "@next/mdx": "16.4.3",
+    "commander": "^15.0.0",
     "gifenc": "^1.0.3",
     "next": "16.4.6",
     "pngjs": "^7.0.0",
