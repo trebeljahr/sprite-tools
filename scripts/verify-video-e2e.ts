@@ -160,8 +160,8 @@ async function main() {
       for (let attempt = 0; attempt < 100; attempt++) {
         const job = await api<PublicJob>(`jobs/${id}`);
         if (job.status === "done") return job;
-        assert.notEqual(job.status, "failed", job.error);
-        assert.notEqual(job.status, "uncertain", job.error);
+        assert.notEqual(job.status, "failed", job.error ?? "job failed");
+        assert.notEqual(job.status, "uncertain", job.error ?? "job uncertain");
         await new Promise((done) => setTimeout(done, 100));
       }
       throw new Error("Offline processing timed out");

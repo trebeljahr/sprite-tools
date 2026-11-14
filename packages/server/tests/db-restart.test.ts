@@ -63,7 +63,7 @@ function fakePostgres() {
     socket.on("error", () => {});
     let buffer = Buffer.alloc(0);
     let started = false;
-    socket.on("data", (chunk) => {
+    socket.on("data", (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
       for (;;) {
         if (!started) {
@@ -143,7 +143,7 @@ it("still rejects an active query when its connection dies", async () => {
   postgres.server.on("connection", (socket: Socket) => {
     socket.on("error", () => {});
     let started = false;
-    socket.on("data", (chunk) => {
+    socket.on("data", (chunk: Buffer) => {
       if (!started) {
         started = true;
         socket.write(Buffer.concat([message("R", int32(0)), ready()]));
