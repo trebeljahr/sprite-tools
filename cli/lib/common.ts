@@ -2,7 +2,8 @@
 
 import { writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import type { Command } from "commander";
+// commander 15 is ESM-only; the MCP build (Node16, CommonJS) needs resolution-mode.
+type Command = import("commander", { with: { "resolution-mode": "import" }}).Command;
 import { loadPng, readPngSize } from "./image-io";
 import { detectGridFromImageData } from "../../src/lib/pipeline/detect";
 import {

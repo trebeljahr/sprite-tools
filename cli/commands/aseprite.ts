@@ -1,4 +1,5 @@
-import type { Command } from "commander";
+// commander 15 is ESM-only; the MCP build (Node16, CommonJS) needs resolution-mode.
+type Command = import("commander", { with: { "resolution-mode": "import" }}).Command;
 import { readFileSync } from "node:fs";
 import {
   writeJsonOutput,
