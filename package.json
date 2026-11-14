@@ -83,7 +83,7 @@
     "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,md,mdx}": "biome check --write --no-errors-on-unmatched"
   },
   "dependencies": {
-    "@dotenvx/dotenvx": "^1.75.1",
+    "@dotenvx/dotenvx": "^2.38.2",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@next/mdx": "16.4.3",
     "commander": "^15.0.0",
