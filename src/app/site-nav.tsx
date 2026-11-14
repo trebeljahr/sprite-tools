@@ -7,7 +7,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Github, Menu, Package } from "lucide-react";
+import { ChevronDown, Menu, Package } from "lucide-react";
+import { Github } from "@/components/github-icon";
 import {
   DropdownMenu,
   DropdownMenuTrigger,

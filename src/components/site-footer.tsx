@@ -1,6 +1,7 @@
 import { ProjectDonateLink } from "./project-donate-link";
 import Link from "next/link";
-import { Github, Package } from "lucide-react";
+import { Package } from "lucide-react";
+import { Github } from "@/components/github-icon";
 import { DONATE_URL, NPM_PACKAGE_URL, REPO_URL } from "@/lib/project-info";
 
 const VERSION = "0.1.0";
