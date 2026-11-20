@@ -26,7 +26,7 @@ try {
       sha: env("TARGET_SHA"),
       digest: env("TARGET_DIGEST"),
       expectedCurrentDigest: env("EXPECTED_CURRENT_DIGEST"),
-      // A dispatched `build` (dependency-updates.yml after a Dependabot merge)
+      // A dispatched `build` (deps-land.yml after it fast-forwards main)
       // releases like a push; a dispatched `deploy` needs the reviewed digest.
       automatic: env("GITHUB_EVENT_NAME") === "push" || env("RELEASE_OPERATION") === "build",
     },
