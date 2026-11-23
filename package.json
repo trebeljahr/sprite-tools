@@ -85,15 +85,15 @@
   "dependencies": {
     "@dotenvx/dotenvx": "^1.75.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@next/mdx": "16.4.5",
+    "@next/mdx": "16.4.6",
     "commander": "^14.0.3",
     "gifenc": "^1.0.3",
-    "next": "16.4.5",
+    "next": "16.4.6",
     "pngjs": "^7.0.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "^4.6.7",
-    "better-auth": "1.7.18"
+    "better-auth": "1.7.25"
   },
   "devDependencies": {
     "@base-ui/react": "^1.9.0",
