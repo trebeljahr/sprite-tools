@@ -85,7 +85,7 @@
   "dependencies": {
     "@dotenvx/dotenvx": "^2.38.2",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@next/mdx": "16.4.3",
+    "@next/mdx": "16.4.6",
     "commander": "^15.0.0",
     "gifenc": "^1.0.3",
     "next": "16.4.6",
