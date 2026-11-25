@@ -62,3 +62,6 @@ jobs:
           large=$(find out -type f -size +25M)
           test -z "$large" || { echo "Over 25 MiB: $large"; exit 1; }
       - run: pnpm build:server
+      # The bundle must load and listen: a dependency can break it at start
+      # while typecheck and tests stay green.
+      - run: node packages/server/scripts/bundle-smoke.mjs

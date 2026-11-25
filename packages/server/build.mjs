@@ -19,9 +19,18 @@ await build({
   format: "esm",
   target: "node20",
   external: ["pg-native"],
-  // CommonJS dependencies call require(); give the ESM bundle one.
+  // CommonJS dependencies call require() and read __filename/__dirname; give the
+  // ESM bundle all three. dotenvx 2 (@dotenvx/tooling) reads __filename at load,
+  // and without it the server exits before it listens.
   banner: {
-    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+    js: [
+      "import { createRequire as __createRequire } from 'node:module';",
+      "import { fileURLToPath as __fileURLToPath } from 'node:url';",
+      "import { dirname as __pathDirname } from 'node:path';",
+      "const require = __createRequire(import.meta.url);",
+      "const __filename = __fileURLToPath(import.meta.url);",
+      "const __dirname = __pathDirname(__filename);",
+    ].join(" "),
   },
   legalComments: "none",
   logLevel: "warning",
