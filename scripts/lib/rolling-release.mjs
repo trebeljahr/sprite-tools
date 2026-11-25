@@ -66,35 +66,9 @@ export function queuedDeployment(body) {
   return accepted[0].deployment_uuid;
 }
 
-// All network, polling and journal operations are injected for regression tests.
-// The workflow is the exclusive latest/marker writer and serializes all runs.
-// The markers leave crashes and ambiguous deployments latched closed across runs.
-export async function rollingRelease(config, release, dependencies = {}) {
-  validateRelease(config, release);
-  const request = dependencies.fetch ?? fetch;
-  // The controller releases the accounts server only. The static client is
-  // activated and verified after it (deploy.yml).
-  const verify =
-    dependencies.verify ??
-    ((sha) =>
-      verifyServer(sha, {
-        fetch: request,
-        ...(dependencies.sleep ? { sleep: dependencies.sleep } : {}),
-      }));
-  const record = dependencies.record ?? (() => {});
-  const pause = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
-  const report = {
-    appUuid: APP.uuid,
-    targetSha: release.sha,
-    targetDigest: release.digest,
-    stage: "preflight",
-  };
-  const save = (stage) => {
-    report.stage = stage;
-    record({ ...report });
-  };
-  save("preflight");
-
+// One authenticated registry session: read a manifest, read the commit an image
+// was built from, and move a tag to an image.
+async function connect(config, request, pause) {
   const authUrl = new URL("https://ghcr.io/token");
   authUrl.searchParams.set("service", "ghcr.io");
   authUrl.searchParams.set("scope", `repository:${APP.registryRepository}:pull,push`);
@@ -192,6 +166,39 @@ export async function rollingRelease(config, release, dependencies = {}) {
       await pause(1000);
     }
   };
+  return { manifest, revision, point };
+}
+
+// All network, polling and journal operations are injected for regression tests.
+// The workflow is the exclusive latest/marker writer and serializes all runs.
+// The markers leave crashes and ambiguous deployments latched closed across runs.
+export async function rollingRelease(config, release, dependencies = {}) {
+  validateRelease(config, release);
+  const request = dependencies.fetch ?? fetch;
+  // The controller releases the accounts server only. The static client is
+  // activated and verified after it (deploy.yml).
+  const verify =
+    dependencies.verify ??
+    ((sha) =>
+      verifyServer(sha, {
+        fetch: request,
+        ...(dependencies.sleep ? { sleep: dependencies.sleep } : {}),
+      }));
+  const record = dependencies.record ?? (() => {});
+  const pause = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+  const report = {
+    appUuid: APP.uuid,
+    targetSha: release.sha,
+    targetDigest: release.digest,
+    stage: "preflight",
+  };
+  const save = (stage) => {
+    report.stage = stage;
+    record({ ...report });
+  };
+  save("preflight");
+
+  const { manifest, revision, point } = await connect(config, request, pause);
   const queue = async (sha) => {
     const body = JSON.stringify({
       ref: `refs/heads/${APP.branch}`,
@@ -301,4 +308,56 @@ export async function rollingRelease(config, release, dependencies = {}) {
     save("recovery-required");
     throw new ReleaseError(`${report.error} ${report.rollback}`);
   }
+}
+
+// After a failed release (stage recovery-required) latest and rolling-started
+// name the image that failed, and every later run refuses to start. Once an
+// operator has seen in Coolify that the failed deployment ended and nothing is
+// still queued, this moves both tags back to the last verified image. It never
+// queues a deployment. The operator names the failed digest, so a run against a
+// registry in any other state changes nothing.
+export async function reconcileRelease(config, release, dependencies = {}) {
+  if (config.uuid !== APP.uuid || config.repository !== APP.repository)
+    throw new ReleaseError("Reconciliation must name exactly the configured Sprite Tools app.");
+  if (!config.actor || !config.token) throw new ReleaseError("Missing registry credentials.");
+  if (!isDigest(release.failedDigest))
+    throw new ReleaseError("Reconciliation requires the exact digest of the failed image.");
+  const request = dependencies.fetch ?? fetch;
+  const verify =
+    dependencies.verify ??
+    ((sha) =>
+      verifyServer(sha, {
+        fetch: request,
+        ...(dependencies.sleep ? { sleep: dependencies.sleep } : {}),
+      }));
+  const record = dependencies.record ?? (() => {});
+  const pause = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+  const report = { appUuid: APP.uuid, failedDigest: release.failedDigest, stage: "preflight" };
+  const save = (stage) => {
+    report.stage = stage;
+    record({ ...report });
+  };
+  save("preflight");
+  const { manifest, revision, point } = await connect(config, request, pause);
+  const latest = await manifest("latest");
+  const started = await manifest("rolling-started", true);
+  const verified = await manifest("rolling-verified", true);
+  if (!started || !verified) throw new ReleaseError("The release journal is not initialized.");
+  if (verified.digest === release.failedDigest)
+    throw new ReleaseError("The named image is the verified release, not a failed one.");
+  if (started.digest !== release.failedDigest)
+    throw new ReleaseError("The named image is not the release that was started.");
+  if (![release.failedDigest, verified.digest].includes(latest.digest))
+    throw new ReleaseError("Latest belongs to another writer; refusing to overwrite it.");
+  const verifiedSha = await revision(verified);
+  report.verifiedSha = verifiedSha;
+  report.verifiedDigest = verified.digest;
+  // The public server must still serve the verified commit: a failed image
+  // that went live after all is a release to verify, not one to roll back.
+  await verify(verifiedSha);
+  save("verified-serving");
+  if (latest.digest !== verified.digest) await point("latest", verified);
+  await point("rolling-started", verified);
+  save("reconciled");
+  return report;
 }

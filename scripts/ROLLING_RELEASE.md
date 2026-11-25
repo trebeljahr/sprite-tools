@@ -146,6 +146,15 @@ that exact queue before rollback or journal reconciliation; observing old HTML
 does not prove a queued job stopped. Pre-hook failures may restore the previous
 tag while keeping the journal closed.
 
+Operation `reconcile` reopens the journal after a failed release whose
+deployment ended with the previous container still serving. The operator checks
+in Coolify that the failed deployment ended and nothing is queued, then
+dispatches `reconcile` with `failed_digest` (the failed run's `TARGET_DIGEST`).
+It requires `rolling-started` to name that digest and the public server to
+serve the commit of `rolling-verified`, then moves `latest` and
+`rolling-started` to the verified image. It queues no deployment and leaves the
+client alone. Any other registry state changes nothing.
+
 To roll back the server, deploy the previous commit's reviewed digest through
 the controller. If the controller cannot run, pin that digest in the app's tag
 field (`sha256-<64 hex characters>` in Coolify 4.0.0-beta.469) and reconcile

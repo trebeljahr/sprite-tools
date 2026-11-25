@@ -8,6 +8,14 @@
 # releases the server first, and activates the client version only after the
 # server serves this commit.
 name: Build & Release
+#
+# A release that fails after its Coolify hook stops at "recovery-required":
+# latest and rolling-started name the failed image and every later run refuses
+# to start. Recovery: open the app's deployments in Coolify and check that the
+# failed one ended and nothing is queued, then dispatch this workflow with
+# operation `reconcile` and failed_digest set to TARGET_DIGEST from the failed
+# run. That moves both tags back to the verified image and queues nothing. The
+# next push or `build` dispatch releases as usual.
 
 on:
   push:
@@ -15,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Build, deploy a reviewed image, or verify a release
+        description: Build, deploy a reviewed image, verify a release, or reconcile a failed one
         type: choice
-        options: [build, deploy, verify]
+        options: [build, deploy, verify, reconcile]
         default: build
       target_sha:
         description: Full commit SHA required for deploy or verify
@@ -29,6 +37,12 @@ on:
         required: false
       expected_current_digest:
         description: Reviewed current latest digest (deploy only)
+        type: string
+        required: false
+      failed_digest:
+        description: >-
+          Digest of the image whose release failed (reconcile only). Check in
+          Coolify first that its deployment ended and nothing is still queued.
         type: string
         required: false
 
@@ -48,7 +62,7 @@ jobs:
   build:
     outputs:
       digest: ${{ steps.image.outputs.digest }}
-    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy'
+    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy' && inputs.operation != 'reconcile'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,7 +130,7 @@ jobs:
   # Builds the static export and uploads it as a Worker version tagged with
   # the commit. Uploading does not change what the site serves.
   client:
-    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy'
+    if: github.repository == 'trebeljahr/sprite-tools' && github.ref == 'refs/heads/main' && inputs.operation != 'verify' && inputs.operation != 'deploy' && inputs.operation != 'reconcile'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -182,7 +196,7 @@ jobs:
       ((
         (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build')) &&
         vars.SPRITE_TOOLS_ROLLOUT_MODE == 'automatic' && needs.build.result == 'success' && needs.client.result == 'success') ||
-       (github.event_name == 'workflow_dispatch' && inputs.operation == 'deploy'))
+       (github.event_name == 'workflow_dispatch' && (inputs.operation == 'deploy' || inputs.operation == 'reconcile')))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -196,8 +210,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      # `reconcile` only moves latest and rolling-started back to the verified
+      # image after a failed release; it queues nothing and skips the client.
       - name: Promote, queue the server app, and verify it
         env:
+          FAILED_DIGEST: ${{ inputs.failed_digest }}
           ROLLOUT_MODE: ${{ vars.SPRITE_TOOLS_ROLLOUT_MODE }}
           TARGET_DIGEST: ${{ (github.event_name == 'push' || inputs.operation == 'build') && needs.build.outputs.digest || inputs.image_digest }}
           EXPECTED_CURRENT_DIGEST: ${{ inputs.expected_current_digest }}
@@ -217,6 +234,7 @@ jobs:
       # The server serves this commit now; a failure below leaves a new server
       # with the previous client, which is the compatible direction.
       - name: Activate the client version uploaded for this commit
+        if: inputs.operation != 'reconcile'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -225,4 +243,5 @@ jobs:
           version=$(node scripts/client-version.mjs "$TARGET_SHA" versions.json)
           npx --yes "wrangler@$WRANGLER_VERSION" versions deploy "$version@100%" --yes --message "$TARGET_SHA"
       - name: Verify the client
+        if: inputs.operation != 'reconcile'
         run: node scripts/verify-release.mjs "$TARGET_SHA" client

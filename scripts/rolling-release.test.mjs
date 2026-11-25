@@ -6,7 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { APP, queuedDeployment, rollingRelease, safeFailure } from "./lib/rolling-release.mjs";
+import {
+  APP,
+  queuedDeployment,
+  reconcileRelease,
+  rollingRelease,
+  safeFailure,
+} from "./lib/rolling-release.mjs";
 
 const OLD = "a".repeat(40);
 const NEW = "b".repeat(40);
@@ -287,6 +293,63 @@ test("failed candidate leaves the target and latch untouched for exact queue ins
     /operator reconciliation/,
   );
   assert.equal(writes(p).length, before);
+});
+
+test("reconcile moves latest and the started marker back to the verified image, with no hook", async () => {
+  const p = platform({ initialized: true, failTarget: true });
+  const failed = p.release.digest;
+  const live = p.release.expectedCurrentDigest;
+  await assert.rejects(rollingRelease(config, p.release, p.deps), /Release operation failed/);
+  const seen = [];
+  const deps = { ...p.deps, verify: async (sha) => seen.push(sha) };
+  const report = await reconcileRelease(config, { failedDigest: failed }, deps);
+  assert.deepEqual(seen, [OLD]);
+  assert.equal(report.stage, "reconciled");
+  assert.equal(p.tags.get("latest"), live);
+  assert.equal(p.tags.get("rolling-started"), live);
+  assert.equal(p.tags.get("rolling-verified"), live);
+  assert.deepEqual(p.hooks, [NEW], "Reconciliation never queues a deployment.");
+  // The journal is clean again: the next release passes the latch.
+  const next = platform({ initialized: true });
+  next.tags.set("latest", live);
+  await rollingRelease(config, next.release, next.deps);
+});
+
+test("reconcile changes nothing for another digest, a clean journal, or a live failed image", async () => {
+  const p = platform({ initialized: true, failTarget: true });
+  await assert.rejects(rollingRelease(config, p.release, p.deps), /Release operation failed/);
+  const before = writes(p).length;
+  const quiet = { ...p.deps, verify: async () => {} };
+  await assert.rejects(
+    reconcileRelease(config, { failedDigest: p.tags.get(OTHER) }, quiet),
+    /not the release that was started/,
+  );
+  await assert.rejects(
+    reconcileRelease(config, { failedDigest: p.release.expectedCurrentDigest }, quiet),
+    /verified release, not a failed one/,
+  );
+  await assert.rejects(reconcileRelease(config, { failedDigest: "latest" }, quiet), /exact digest/);
+  // The public server answers with the failed commit: nothing to roll back.
+  await assert.rejects(
+    reconcileRelease(
+      config,
+      { failedDigest: p.release.digest },
+      {
+        ...p.deps,
+        verify: async () => {
+          throw new Error("Serving another commit.");
+        },
+      },
+    ),
+    /Release operation failed|Serving another commit/,
+  );
+  assert.equal(writes(p).length, before);
+  const clean = platform();
+  await assert.rejects(
+    reconcileRelease(config, { failedDigest: clean.release.digest }, clean.deps),
+    /journal is not initialized/,
+  );
+  assert.equal(writes(clean).length, 0);
 });
 
 test("unknown webhook outcome preserves the tag and remains latched without retry", async () => {
